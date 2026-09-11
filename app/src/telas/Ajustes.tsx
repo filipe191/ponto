@@ -17,7 +17,7 @@ import { carregarConfig, salvarConfig } from '../config';
 import { testarConexao } from '../api';
 
 export function Ajustes({ estado }: { estado: EstadoPonto }) {
-  const { naFila, sincronizarAgora } = estado;
+  const { naFila, correcoesNaFila, sincronizarAgora } = estado;
 
   const [urlApi, setUrlApi] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -107,11 +107,30 @@ export function Ajustes({ estado }: { estado: EstadoPonto }) {
               ? 'Tudo sincronizado.'
               : `${naFila} ${naFila === 1 ? 'batida aguarda' : 'batidas aguardam'} envio. Ficam salvas no aparelho até o servidor confirmar.`}
           </Text>
-          {naFila > 0 && (
+
+          {correcoesNaFila > 0 && (
+            <Text style={[estilos.textoFila, { marginTop: espaco.sm }]}>
+              {correcoesNaFila === 1
+                ? '1 correção feita na aba Corrigir ainda não chegou ao servidor.'
+                : `${correcoesNaFila} correções feitas na aba Corrigir ainda não chegaram ao servidor.`}
+            </Text>
+          )}
+
+          {(naFila > 0 || correcoesNaFila > 0) && (
             <Pressable onPress={() => sincronizarAgora()}>
               <Text style={estilos.link}>Tentar enviar agora</Text>
             </Pressable>
           )}
+        </View>
+
+        <View style={estilos.caixaFila}>
+          <Text style={estilos.tituloFila}>Armazenamento</Text>
+          <Text style={estilos.textoFila}>
+            Depois de cada sincronização o aparelho apaga o que o servidor já
+            confirmou. Ficam aqui apenas o dia de hoje, um turno em aberto e o
+            que ainda não foi enviado — o histórico completo você vê na aba
+            Histórico, direto do servidor.
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

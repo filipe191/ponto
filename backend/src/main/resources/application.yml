@@ -5,7 +5,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/ponto}
     username: ${DB_USER:ponto}
-    password: ${DB_PASSWORD:ponto}
+    password: ${DB_PASSWORD}
 
   jpa:
     hibernate:
@@ -27,7 +27,7 @@ server:
   port: 8080
 
 ponto:
-  api-key: ${PONTO_API_KEY:troque-esta-chave}
+  api-key: ${PONTO_API_KEY}   # sem default de proposito: sobe sem chave, nao sobe
   timezone: America/Sao_Paulo
   jornada-diaria: PT8H
 

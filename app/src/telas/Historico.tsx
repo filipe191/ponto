@@ -1,51 +1,140 @@
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { cores, espaco, tipo } from '../theme';
 import { EstadoPonto } from '../estado';
-import { dataAmigavel, ehDiaUtil, formatarDuracao, horaLocal, nomeDoDia } from '../tempo';
+import { buscarResumo } from '../api';
+import { carregarConfig, configCompleta } from '../config';
+import { lerCacheResumo, salvarCacheResumo } from '../db';
+import { dataAmigavel, horaLocal, mesAtual, nomeDoDia, rotuloMes, somarMeses } from '../tempo';
+import { ResumoMes } from '../tipos';
 
-const JORNADA_MINUTOS = 8 * 60;
-
+/**
+ * Historico do mes, vindo do servidor.
+ *
+ * Desde que o celular passou a se limpar depois de cada sincronizacao, o passado
+ * nao existe mais aqui — quem guarda e calcula e o backend. Isso tambem acaba
+ * com a jornada duplicada: o saldo mostrado e o que o servidor calculou com o
+ * ponto.jornada-diaria dele, e nao uma constante repetida no app.
+ *
+ * A ultima resposta de cada mes fica em cache no SQLite so para a tela abrir com
+ * conteudo quando nao houver rede. Cache nunca vira fonte da verdade: qualquer
+ * refresh bem-sucedido o substitui.
+ */
 export function Historico({ estado }: { estado: EstadoPonto }) {
-  const { dias, sincronizandoAgora, sincronizarAgora } = estado;
+  const { naFila, correcoesNaFila } = estado;
 
-  const trabalhado = dias.reduce((soma, d) => soma + d.minutos, 0);
-  const diasUteisComRegistro = dias.filter((d) => ehDiaUtil(d.data)).length;
-  const esperado = diasUteisComRegistro * JORNADA_MINUTOS;
-  const saldo = trabalhado - esperado;
+  const [mes, setMes] = useState(mesAtual());
+  const [resumo, setResumo] = useState<ResumoMes | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [doCache, setDoCache] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  const carregar = useCallback(async () => {
+    setCarregando(true);
+    try {
+      const config = await carregarConfig();
+
+      if (!configCompleta(config)) {
+        setAviso('Configure o servidor em Ajustes para ver o histórico.');
+        setResumo(null);
+        return;
+      }
+
+      try {
+        const doServidor = await buscarResumo(config, mes);
+        setResumo(doServidor);
+        setDoCache(false);
+        setAviso(null);
+        await salvarCacheResumo(mes, doServidor);
+      } catch (e: any) {
+        const cache = await lerCacheResumo(mes);
+        if (cache) {
+          setResumo(cache.resumo);
+          setDoCache(true);
+          setAviso(`Sem resposta do servidor. Mostrando a cópia de ${dataAmigavel(cache.buscadoEm.slice(0, 10))} às ${horaLocal(cache.buscadoEm)}.`);
+        } else {
+          setResumo(null);
+          setAviso(e?.message ?? 'Não foi possível falar com o servidor');
+        }
+      }
+    } finally {
+      setCarregando(false);
+    }
+  }, [mes]);
+
+  useEffect(() => {
+    carregar();
+  }, [carregar]);
+
+  const dias = [...(resumo?.dias ?? [])].sort((a, b) => b.data.localeCompare(a.data));
+  const naoEnviadas = naFila + correcoesNaFila;
+  const podeAvancar = mes < mesAtual();
 
   return (
     <ScrollView
       contentContainerStyle={estilos.conteudo}
       refreshControl={
-        <RefreshControl
-          refreshing={sincronizandoAgora}
-          onRefresh={() => sincronizarAgora()}
-          tintColor={cores.textoFraco}
-        />
+        <RefreshControl refreshing={carregando} onRefresh={carregar} tintColor={cores.textoFraco} />
       }
     >
+      <View style={estilos.seletorMes}>
+        <Pressable
+          onPress={() => setMes(somarMeses(mes, -1))}
+          accessibilityLabel="Mês anterior"
+          style={estilos.seta}
+        >
+          <Text style={estilos.setaTexto}>‹</Text>
+        </Pressable>
+
+        <Text style={estilos.mes}>{rotuloMes(mes)}</Text>
+
+        <Pressable
+          onPress={() => podeAvancar && setMes(somarMeses(mes, 1))}
+          disabled={!podeAvancar}
+          accessibilityLabel="Próximo mês"
+          style={estilos.seta}
+        >
+          <Text style={[estilos.setaTexto, !podeAvancar && estilos.setaApagada]}>›</Text>
+        </Pressable>
+      </View>
+
       <View style={estilos.resumo}>
         <View style={estilos.blocoResumo}>
-          <Text style={estilos.valorResumo}>{formatarDuracao(trabalhado)}</Text>
+          <Text style={estilos.valorResumo}>{resumo?.trabalhadoFormatado ?? '—'}</Text>
           <Text style={estilos.rotuloResumo}>trabalhadas no mês</Text>
         </View>
         <View style={estilos.blocoResumo}>
-          <Text style={[estilos.valorResumo, { color: saldo < 0 ? cores.pendente : cores.emTurno }]}>
-            {formatarDuracao(saldo)}
+          <Text
+            style={[
+              estilos.valorResumo,
+              { color: (resumo?.saldoMinutos ?? 0) < 0 ? cores.pendente : cores.emTurno },
+            ]}
+          >
+            {resumo?.saldoFormatado ?? '—'}
           </Text>
           <Text style={estilos.rotuloResumo}>
-            {saldo < 0 ? 'a compensar' : 'de saldo'}
+            {(resumo?.saldoMinutos ?? 0) < 0 ? 'a compensar' : 'de saldo'}
           </Text>
         </View>
       </View>
 
-      <Text style={estilos.nota}>
-        Saldo comparado a {JORNADA_MINUTOS / 60}h nos {diasUteisComRegistro} dias úteis com registro.
-      </Text>
+      {doCache && <Text style={estilos.selo}>cópia local</Text>}
 
-      {dias.length === 0 && (
-        <Text style={estilos.vazio}>Nenhuma marcação neste mês ainda.</Text>
+      {aviso && <Text style={estilos.aviso}>{aviso}</Text>}
+
+      {naoEnviadas > 0 && (
+        <Text style={estilos.aviso}>
+          {naoEnviadas === 1
+            ? '1 marcação ainda não enviada não entra nesta conta.'
+            : `${naoEnviadas} marcações ainda não enviadas não entram nesta conta.`}
+        </Text>
+      )}
+
+      {carregando && !resumo && <ActivityIndicator color={cores.textoFraco} style={{ marginTop: espaco.xl }} />}
+
+      {!carregando && resumo && dias.length === 0 && (
+        <Text style={estilos.vazio}>Nenhuma marcação neste mês.</Text>
       )}
 
       {dias.map((dia) => (
@@ -56,8 +145,8 @@ export function Historico({ estado }: { estado: EstadoPonto }) {
               <Text style={estilos.nomeDia}>{nomeDoDia(dia.data)}</Text>
             </View>
             <View style={estilos.totalDia}>
-              <Text style={estilos.valorDia}>{formatarDuracao(dia.minutos)}</Text>
-              {dia.emAberto && <Text style={estilos.emAberto}>saída não registrada</Text>}
+              <Text style={estilos.valorDia}>{dia.trabalhadoFormatado}</Text>
+              {dia.diaAberto && <Text style={estilos.emAberto}>saída não registrada</Text>}
             </View>
           </View>
 
@@ -71,12 +160,19 @@ export function Historico({ estado }: { estado: EstadoPonto }) {
                   ]}
                 />
                 <Text style={estilos.chipTexto}>{horaLocal(b.ocorridoEm)}</Text>
-                {b.status !== 'enviado' && <Text style={estilos.chipPendente}>·</Text>}
+                {(b.manual || b.ajustadoEm) && <Text style={estilos.chipAjustada}>·</Text>}
               </View>
             ))}
           </View>
         </View>
       ))}
+
+      {resumo && dias.length > 0 && (
+        <Text style={estilos.nota}>
+          Saldo calculado pelo servidor sobre {Math.round(resumo.esperadoMinutos / 60)}h de jornada
+          nos dias úteis do mês. O ponto ao lado da hora marca correção manual.
+        </Text>
+      )}
     </ScrollView>
   );
 }
@@ -85,6 +181,31 @@ const estilos = StyleSheet.create({
   conteudo: {
     padding: espaco.lg,
     paddingBottom: espaco.xl,
+  },
+  seletorMes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: espaco.md,
+  },
+  seta: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  setaTexto: {
+    color: cores.texto,
+    fontSize: 30,
+    lineHeight: 34,
+  },
+  setaApagada: {
+    color: cores.borda,
+  },
+  mes: {
+    ...tipo.titulo,
+    color: cores.texto,
+    flex: 1,
+    textAlign: 'center',
   },
   resumo: {
     flexDirection: 'row',
@@ -106,10 +227,24 @@ const estilos = StyleSheet.create({
     color: cores.textoFraco,
     marginTop: espaco.xs,
   },
-  nota: {
+  selo: {
+    ...tipo.legenda,
+    color: cores.pendente,
+    marginTop: espaco.sm,
+    textAlign: 'center',
+  },
+  aviso: {
     ...tipo.legenda,
     color: cores.textoFraco,
     marginTop: espaco.sm,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  nota: {
+    ...tipo.legenda,
+    color: cores.fora,
+    marginTop: espaco.lg,
+    lineHeight: 19,
   },
   vazio: {
     ...tipo.corpo,
@@ -174,8 +309,8 @@ const estilos = StyleSheet.create({
     color: cores.texto,
     fontVariant: ['tabular-nums'],
   },
-  chipPendente: {
-    color: cores.pendente,
+  chipAjustada: {
+    color: cores.textoFraco,
     fontSize: 16,
     lineHeight: 16,
   },

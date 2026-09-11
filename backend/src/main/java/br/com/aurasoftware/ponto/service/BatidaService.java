@@ -3,6 +3,7 @@ package br.com.aurasoftware.ponto.service;
 import br.com.aurasoftware.ponto.domain.Batida;
 import br.com.aurasoftware.ponto.domain.TipoBatida;
 import br.com.aurasoftware.ponto.repository.BatidaRepository;
+import br.com.aurasoftware.ponto.web.dto.AjusteRequest;
 import br.com.aurasoftware.ponto.web.dto.BatidaRequest;
 import br.com.aurasoftware.ponto.web.dto.BatidaResponse;
 import br.com.aurasoftware.ponto.web.dto.ResumoResponse;
@@ -72,7 +73,7 @@ public class BatidaService {
                 continue;
             }
 
-            if (item.ocorridoEm().isAfter(agora.plus(LIMITE_FUTURO))) {
+            if (muitoNoFuturo(item.ocorridoEm(), agora)) {
                 rejeitadas.add(new SincronizacaoResponse.ErroItem(
                         item.id(), "ocorridoEm mais de 24h no futuro — verifique o relogio do aparelho"));
                 continue;
@@ -98,12 +99,57 @@ public class BatidaService {
     }
 
     /**
+     * Corrige hora, tipo ou observacao de uma batida que ja esta aqui.
+     *
+     * Existe porque o app agora limpa o SQLite depois de sincronizar: passado o
+     * dia, o servidor e a unica copia, entao a correcao precisa acontecer nele.
+     */
+    @Transactional
+    public BatidaResponse ajustar(UUID id, AjusteRequest ajuste) {
+        if (ajuste.vazio()) {
+            throw new IllegalArgumentException("Informe ao menos um campo para ajustar");
+        }
+        if (muitoNoFuturo(ajuste.ocorridoEm(), OffsetDateTime.now())) {
+            throw new IllegalArgumentException(
+                    "ocorridoEm mais de 24h no futuro — verifique o relogio do aparelho");
+        }
+
+        Batida batida = vivaOuFalha(id);
+        batida.ajustar(ajuste.ocorridoEm(), ajuste.tipo(), ajuste.observacao());
+        repository.save(batida);
+
+        log.info("Batida {} ajustada para {} {}", id, batida.getTipo(), batida.getOcorridoEm());
+        return BatidaResponse.de(batida, relogioSuspeito(batida));
+    }
+
+    /**
+     * Remove uma batida errada. Exclusao logica: a linha fica no banco e o id
+     * continua reservado, para que um lote antigo reenviado nao a recrie.
+     */
+    @Transactional
+    public void apagar(UUID id) {
+        Batida batida = vivaOuFalha(id);
+        batida.apagar();
+        repository.save(batida);
+        log.info("Batida {} apagada", id);
+    }
+
+    private Batida vivaOuFalha(UUID id) {
+        return repository.findByIdAndApagadoEmIsNull(id)
+                .orElseThrow(() -> new NaoEncontrado("Batida %s nao encontrada".formatted(id)));
+    }
+
+    private boolean muitoNoFuturo(OffsetDateTime quando, OffsetDateTime agora) {
+        return quando != null && quando.isAfter(agora.plus(LIMITE_FUTURO));
+    }
+
+    /**
      * Ultima batida registrada. O app usa isso ao reinstalar/trocar de aparelho
      * para saber se o proximo toque e ENTRADA ou SAIDA.
      */
     @Transactional(readOnly = true)
     public Optional<BatidaResponse> ultima() {
-        return repository.findTop1ByOrderByOcorridoEmDesc().stream()
+        return repository.findTop1ByApagadoEmIsNullOrderByOcorridoEmDesc().stream()
                 .findFirst()
                 .map(b -> BatidaResponse.de(b, relogioSuspeito(b)));
     }
@@ -178,7 +224,7 @@ public class BatidaService {
     private List<Batida> buscar(LocalDate inicio, LocalDate fim) {
         OffsetDateTime de = inicio.atStartOfDay(zona).toOffsetDateTime();
         OffsetDateTime ate = fim.plusDays(1).atStartOfDay(zona).toOffsetDateTime();
-        return repository.findByOcorridoEmBetweenOrderByOcorridoEmAsc(de, ate);
+        return repository.findByOcorridoEmBetweenAndApagadoEmIsNullOrderByOcorridoEmAsc(de, ate);
     }
 
     /**
@@ -187,6 +233,12 @@ public class BatidaService {
      * estava adiantado.
      */
     private boolean relogioSuspeito(Batida b) {
+        // Batida corrigida ou lancada a mao tem a hora trocada DE PROPOSITO.
+        // Sem esta saida, consertar uma marcacao para mais tarde acusaria
+        // relogio adiantado — justamente no registro em que voce mais confia.
+        if (b.isManual() || b.getAjustadoEm() != null) {
+            return false;
+        }
         return b.getOcorridoEm().isAfter(b.getRecebidoEm().plus(TOLERANCIA_FUTURO));
     }
 

@@ -14,11 +14,13 @@ public record BatidaResponse(
         String origem,
         String observacao,
         boolean manual,
+        OffsetDateTime ajustadoEm,
         boolean relogioSuspeito
 ) {
     public static BatidaResponse de(Batida b, boolean relogioSuspeito) {
         return new BatidaResponse(
                 b.getId(), b.getTipo(), b.getOcorridoEm(), b.getRecebidoEm(),
-                b.getOrigem(), b.getObservacao(), b.isManual(), relogioSuspeito);
+                b.getOrigem(), b.getObservacao(), b.isManual(), b.getAjustadoEm(),
+                relogioSuspeito);
     }
 }

@@ -62,6 +62,18 @@ public class Batida {
     @Column(name = "manual", nullable = false)
     private boolean manual = false;
 
+    /** Quando a hora/tipo foi corrigida pelo app. NULL = nunca foi mexida. */
+    @Column(name = "ajustado_em")
+    private OffsetDateTime ajustadoEm;
+
+    /**
+     * Exclusao logica. A linha continua no banco para preservar a trilha de
+     * auditoria e para que um reenvio antigo do app nao ressuscite a batida
+     * (o controle de duplicata olha o id, que continua existindo).
+     */
+    @Column(name = "apagado_em")
+    private OffsetDateTime apagadoEm;
+
     protected Batida() {
         // JPA
     }
@@ -108,5 +120,44 @@ public class Batida {
 
     public boolean isManual() {
         return manual;
+    }
+
+    public OffsetDateTime getAjustadoEm() {
+        return ajustadoEm;
+    }
+
+    public OffsetDateTime getApagadoEm() {
+        return apagadoEm;
+    }
+
+    public boolean estaApagada() {
+        return apagadoEm != null;
+    }
+
+    /**
+     * Corrige a batida. Cada argumento nulo significa "nao mexe neste campo",
+     * entao da para trocar so a hora sem reenviar o resto.
+     *
+     * O uptimeMs original e mantido de proposito: ele descreve o aparelho no
+     * instante do registro, e corrigir a hora nao muda o que aconteceu la.
+     */
+    public void ajustar(OffsetDateTime ocorridoEm, TipoBatida tipo, String observacao) {
+        if (ocorridoEm != null) {
+            this.ocorridoEm = ocorridoEm;
+        }
+        if (tipo != null) {
+            this.tipo = tipo;
+        }
+        if (observacao != null) {
+            this.observacao = observacao.isBlank() ? null : observacao;
+        }
+        this.manual = true;
+        this.ajustadoEm = OffsetDateTime.now();
+    }
+
+    public void apagar() {
+        if (apagadoEm == null) {
+            this.apagadoEm = OffsetDateTime.now();
+        }
     }
 }

@@ -6,13 +6,17 @@ import { cores, espaco, tipo } from './src/theme';
 import { useEstadoPonto } from './src/estado';
 import { Hoje } from './src/telas/Hoje';
 import { Historico } from './src/telas/Historico';
+import { Corrigir } from './src/telas/Corrigir';
 import { Ajustes } from './src/telas/Ajustes';
 
-type Aba = 'hoje' | 'historico' | 'ajustes';
+// "Corrigir" e nao "Ajustar": ao lado de "Ajustes" (servidor e chave), dois
+// rotulos parecidos na mesma barra so fariam voce entrar na aba errada.
+type Aba = 'hoje' | 'historico' | 'corrigir' | 'ajustes';
 
 const ABAS: { chave: Aba; rotulo: string }[] = [
   { chave: 'hoje', rotulo: 'Hoje' },
   { chave: 'historico', rotulo: 'Histórico' },
+  { chave: 'corrigir', rotulo: 'Corrigir' },
   { chave: 'ajustes', rotulo: 'Ajustes' },
 ];
 
@@ -33,6 +37,8 @@ export default function App() {
           <Hoje estado={estado} />
         ) : aba === 'historico' ? (
           <Historico estado={estado} />
+        ) : aba === 'corrigir' ? (
+          <Corrigir estado={estado} />
         ) : (
           <Ajustes estado={estado} />
         )}
@@ -50,7 +56,7 @@ export default function App() {
               style={estilos.aba}
             >
               <Text style={[estilos.abaTexto, ativa && estilos.abaAtiva]}>{rotulo}</Text>
-              {chave === 'ajustes' && estado.naFila > 0 && <View style={estilos.selo} />}
+              {chave === 'ajustes' && estado.pendencias > 0 && <View style={estilos.selo} />}
             </Pressable>
           );
         })}

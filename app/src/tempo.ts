@@ -1,4 +1,4 @@
-import { Batida, DiaTrabalhado } from './tipos';
+import { Batida, DiaTrabalhado, TipoBatida } from './tipos';
 
 /**
  * Calculos de horas feitos LOCALMENTE, a partir do SQLite. O app mostra o
@@ -58,23 +58,37 @@ export function agruparPorDia(batidas: Batida[]): DiaTrabalhado[] {
 
   for (const [data, lista] of mapa) {
     const ordenadas = [...lista].sort((a, b) => a.ocorridoEm.localeCompare(b.ocorridoEm));
+    const { minutos, emAberto } = minutosPareados(ordenadas);
 
-    let minutos = 0;
-    let entradaAberta: Batida | null = null;
-
-    for (const b of ordenadas) {
-      if (b.tipo === 'ENTRADA') {
-        entradaAberta = b;
-      } else if (entradaAberta) {
-        minutos += diferencaMinutos(entradaAberta.ocorridoEm, b.ocorridoEm);
-        entradaAberta = null;
-      }
-    }
-
-    dias.push({ data, minutos, emAberto: entradaAberta !== null, batidas: ordenadas });
+    dias.push({ data, minutos, emAberto, batidas: ordenadas });
   }
 
   return dias.sort((a, b) => b.data.localeCompare(a.data));
+}
+
+/**
+ * O pareamento em si, separado porque a tela Corrigir precisa do total de um
+ * dia montado a partir de marcacoes que vieram do servidor — nao de linhas do
+ * SQLite. Aceita qualquer coisa com tipo e ocorridoEm.
+ */
+export function minutosPareados(
+  batidas: { tipo: TipoBatida; ocorridoEm: string }[],
+): { minutos: number; emAberto: boolean } {
+  const ordenadas = [...batidas].sort((a, b) => a.ocorridoEm.localeCompare(b.ocorridoEm));
+
+  let minutos = 0;
+  let entradaAberta: { ocorridoEm: string } | null = null;
+
+  for (const b of ordenadas) {
+    if (b.tipo === 'ENTRADA') {
+      entradaAberta = b;
+    } else if (entradaAberta) {
+      minutos += diferencaMinutos(entradaAberta.ocorridoEm, b.ocorridoEm);
+      entradaAberta = null;
+    }
+  }
+
+  return { minutos, emAberto: entradaAberta !== null };
 }
 
 export function diferencaMinutos(inicioIso: string, fimIso: string): number {
@@ -103,4 +117,72 @@ export function dataAmigavel(data: string): string {
   if (data === ontem) return 'Ontem';
   const [, mes, dia] = data.split('-');
   return `${dia}/${mes}`;
+}
+
+/* -------------------------------------------------- navegacao por dia e mes */
+
+export function hojeLocal(): string {
+  return dataLocal(formatarIso(new Date()));
+}
+
+export function somarDias(data: string, dias: number): string {
+  // Meio-dia evita que horario de verao empurre o resultado para o dia vizinho.
+  const d = new Date(`${data}T12:00:00`);
+  d.setDate(d.getDate() + dias);
+  return dataLocal(formatarIso(d));
+}
+
+export function mesDe(data: string): string {
+  return data.slice(0, 7);
+}
+
+export function mesAtual(): string {
+  return mesDe(hojeLocal());
+}
+
+export function somarMeses(mes: string, meses: number): string {
+  const [ano, m] = mes.split('-').map(Number);
+  const d = new Date(ano, m - 1 + meses, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+const NOMES_MES = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
+export function rotuloMes(mes: string): string {
+  const [ano, m] = mes.split('-').map(Number);
+  return `${NOMES_MES[m - 1]} de ${ano}`;
+}
+
+/** "quarta, 10/09" — cabecalho do seletor de dia na tela Corrigir. */
+export function dataPorExtenso(data: string): string {
+  const [, mes, dia] = data.split('-');
+  return `${nomeDoDia(data)}, ${dia}/${mes}`;
+}
+
+/* ------------------------------------------------------ edicao de horario */
+
+/** Junta um dia (YYYY-MM-DD) com uma hora (HH:MM) no ISO local com offset. */
+export function isoDoDiaComHora(data: string, hora: string): string {
+  return formatarIso(new Date(`${data}T${hora}:00`));
+}
+
+/** Desloca um ISO em minutos, mantendo o dia se a conta virar a meia-noite. */
+export function deslocarMinutos(iso: string, minutos: number): string {
+  return formatarIso(new Date(new Date(iso).getTime() + minutos * 60000));
+}
+
+/** Normaliza "8:5" -> "08:05". Devolve null se nao der para entender. */
+export function normalizarHora(texto: string): string | null {
+  const cru = texto.trim().replace(/[.,;]/g, ':');
+  const m = /^(\d{1,2}):?(\d{0,2})$/.exec(cru);
+  if (!m) return null;
+
+  const h = Number(m[1]);
+  const min = Number(m[2] || '0');
+  if (h > 23 || min > 59) return null;
+
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
 }

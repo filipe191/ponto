@@ -1,6 +1,7 @@
 package br.com.aurasoftware.ponto.web;
 
 import br.com.aurasoftware.ponto.service.BatidaService;
+import br.com.aurasoftware.ponto.web.dto.AjusteRequest;
 import br.com.aurasoftware.ponto.web.dto.BatidaResponse;
 import br.com.aurasoftware.ponto.web.dto.ResumoResponse;
 import br.com.aurasoftware.ponto.web.dto.SincronizacaoRequest;
@@ -8,7 +9,10 @@ import br.com.aurasoftware.ponto.web.dto.SincronizacaoResponse;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/pontos")
@@ -36,6 +41,22 @@ public class BatidaController {
     @PostMapping("/lote")
     public SincronizacaoResponse sincronizar(@Valid @RequestBody SincronizacaoRequest request) {
         return service.sincronizar(request);
+    }
+
+    /**
+     * Corrige uma batida ja sincronizada (tela Corrigir do app). Campo ausente
+     * no corpo fica como esta — normalmente vem so o ocorridoEm.
+     */
+    @PatchMapping("/{id}")
+    public BatidaResponse ajustar(@PathVariable UUID id, @Valid @RequestBody AjusteRequest ajuste) {
+        return service.ajustar(id, ajuste);
+    }
+
+    /** Apaga (logicamente) uma batida errada. */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> apagar(@PathVariable UUID id) {
+        service.apagar(id);
+        return ResponseEntity.noContent().build();
     }
 
     /** Usado pelo app na primeira abertura para saber o proximo tipo de batida. */

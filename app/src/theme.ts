@@ -37,12 +37,12 @@ export const tipo = {
     letterSpacing: -2,
     // Sem isso os digitos "pulam" a cada segundo. Detalhe que faz diferenca
     // num app que fica com um cronometro rodando na tela.
-    fontVariant: ['tabular-nums'] as const,
+    fontVariant: ['tabular-nums' as const],
   },
   numero: {
     fontSize: 20,
     fontWeight: '500' as const,
-    fontVariant: ['tabular-nums'] as const,
+    fontVariant: ['tabular-nums' as const],
   },
   titulo: {
     fontSize: 17,
