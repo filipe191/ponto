@@ -1,0 +1,41 @@
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: ponto-db
+    environment:
+      POSTGRES_DB: ponto
+      POSTGRES_USER: ponto
+      POSTGRES_PASSWORD: ponto_senha_local
+      TZ: America/Sao_Paulo
+    volumes:
+      - ponto_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"      # 5433 no host pra nao brigar com outro Postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ponto -d ponto"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: ponto-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Valores diretos no compose de proposito: env do shell sobrescreve .env
+      # e isso ja causou dor de cabeca antes.
+      DB_URL: jdbc:postgresql://db:5432/ponto
+      DB_USER: ponto
+      DB_PASSWORD: ponto_senha_local
+      PONTO_API_KEY: troque-esta-chave-por-uma-aleatoria
+      TZ: America/Sao_Paulo
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  ponto_pgdata:
