@@ -1,5 +1,6 @@
-import { ErroHttp, aplicarAjuste, enviarLote } from './api';
+import { ErroHttp, aplicarAjuste, enviarLote, ultimaDoServidor } from './api';
 import { carregarConfig, configCompleta } from './config';
+import { temRede } from './rede';
 import {
   ajustesPendentes,
   limparSincronizadas,
@@ -28,7 +29,7 @@ import {
 const TAMANHO_LOTE = 200;
 
 export interface ResultadoSync {
-  status: 'ok' | 'nada-a-fazer' | 'sem-config' | 'falhou';
+  status: 'ok' | 'nada-a-fazer' | 'sem-config' | 'sem-rede' | 'falhou';
   enviadas: number;
   rejeitadas: number;
   ajustadas: number;
@@ -36,13 +37,17 @@ export interface ResultadoSync {
   mensagem?: string;
 }
 
+const PARADO: ResultadoSync = {
+  status: 'nada-a-fazer', enviadas: 0, rejeitadas: 0, ajustadas: 0, limpas: 0,
+};
+
 let sincronizando = false;
 
 export async function sincronizar(): Promise<ResultadoSync> {
   // Duas chamadas concorrentes tentariam enviar o mesmo lote. O servidor
   // aguentaria (e idempotente), mas nao ha motivo para gastar rede.
   if (sincronizando) {
-    return { status: 'nada-a-fazer', enviadas: 0, rejeitadas: 0, ajustadas: 0, limpas: 0 };
+    return PARADO;
   }
 
   sincronizando = true;
@@ -50,13 +55,16 @@ export async function sincronizar(): Promise<ResultadoSync> {
     const config = await carregarConfig();
     if (!configCompleta(config)) {
       return {
+        ...PARADO,
         status: 'sem-config',
-        enviadas: 0,
-        rejeitadas: 0,
-        ajustadas: 0,
-        limpas: 0,
         mensagem: 'Falta configurar o endereco do servidor',
       };
+    }
+
+    // Sem nenhuma interface de rede nao ha o que tentar. Sair aqui deixa tudo
+    // exatamente como esta: a fila continua cheia e NADA e apagado do aparelho.
+    if (!(await temRede())) {
+      return { ...PARADO, status: 'sem-rede' };
     }
 
     const fila = await pendentes();
@@ -66,12 +74,18 @@ export async function sincronizar(): Promise<ResultadoSync> {
     let rejeitadas = 0;
     let ajustadas = 0;
 
+    // A limpeza local so pode acontecer depois de o servidor responder de
+    // verdade. Estar numa rede nao e prova de nada — Tailscale fora do ar,
+    // portal de Wi-Fi de cafe e backend derrubado sao todos "conectado".
+    let servidorRespondeu = false;
+
     for (let i = 0; i < fila.length; i += TAMANHO_LOTE) {
       const lote = fila.slice(i, i + TAMANHO_LOTE);
       const ids = lote.map((b) => b.id);
 
       try {
         const resposta = await enviarLote(config, lote);
+        servidorRespondeu = true;
 
         // Duplicada = o servidor ja tinha. Do ponto de vista do app isso e
         // sucesso: a batida esta salva la. Tratar como erro faria a fila
@@ -105,6 +119,7 @@ export async function sincronizar(): Promise<ResultadoSync> {
       try {
         await aplicarAjuste(config, correcao);
         await removerAjuste(correcao.id);
+        servidorRespondeu = true;
         ajustadas++;
       } catch (e: any) {
         // 404: a batida nao existe mais la (apagada em outro momento). Nao ha
@@ -112,6 +127,7 @@ export async function sincronizar(): Promise<ResultadoSync> {
         // sempre.
         if (e instanceof ErroHttp && e.status === 404) {
           await removerAjuste(correcao.id);
+          servidorRespondeu = true;   // ele respondeu; so nao tinha o registro
           continue;
         }
 
@@ -133,12 +149,24 @@ export async function sincronizar(): Promise<ResultadoSync> {
       }
     }
 
-    // Chegou aqui: o servidor confirmou tudo que dava para confirmar. Agora o
-    // celular pode se desfazer do que ja esta la.
+    // Nada na fila significa que nenhuma requisicao saiu daqui — e sem
+    // requisicao nao ha prova de que o servidor esta vivo. Uma consulta barata
+    // (timeout de 4s) resolve: ou ela confirma o contato, ou a limpeza fica
+    // para a proxima. Apagar o historico do celular contra um servidor que nao
+    // respondeu seria apagar sem rede a favor.
+    if (!servidorRespondeu) {
+      try {
+        await ultimaDoServidor(config);
+        servidorRespondeu = true;
+      } catch {
+        return { ...PARADO, status: 'sem-rede' };
+      }
+    }
+
     const limpas = await limparSincronizadas();
 
     if (enviadas === 0 && rejeitadas === 0 && ajustadas === 0 && limpas === 0) {
-      return { status: 'nada-a-fazer', enviadas: 0, rejeitadas: 0, ajustadas: 0, limpas: 0 };
+      return PARADO;
     }
 
     return { status: 'ok', enviadas, rejeitadas, ajustadas, limpas };

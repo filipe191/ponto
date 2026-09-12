@@ -17,6 +17,7 @@ import {
   registrarBatida,
   ultimaBatida,
 } from './db';
+import { temRede } from './rede';
 import { sincronizar } from './sync';
 import { agruparPorDia, formatarIso } from './tempo';
 import { AjustePendente, Batida, BatidaServidor, DiaTrabalhado, TipoBatida } from './tipos';
@@ -43,6 +44,32 @@ export function useEstadoPonto() {
   const emTurno = ultima?.tipo === 'ENTRADA';
   const proximoTipo: TipoBatida = emTurno ? 'SAIDA' : 'ENTRADA';
 
+  /**
+   * Pergunta ao servidor se ha turno em aberto. So faz sentido quando o banco
+   * local esta vazio — manha seguinte a uma limpeza, ou app recem instalado.
+   *
+   * NUNCA e esperado por quem chama: a tela ja abriu com o que tinha. Esperar
+   * esta resposta para desenhar a primeira tela prendia o app no spinner ate o
+   * timeout do HTTP quando o servidor estava fora do ar.
+   */
+  const conferindo = useRef(false);
+  const conferirTurnoNoServidor = useCallback(async () => {
+    if (conferindo.current) return;
+    conferindo.current = true;
+
+    try {
+      const remota = await ultimaRemota();
+      if (!remota) return;
+
+      // Se voce bateu o ponto enquanto a resposta vinha, o local manda.
+      const local = await ultimaBatida();
+      if (!local) setUltima(remota);
+    } finally {
+      conferindo.current = false;
+    }
+  }, []);
+
+  /** So banco local. Rapido e sem rede — e isto que libera a primeira tela. */
   const recarregar = useCallback(async () => {
     const inicio = new Date();
     inicio.setDate(1);
@@ -64,11 +91,12 @@ export function useEstadoPonto() {
     setAjustes(correcoes);
     setNaFila(fila);
     setCorrecoesNaFila(filaCorrecoes);
+    setUltima(ult);
 
-    // Sem nada no banco local (manha seguinte a uma limpeza, ou app recem
-    // instalado), quem sabe se voce esta em turno e o servidor.
-    setUltima(ult ?? (await ultimaRemota()));
-  }, []);
+    if (!ult) {
+      conferirTurnoNoServidor();   // sem await: a tela nao espera a rede
+    }
+  }, [conferirTurnoNoServidor]);
 
   const sincronizarAgora = useCallback(async () => {
     setSincronizando(true);
@@ -172,15 +200,19 @@ export function useEstadoPonto() {
     return () => inscricao.remove();
   }, [recarregar, sincronizarAgora]);
 
-  // Gatilho 2: rede voltou com o app aberto.
+  // Gatilho 2: rede voltou com o app aberto. E o que faz a fila esvaziar sozinha
+  // assim que voce reconecta, sem precisar abrir e fechar o app.
   const tinhaRede = useRef<boolean | null>(null);
   useEffect(() => {
     const remover = NetInfo.addEventListener((estado) => {
-      const temRede = Boolean(estado.isConnected && estado.isInternetReachable !== false);
-      if (tinhaRede.current === false && temRede) {
+      // Mesma regra do rede.ts: so isConnected. O servidor costuma estar na LAN
+      // ou no Tailscale, entao exigir internet de verdade faria o app ignorar
+      // justamente a rede de casa.
+      const conectado = estado.isConnected === true;
+      if (tinhaRede.current === false && conectado) {
         sincronizarAgora();
       }
-      tinhaRede.current = temRede;
+      tinhaRede.current = conectado;
     });
     return () => remover();
   }, [sincronizarAgora]);
@@ -214,6 +246,7 @@ async function ultimaRemota(): Promise<Batida | null> {
   try {
     const config = await carregarConfig();
     if (!configCompleta(config)) return null;
+    if (!(await temRede())) return null;
 
     const remota = await ultimaDoServidor(config);
     return remota ? deServidor(remota) : null;

@@ -57,3 +57,25 @@ export const tipo = {
     fontWeight: '400' as const,
   },
 };
+
+/**
+ * Raios. Antes cada tela escolhia o seu: havia 3, 4, 8, 10, 12, 14, 18 e 999
+ * espalhados pelos arquivos, sem criterio. A escala abaixo e a unificacao —
+ * nada de numero solto em StyleSheet novo.
+ */
+export const raio = {
+  pequeno: 8,
+  medio: 12,      // campos de texto
+  grande: 14,     // cartoes e botoes
+  enorme: 18,     // o botao principal da tela Hoje
+  total: 999,     // circulos e pilulas
+};
+
+/**
+ * Estados de toque. Um so lugar decide como um Pressable reage, senao cada
+ * tela inventa a sua opacidade.
+ */
+export const toque = {
+  opacidade: 0.75,
+  escala: 0.985,
+};

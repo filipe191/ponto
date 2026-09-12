@@ -6,6 +6,7 @@ import { EstadoPonto } from '../estado';
 import { buscarResumo } from '../api';
 import { carregarConfig, configCompleta } from '../config';
 import { lerCacheResumo, salvarCacheResumo } from '../db';
+import { temRede } from '../rede';
 import { dataAmigavel, horaLocal, mesAtual, nomeDoDia, rotuloMes, somarMeses } from '../tempo';
 import { ResumoMes } from '../tipos';
 
@@ -41,6 +42,30 @@ export function Historico({ estado }: { estado: EstadoPonto }) {
         return;
       }
 
+      /** Cai para a ultima copia baixada deste mes, com o motivo a vista. */
+      const usarCache = async (motivo: string, semCache: string) => {
+        const cache = await lerCacheResumo(mes);
+        if (cache) {
+          setResumo(cache.resumo);
+          setDoCache(true);
+          setAviso(`${motivo} Mostrando a cópia de ${dataAmigavel(cache.buscadoEm.slice(0, 10))} às ${horaLocal(cache.buscadoEm)}.`);
+        } else {
+          setResumo(null);
+          setDoCache(false);
+          setAviso(semCache);
+        }
+      };
+
+      // Sem rede nenhuma, nao ha por que gastar o timeout do HTTP encarando um
+      // spinner: o cache ja esta aqui e e o melhor que existe agora.
+      if (!(await temRede())) {
+        await usarCache(
+          'Sem conexão.',
+          'Sem conexão e sem cópia deste mês no aparelho. O histórico mora no servidor.',
+        );
+        return;
+      }
+
       try {
         const doServidor = await buscarResumo(config, mes);
         setResumo(doServidor);
@@ -48,15 +73,10 @@ export function Historico({ estado }: { estado: EstadoPonto }) {
         setAviso(null);
         await salvarCacheResumo(mes, doServidor);
       } catch (e: any) {
-        const cache = await lerCacheResumo(mes);
-        if (cache) {
-          setResumo(cache.resumo);
-          setDoCache(true);
-          setAviso(`Sem resposta do servidor. Mostrando a cópia de ${dataAmigavel(cache.buscadoEm.slice(0, 10))} às ${horaLocal(cache.buscadoEm)}.`);
-        } else {
-          setResumo(null);
-          setAviso(e?.message ?? 'Não foi possível falar com o servidor');
-        }
+        await usarCache(
+          'Sem resposta do servidor.',
+          e?.message ?? 'Não foi possível falar com o servidor',
+        );
       }
     } finally {
       setCarregando(false);

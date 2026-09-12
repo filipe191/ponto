@@ -18,6 +18,7 @@ import { EstadoPonto } from '../estado';
 import { buscarPeriodo } from '../api';
 import { carregarConfig, configCompleta } from '../config';
 import { batidasEntre } from '../db';
+import { temRede } from '../rede';
 import {
   dataPorExtenso,
   formatarDuracao,
@@ -73,7 +74,15 @@ export function Corrigir({ estado }: { estado: EstadoPonto }) {
       let doServidor: MarcacaoEditavel[] = [];
       try {
         const config = await carregarConfig();
-        if (configCompleta(config)) {
+
+        if (!configCompleta(config)) {
+          setAvisoServidor('Sem servidor configurado — mostrando só o que está no aparelho.');
+        } else if (!(await temRede())) {
+          // Offline a tela continua util: o dia de hoje e tudo que ainda nao
+          // foi enviado estao no aparelho. Gastar o timeout do HTTP antes de
+          // mostrar isso so faria a tela parecer travada.
+          setAvisoServidor('Sem conexão — mostrando só o que está no aparelho.');
+        } else {
           const resposta = await buscarPeriodo(config, dia, dia);
           doServidor = resposta.map((b) => ({
             id: b.id,
@@ -85,8 +94,6 @@ export function Corrigir({ estado }: { estado: EstadoPonto }) {
             ajustePendente: null,
           }));
           setAvisoServidor(null);
-        } else {
-          setAvisoServidor('Sem servidor configurado — mostrando só o que está no aparelho.');
         }
       } catch (e: any) {
         setAvisoServidor(

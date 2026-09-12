@@ -28,9 +28,10 @@ async function requisicao<T>(
   config: Config,
   caminho: string,
   init: RequestInit = {},
+  timeoutMs = TIMEOUT_MS,
 ): Promise<T> {
   const controlador = new AbortController();
-  const timer = setTimeout(() => controlador.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controlador.abort(), timeoutMs);
 
   try {
     const resposta = await fetch(`${config.urlApi}${caminho}`, {
@@ -108,9 +109,18 @@ export async function aplicarAjuste(config: Config, ajuste: AjustePendente): Pro
   });
 }
 
+/**
+ * Leitura de tela. Timeout intermediario: 15s e tempo demais encarando um
+ * spinner quando existe cache para mostrar, mas 4s seria curto para o primeiro
+ * resumo depois de o backend subir.
+ */
+const TIMEOUT_TELA_MS = 8000;
+
 /** Historico do mes (YYYY-MM) — e o servidor que calcula horas e saldo. */
 export async function buscarResumo(config: Config, mes: string): Promise<ResumoMes> {
-  return requisicao<ResumoMes>(config, `/api/pontos/resumo?mes=${mes}`, { method: 'GET' });
+  return requisicao<ResumoMes>(
+    config, `/api/pontos/resumo?mes=${mes}`, { method: 'GET' }, TIMEOUT_TELA_MS,
+  );
 }
 
 /** Batidas de um periodo, usado pela tela Corrigir. Datas em YYYY-MM-DD. */
@@ -120,7 +130,7 @@ export async function buscarPeriodo(
   fim: string,
 ): Promise<BatidaServidor[]> {
   return requisicao<BatidaServidor[]>(
-    config, `/api/pontos?inicio=${inicio}&fim=${fim}`, { method: 'GET' },
+    config, `/api/pontos?inicio=${inicio}&fim=${fim}`, { method: 'GET' }, TIMEOUT_TELA_MS,
   );
 }
 
@@ -128,7 +138,16 @@ export async function buscarPeriodo(
  * Ultima batida segundo o servidor. Ganhou importancia agora que o celular
  * apaga o historico local: depois da limpeza, e daqui que o app descobre se
  * voce esta em turno.
+ *
+ * Timeout curto de proposito. Isto roda na abertura do app como um extra — se o
+ * servidor nao responde rapido, a tela segue com o que o aparelho sabe. Os 15s
+ * dos outros endpoints existem para nao perder uma batida no envio; aqui nao ha
+ * nada a perder.
  */
+const TIMEOUT_CONSULTA_RAPIDA_MS = 4000;
+
 export async function ultimaDoServidor(config: Config): Promise<BatidaServidor | null> {
-  return requisicao<BatidaServidor | null>(config, '/api/pontos/ultima', { method: 'GET' });
+  return requisicao<BatidaServidor | null>(
+    config, '/api/pontos/ultima', { method: 'GET' }, TIMEOUT_CONSULTA_RAPIDA_MS,
+  );
 }

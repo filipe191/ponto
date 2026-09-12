@@ -83,6 +83,36 @@ Toque em *Salvar e testar*. Se o servidor responder, está pronto.
 > um build com `eas build --platform ios --profile preview` e instale via
 > TestFlight.
 
+### Compilando pelo Xcode
+
+As fases de script do Xcode rodam com um `PATH` mínimo e **não enxergam o
+Homebrew**. Sem isso o build morre com `Command PhaseScriptExecution failed
+with a nonzero exit code`, cercado de centenas de warnings irrelevantes dos
+Pods. Em cada máquina, crie o arquivo local:
+
+```bash
+cd app/ios
+echo "export NODE_BINARY=$(command -v node)" > .xcode.env.local
+```
+
+Use o caminho do symlink (`/opt/homebrew/bin/node`) e **não** o do Cellar
+(`/opt/homebrew/Cellar/node/<versão>/bin/node`) — o segundo some no próximo
+`brew upgrade node` e quebra o build do nada. O arquivo é ignorado pelo git,
+então cada máquina tem o seu.
+
+Quando o build falhar, o erro útil não é o que o Xcode mostra no topo:
+
+```bash
+cd app/ios
+xcodebuild -workspace Ponto.xcworkspace -scheme Ponto -configuration Release \
+  -sdk iphoneos -destination 'generic/platform=iOS' build 2>&1 | tee /tmp/build.log
+grep -nE "error:|PhaseScriptExecution|failed" /tmp/build.log
+```
+
+Note que em **Debug o bundling do JS é pulado** (`SKIP_BUNDLING=1`): um build
+Debug que passa não prova que o Release passa. Para testar a etapa de bundle e
+o Hermes, compile em Release.
+
 ## 3. Onde hospedar
 
 O iPhone precisa alcançar a API. Duas opções que não expõem nada para a
