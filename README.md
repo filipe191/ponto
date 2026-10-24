@@ -1,15 +1,27 @@
 # Ponto
 
-Controle de ponto pessoal que funciona sem rede. O iPhone grava a batida
-localmente e sincroniza com o servidor quando houver conexão.
+Controle de ponto em duas frentes, independentes entre si:
+
+- **Sistema web** (`web/`): relógio de ponto para a empresa, com tablet como relógio
+  (PIN), painel de administração, espelho mensal, banco de horas, regras da CLT,
+  fechamento do mês e HTTPS na rede local. FastAPI + nginx + Postgres.
+  Instruções completas em [`web/README.md`](web/README.md).
+- **App de celular** (`app/` + `backend/`): controle de ponto pessoal que funciona
+  sem rede. O iPhone grava a batida localmente e sincroniza com o servidor quando
+  houver conexão. É o assunto do restante deste README.
 
 ```
 ponto/
-├── backend/   Spring Boot + Postgres (API e histórico definitivo)
+├── web/       Sistema web: relógio + administração (FastAPI, nginx, Postgres)
+├── backend/   Spring Boot + Postgres (API e histórico definitivo do app)
 └── app/       Expo / React Native (iPhone)
 ```
 
-## Como as duas partes conversam
+Os dois sobem com docker compose sem conflito: o web usa as portas 9092/9443 e os
+containers `ponto-backend`/`ponto-frontend`; o backend do app usa 5433/8080 e
+`ponto-db`/`ponto-api`.
+
+## Como as duas partes do app conversam
 
 A batida é gravada no SQLite do celular **primeiro**, sempre. O envio é um passo
 separado que pode falhar quantas vezes for — o botão nunca depende da rede.
