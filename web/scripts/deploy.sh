@@ -30,9 +30,19 @@ openssl x509 -checkend $((30 * 86400)) -noout -in certs/server.crt >/dev/null \
 
 passo "Testes automatizados"
 docker build -q -t ponto-backend-testes ./backend >/dev/null
-docker run --rm -u root -e PYTHONDONTWRITEBYTECODE=1 \
+# Os testes de integração usam um Postgres descartável, numa rede só deles (nunca o banco de produção)
+TESTE_REDE="ponto-deploy-testes-$$"
+limpar_testes() { docker rm -f "$TESTE_REDE-db" >/dev/null 2>&1 || true; docker network rm "$TESTE_REDE" >/dev/null 2>&1 || true; }
+trap limpar_testes EXIT
+docker network create "$TESTE_REDE" >/dev/null
+docker run -d --name "$TESTE_REDE-db" --network "$TESTE_REDE" \
+    -e POSTGRES_USER=ponto -e POSTGRES_PASSWORD=teste -e POSTGRES_DB=ponto_test postgres:18 >/dev/null
+until docker exec "$TESTE_REDE-db" pg_isready -q -h 127.0.0.1 -U ponto -d ponto_test 2>/dev/null; do sleep 1; done
+docker run --rm -u root --network "$TESTE_REDE" -e PYTHONDONTWRITEBYTECODE=1 \
+    -e PGHOST="$TESTE_REDE-db" -e PGUSER=ponto -e PGPASSWORD=teste -e PGDATABASE=ponto_test \
     -v "$RAIZ/backend/tests:/app/tests:ro" -v "$RAIZ/backend/requirements-dev.txt:/app/requirements-dev.txt:ro" \
     ponto-backend-testes sh -c "pip install -q --root-user-action=ignore -r requirements-dev.txt && python -m pytest -q -p no:cacheprovider tests"
+limpar_testes
 
 passo "Vulnerabilidades conhecidas nas dependências"
 # Backend: falha conhecida interrompe o deploy (atualize a versão em backend/requirements.txt).

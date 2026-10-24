@@ -174,15 +174,21 @@ backend/app/
 
 ## Desenvolvimento
 
-Testes (regras de jornada, CLT, feriados, espelho, tokens e limites):
+Testes unitários (regras de jornada, CLT, feriados, espelho, tokens e limites) e de integração (`tests/integration/`: migração de um banco antigo, isolamento entre empresas, relógios, regras por empresa, superadmins), estes contra um Postgres de verdade:
 
 ```bash
 cd ~/ponto/web/backend
+docker network create ponto-testes
+docker run -d --name ponto-testes-db --network ponto-testes -e POSTGRES_USER=ponto -e POSTGRES_PASSWORD=teste -e POSTGRES_DB=ponto_test postgres:18
 docker build -t ponto-backend .
-docker run --rm -u root -v "$PWD/tests:/app/tests:ro" -v "$PWD/requirements-dev.txt:/app/requirements-dev.txt:ro" \
+docker run --rm -u root --network ponto-testes -e PGHOST=ponto-testes-db -e PGUSER=ponto -e PGPASSWORD=teste -e PGDATABASE=ponto_test \
+  -v "$PWD/tests:/app/tests:ro" -v "$PWD/requirements-dev.txt:/app/requirements-dev.txt:ro" \
   ponto-backend sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q tests"
+docker rm -f ponto-testes-db && docker network rm ponto-testes
 ```
 
-Nova mudança no banco: crie `app/db/migrations/versions/0008_<descricao>.py` com `revision = "0008"` e `down_revision = "0007"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
+Os testes de integração **apagam e recriam o banco**: só rodam quando `PGDATABASE` contém "test"; sem isso, são pulados. O `scripts/deploy.sh` faz o mesmo com um Postgres descartável, e o GitHub Actions (`.github/workflows/backend.yml`) roda tudo, mais o `pip-audit`, a cada push.
+
+Nova mudança no banco: crie `app/db/migrations/versions/0010_<descricao>.py` com `revision = "0010"` e `down_revision = "0009"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
 
 Páginas: o HTML fica em `frontend/public/*.html` e o script de cada uma em `frontend/public/js/`. A CSP só aceita scripts desses arquivos (`script-src 'self'`): não coloque `<script>` com código nem `onclick=` dentro do HTML.
