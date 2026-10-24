@@ -86,12 +86,16 @@ class DeviceService:
 
     def authenticate(self, key: str | None) -> tuple[Employee, EmployeeDevice]:
         device = self.repo.by_key_hash(hash_device_key(key)) if key else None
+        if device and not device.revoked_at:
+            self._revoke_if_idle(device)
         if not device or device.revoked_at:
             raise Unauthorized("Chave de acesso inválida")
+        now = datetime.now(timezone.utc)
+        if device.expires_at <= now:
+            raise Unauthorized("Chave de acesso vencida. Peça uma nova ao administrador")
         employee = self.employees.get(device.employee_id)
         if not employee or not employee.active:
             raise Unauthorized("Funcionário desativado")
-        now = datetime.now(timezone.utc)
         # Grava o último uso de vez em quando, não a cada requisição
         if not device.last_used_at or now - device.last_used_at > timedelta(minutes=5):
             device.last_used_at = now
@@ -99,7 +103,33 @@ class DeviceService:
         return employee, device
 
     def list(self, employee_id: int) -> list[EmployeeDevice]:
-        return self.repo.list_for_employee(employee_id)
+        devices = self.repo.list_for_employee(employee_id)
+        for device in devices:
+            if not device.revoked_at:
+                self._revoke_if_idle(device)
+        return devices
+
+    def expiring(self) -> int:
+        """Chaves ativas que vencem nos próximos settings.device_warn_days dias (aviso no painel)."""
+        now = datetime.now(timezone.utc)
+        return self.repo.count_active_expiring(now, now + timedelta(days=settings.device_warn_days))
+
+    def _revoke_if_idle(self, device: EmployeeDevice) -> None:
+        """Chave parada há muito tempo (celular trocado, perdido, esquecido) é revogada sozinha."""
+        now = datetime.now(timezone.utc)
+        if now - (device.last_used_at or device.created_at) <= timedelta(days=settings.device_idle_days):
+            return
+        device.revoked_at = now
+        employee = self.employees.get(device.employee_id)
+        AuditLog(self.db).record(
+            "sistema",
+            "celular.revogado",
+            f"Revogou sozinho a chave do celular \"{device.name}\" de {employee.name if employee else '?'}: "
+            f"{settings.device_idle_days} dias sem uso",
+            employee_id=device.employee_id,
+            details={"device_id": device.id, "name": device.name, "idle_days": settings.device_idle_days},
+        )
+        self.db.commit()
 
     def create(self, employee_id: int, name: str, user: str) -> DeviceCreated:
         employee = self.employees.get(employee_id)
@@ -107,7 +137,13 @@ class DeviceService:
             raise NotFound("Funcionário não encontrado")
         key = new_device_key()
         device = self.repo.add(
-            EmployeeDevice(employee_id=employee_id, name=name, key_hash=hash_device_key(key), created_by=user)
+            EmployeeDevice(
+                employee_id=employee_id,
+                name=name,
+                key_hash=hash_device_key(key),
+                created_by=user,
+                expires_at=datetime.now(timezone.utc) + timedelta(days=settings.device_key_days),
+            )
         )
         AuditLog(self.db).record(
             user,
@@ -124,6 +160,7 @@ class DeviceService:
             created_by=device.created_by,
             last_used_at=None,
             revoked_at=None,
+            expires_at=device.expires_at,
             key=key,
         )
 

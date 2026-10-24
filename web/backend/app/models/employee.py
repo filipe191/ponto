@@ -19,6 +19,8 @@ class Employee(Base):
     pin_hash: Mapped[str] = mapped_column(String, unique=True)
     # PIN de 4 ou 5 dígitos, de antes da regra de 6: continua valendo, mas o admin deve trocar
     pin_short: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("FALSE"))
+    # Dados pessoais apagados depois do prazo de guarda (LGPD); as batidas ficam, sem o nome
+    anonymized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("TRUE"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # Fora do período de contrato não há jornada prevista (nem faltas)
@@ -38,6 +40,20 @@ class Employee(Base):
             if s.valid_from <= day:
                 current = s
         return current or (self.schedules[0] if self.schedules else None)
+
+    @property
+    def retention_due(self) -> bool:
+        """Desligado há mais que o prazo de guarda (LGPD) e ainda com os dados pessoais."""
+        from app.core.config import settings
+
+        if self.anonymized_at or not self.terminated_on:
+            return False
+        today = now_local().date()
+        try:
+            limit = today.replace(year=today.year - settings.retention_years)
+        except ValueError:  # 29/02
+            limit = today.replace(year=today.year - settings.retention_years, day=28)
+        return self.terminated_on <= limit
 
     def employed_on(self, day: date) -> bool:
         return self.hired_on <= day and (self.terminated_on is None or day <= self.terminated_on)

@@ -3,6 +3,8 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 
 from app.api.deps import AdminUser, DbSession, require_admin
 from app.schemas.admin import (
@@ -58,6 +60,23 @@ def create_employee(body: EmployeeCreate, db: DbSession, user: AdminUser):
 @router.patch("/employees/{employee_id}", response_model=OkResponse)
 def update_employee(employee_id: int, body: EmployeeUpdate, db: DbSession, user: AdminUser):
     EmployeeService(db).update(employee_id, body, user)
+    return OkResponse()
+
+
+@router.get("/employees/{employee_id}/export")
+def export_employee(employee_id: int, db: DbSession, user: AdminUser):
+    """LGPD: tudo o que o sistema guarda sobre o funcionário, em JSON (pedido de acesso aos dados)."""
+    data = EmployeeService(db).export(employee_id, user)
+    return JSONResponse(
+        jsonable_encoder(data),
+        headers={"Content-Disposition": f'attachment; filename="dados-funcionario-{employee_id}.json"'},
+    )
+
+
+@router.post("/employees/{employee_id}/anonymize", response_model=OkResponse)
+def anonymize_employee(employee_id: int, db: DbSession, user: AdminUser):
+    """LGPD: apaga os dados pessoais de quem saiu há mais que o prazo de guarda."""
+    EmployeeService(db).anonymize(employee_id, user)
     return OkResponse()
 
 
@@ -232,8 +251,11 @@ def audit(db: DbSession, employee: int = 0, action: str = "", before: int = 0, l
 
 @router.get("/alerts", response_model=Alerts)
 def alerts(db: DbSession):
-    """Avisos do topo do painel: relógio bloqueado por PINs errados e PINs curtos a trocar."""
+    """Avisos do topo do painel: bloqueios do relógio, PINs curtos, chaves vencendo e prazo de guarda."""
+    employees = EmployeeService(db).list()
     return Alerts(
         pin_blocks=AuditLog(db).recent(PIN_BLOCKED, hours=24),
-        short_pins=sum(e.pin_short and e.active for e in EmployeeService(db).list()),
+        short_pins=sum(e.pin_short and e.active for e in employees),
+        devices_expiring=DeviceService(db).expiring(),
+        retention_due=sum(e.retention_due for e in employees),
     )

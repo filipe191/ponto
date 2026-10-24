@@ -83,6 +83,8 @@ class EmployeeOut(EmployeeRef):
     hired_on: date
     terminated_on: date | None
     pin_short: bool  # PIN antigo de 4 ou 5 dígitos: trocar
+    anonymized_at: datetime | None
+    retention_due: bool  # passou do prazo de guarda e ainda não foi anonimizado
     daily_minutes: int  # jornada em vigor hoje
     workdays: str
     schedules: list[ScheduleOut]

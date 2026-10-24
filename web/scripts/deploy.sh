@@ -34,6 +34,25 @@ docker run --rm -u root -e PYTHONDONTWRITEBYTECODE=1 \
     -v "$RAIZ/backend/tests:/app/tests:ro" -v "$RAIZ/backend/requirements-dev.txt:/app/requirements-dev.txt:ro" \
     ponto-backend-testes sh -c "pip install -q --root-user-action=ignore -r requirements-dev.txt && python -m pytest -q -p no:cacheprovider tests"
 
+passo "Vulnerabilidades conhecidas nas dependências"
+# Backend: falha conhecida interrompe o deploy (atualize a versão em backend/requirements.txt).
+# Em emergência (ex.: sem internet), pule com PULAR_AUDITORIA=1 scripts/deploy.sh
+if [[ "${PULAR_AUDITORIA:-}" == "1" ]]; then
+    echo "AVISO: auditoria de dependências pulada (PULAR_AUDITORIA=1)"
+else
+    docker run --rm -v "$RAIZ/backend/requirements.txt:/r/requirements.txt:ro" python:3.13-slim sh -c \
+        "pip install -q --root-user-action=ignore --disable-pip-version-check pip-audit >/dev/null \
+         && pip-audit -r /r/requirements.txt --progress-spinner off" \
+        || { echo "Há dependências do backend com falhas conhecidas (lista acima). Deploy interrompido." >&2; exit 1; }
+    # App de celular: não é publicado por este script, então só avisa (as falhas restantes
+    # estão nas ferramentas de build do Expo e saem com a atualização do Expo SDK)
+    if [[ -f ../app/package-lock.json ]]; then
+        docker run --rm -v "$RAIZ/../app:/app:ro" -w /app node:22-alpine \
+            npm audit --omit=dev --audit-level=critical >/dev/null 2>&1 \
+            || echo "AVISO: o app de celular tem dependências com falha crítica. Veja: cd app && npm audit --omit=dev"
+    fi
+fi
+
 passo "Backup do banco antes de atualizar"
 scripts/backup.sh
 

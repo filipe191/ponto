@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import EmployeeDevice, Punch, PunchRequest, RequestStatus
@@ -27,6 +27,22 @@ class DeviceRepository:
         self.db.add(device)
         self.db.flush()
         return device
+
+    def count_active_expiring(self, now: datetime, until: datetime) -> int:
+        return self.db.scalar(
+            select(func.count()).where(
+                EmployeeDevice.revoked_at.is_(None), EmployeeDevice.expires_at > now, EmployeeDevice.expires_at <= until
+            )
+        )
+
+    def active_for_employee(self, employee_id: int) -> list[EmployeeDevice]:
+        return list(
+            self.db.scalars(
+                select(EmployeeDevice).where(
+                    EmployeeDevice.employee_id == employee_id, EmployeeDevice.revoked_at.is_(None)
+                )
+            )
+        )
 
 
 class RequestRepository:

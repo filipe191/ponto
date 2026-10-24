@@ -59,6 +59,19 @@ class Settings(BaseSettings):
     # Batidas guardadas no relógio sem conexão são aceitas até X horas depois
     offline_max_hours: int = 24
 
+    # Chave do app de celular: vale X dias desde que foi gerada e é revogada sozinha depois
+    # de Y dias sem uso. O painel avisa quando faltam menos de Z dias para vencer.
+    device_key_days: int = 365
+    device_idle_days: int = 90
+    device_warn_days: int = 30
+
+    # LGPD: registros de ponto ficam guardados X anos depois do desligamento (prazo de
+    # prescrição trabalhista); depois disso o painel oferece anonimizar o ex-funcionário
+    retention_years: int = 5
+    # Aviso de privacidade (/privacidade): quem controla os dados e como pedir acesso ou correção
+    empresa_nome: str = ""
+    privacidade_contato: str = ""
+
     # Documentação interativa em /api/docs (deixe desligada em produção)
     api_docs: bool = False
 

@@ -34,11 +34,11 @@ O sistema guarda dados pessoais de funcionários (nome, horários de trabalho, f
 | 8 | Auditoria incompleta | Média | Médio | Backend | ✅ Concluído |
 | 9 | PIN de 4 dígitos | Média | Pequeno | Backend + relógio | ✅ Concluído |
 | 10 | Cartão de hoje expõe todos os colegas | Média | Pequeno | Relógio | ✅ Concluído |
-| 11 | Fórmulas no CSV | Baixa | Pequeno | Backend | Pendente |
-| 12 | Scripts dentro das páginas (CSP fraco) | Baixa | Médio | Frontend | Pendente |
-| 13 | Dependências sem checagem de vulnerabilidades | Baixa | Pequeno | `web/scripts/deploy.sh` | Pendente |
-| 14 | Chaves de celular não expiram | Baixa | Pequeno | Backend | Pendente |
-| 15 | Processo de LGPD | Baixa | Médio | Documentação | Pendente |
+| 11 | Fórmulas no CSV | Baixa | Pequeno | Backend | ✅ Concluído |
+| 12 | Scripts dentro das páginas (CSP fraco) | Baixa | Médio | Frontend | ✅ Concluído |
+| 13 | Dependências sem checagem de vulnerabilidades | Baixa | Pequeno | `web/scripts/deploy.sh` | ✅ Backend · app parcial |
+| 14 | Chaves de celular não expiram | Baixa | Pequeno | Backend | ✅ Concluído |
+| 15 | Processo de LGPD | Baixa | Médio | Documentação | ✅ Concluído · preencher empresa e contato |
 
 Os itens 2 e 3 mexem em infraestrutura compartilhada com outros sistemas do servidor. Combine antes de aplicar.
 
@@ -263,6 +263,8 @@ Testado na cópia do banco de produção, inclusive a recusa de alteração dire
 
 **Correção.** Ao gerar o CSV, prefixar com `'` toda célula que comece com esses caracteres.
 
+**Status: concluído em 24/10/2026.** Nomes, feriados e avisos que começam com `=`, `+`, `-`, `@`, tab ou quebra de linha ganham um `'` na frente. Textos com `;`, aspas ou quebra de linha vão entre aspas, para não criar colunas ou linhas falsas na planilha. As colunas de horas e números não mudam.
+
 ### 12. Scripts dentro das páginas (CSP mais fraco)
 
 **Problema.** O JavaScript fica dentro dos arquivos HTML, então a política de segurança de conteúdo (CSP) precisa permitir `'unsafe-inline'`.
@@ -271,17 +273,29 @@ Testado na cópia do banco de produção, inclusive a recusa de alteração dire
 
 **Correção.** Mover os scripts para arquivos `.js` e tirar `'unsafe-inline'` de `script-src`.
 
+**Status: concluído em 24/10/2026.** Os scripts das 6 páginas estão em `frontend/public/js/` e a CSP passou a `script-src 'self'`: um script injetado numa página não roda. Só `login.js` e `privacidade.js` são públicos; os demais exigem login, como as páginas. `style-src` continua com `'unsafe-inline'` por causa dos atributos `style=` gerados pelas páginas, o que não permite executar código. Testado no navegador: nenhuma página com erro de script ou violação de CSP.
+
 ### 13. Dependências sem checagem de vulnerabilidades
 
 **Problema.** As versões das bibliotecas são fixas e ninguém confere se alguma tem falha conhecida.
 
 **Correção.** Rodar `pip-audit` (backend) e `npm audit` (app) no `deploy.sh`, interrompendo o deploy se houver falha grave.
 
+**Status: concluído em 24/10/2026, com uma pendência no app.**
+- O `deploy.sh` roda o `pip-audit` no backend e **interrompe o deploy** se houver falha conhecida. Em emergência (ex.: sem internet), pule com `PULAR_AUDITORIA=1 scripts/deploy.sh`.
+- A primeira checagem achou 24 falhas no backend (Starlette e cryptography). Foram corrigidas atualizando `fastapi` (0.115 → 0.162), `starlette` (0.46 → 1.10) e `cryptography` (44 → 50). Os testes e os roteiros de ponta a ponta passaram com as versões novas.
+- **App de celular:** o `npm audit` só avisa, porque o app não é publicado pelo `deploy.sh`. As correções que não mudam versões principais foram aplicadas (29 → 24 falhas), e o app continua compilando e gerando o pacote do iOS. As 24 restantes estão nas ferramentas de build do Expo (CLI, Metro, servidor de desenvolvimento), não no código que vai para o iPhone. Elas só saem atualizando o Expo SDK 52 para uma versão atual, o que exige testar o app num Mac/iPhone.
+
 ### 14. Chaves de celular não expiram
 
 **Problema.** Uma chave de celular vale até ser revogada manualmente.
 
 **Correção.** Dar validade às chaves (ex.: 1 ano), avisar no painel quando estiverem perto de vencer e revogar automaticamente as que ficarem muito tempo sem uso.
+
+**Status: concluído em 24/10/2026.**
+- Cada chave vale 1 ano a partir da criação; as já existentes também passam a vencer 1 ano depois de criadas. A chave vencida é recusada com "Chave de acesso vencida. Peça uma nova ao administrador".
+- A chave parada há 90 dias (ou nunca usada em 90 dias) é revogada sozinha, com registro do "sistema" na auditoria.
+- O painel avisa quando alguma chave vence nos próximos 30 dias e mostra a data de vencimento na lista de celulares.
 
 ### 15. Processo de LGPD
 
@@ -291,6 +305,12 @@ Testado na cópia do banco de produção, inclusive a recusa de alteração dire
 - Aviso de privacidade aos funcionários: quais dados são coletados, para quê, por quanto tempo e com quem são compartilhados (ex.: contabilidade).
 - Regra de retenção: apagar ou anonimizar os registros de quem saiu da empresa depois dos 5 anos legais (inclusive nos backups mensais).
 - Canal para o funcionário pedir acesso ou correção dos próprios dados.
+
+**Status: concluído em 24/10/2026.**
+- **Aviso de privacidade** em `/privacidade`, público e com link no relógio e no login. Ele diz o que é guardado, para quê (obrigação legal da CLT, sem depender de consentimento), com quem é compartilhado, por quanto tempo e a quem pedir acesso ou correção. **Preencha `EMPRESA_NOME` e `PRIVACIDADE_CONTATO` no `.env`**; sem eles a página usa um texto genérico. O texto é um modelo: vale uma revisão por quem cuida da parte jurídica da empresa.
+- **Pedido de acesso:** o botão **Dados** na lista de funcionários baixa, em JSON, tudo o que o sistema guarda sobre a pessoa (cadastro, jornadas, batidas, correções, solicitações, celulares, fechamentos e auditoria), sem hashes de PIN ou chave. Cada exportação fica na auditoria.
+- **Retenção:** 5 anos depois do desligamento, o painel avisa e mostra o botão **Anonimizar**. Ele troca o nome por "Ex-funcionário nº N", invalida o PIN, revoga e renomeia os celulares, tira o nome do aparelho das batidas e as observações das solicitações, e apaga os registros de auditoria da pessoa. É a única exceção à regra de que a auditoria nunca é apagada, e o banco só a aceita dentro dessa operação. As batidas e as horas continuam, sem identificação.
+- **Backups:** os mensais são guardados por 5 anos e então descartados. Assim, um cadastro anonimizado ainda pode existir em backups antigos por até 5 anos.
 
 ---
 
@@ -306,8 +326,8 @@ Testado na cópia do banco de produção, inclusive a recusa de alteração dire
 - [x] 8. Auditoria geral e histórico preservado na reabertura do mês
 - [x] 9. PIN de 6 dígitos e bloqueio progressivo
 - [x] 10. Reduzir os dados mostrados no "Cartão de hoje"
-- [ ] 11. Neutralizar fórmulas no CSV
-- [ ] 12. Scripts em arquivos `.js` e CSP sem `'unsafe-inline'`
-- [ ] 13. `pip-audit` e `npm audit` no deploy
-- [ ] 14. Validade das chaves de celular
-- [ ] 15. Aviso de privacidade e regra de retenção
+- [x] 11. Neutralizar fórmulas no CSV
+- [x] 12. Scripts em arquivos `.js` e CSP sem `'unsafe-inline'`
+- [x] 13. `pip-audit` e `npm audit` no deploy — [ ] atualizar o Expo SDK do app (falhas nas ferramentas de build)
+- [x] 14. Validade das chaves de celular
+- [x] 15. Aviso de privacidade e regra de retenção — [ ] preencher `EMPRESA_NOME` e `PRIVACIDADE_CONTATO` no `.env`

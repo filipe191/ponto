@@ -55,11 +55,21 @@ server {
         return 302 /login?next=$request_uri;
     }
 
-    # Públicos: tela de login, o estilo e as fontes que ela usa
+    # Públicos: tela de login, o estilo, o script e as fontes que ela usa
     location = /login {
         try_files /login.html =404;
     }
     location = /style.css {
+        try_files $uri =404;
+    }
+    location = /js/login.js {
+        try_files $uri =404;
+    }
+    # Aviso de privacidade: público, para o funcionário ler também no próprio celular
+    location = /privacidade {
+        try_files /privacidade.html =404;
+    }
+    location = /js/privacidade.js {
         try_files $uri =404;
     }
     location /fonts/ {

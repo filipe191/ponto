@@ -28,6 +28,8 @@ class EmployeeDevice(Base):
     created_by: Mapped[str] = mapped_column(String)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Validade (settings.device_key_days a partir da criação); depois disso é preciso gerar outra
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class Holiday(Base):

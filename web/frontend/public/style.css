@@ -407,3 +407,13 @@ dialog.mirror::backdrop { background: rgba(20, 27, 32, 0.6); }
 .sessions small { color: var(--muted); }
 .tag-current { padding: 0 6px; border: 1px solid var(--ink-in); border-radius: 4px; color: var(--ink-in); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
 .account-page .form-error:empty, .account-page .form-ok:empty { display: none; }
+
+/* ---------- Aviso de privacidade ---------- */
+
+.privacy { max-width: 720px; line-height: 1.55; }
+.privacy .card { padding: 18px 22px; }
+.privacy ul { margin: 0 0 8px; padding-left: 20px; }
+.privacy li + li { margin-top: 4px; }
+.privacy p + p { margin-top: 8px; }
+.site-foot { padding: 0 16px 24px; text-align: center; font-size: 0.85rem; }
+.site-foot a { color: var(--muted); }

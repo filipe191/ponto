@@ -1,9 +1,23 @@
+import secrets
+from datetime import datetime, timezone
+
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.errors import BadRequest, Conflict, NotFound
 from app.core.security import hash_pin
-from app.models import Employee, EmployeeSchedule
+from app.models import (
+    AuditEvent,
+    Employee,
+    EmployeeDevice,
+    EmployeeSchedule,
+    MonthClosure,
+    Punch,
+    PunchChange,
+    PunchRequest,
+)
 from app.repositories.employee_repository import EmployeeRepository
 from app.repositories.punch_repository import PunchRepository
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate
@@ -56,6 +70,8 @@ class EmployeeService:
 
     def update(self, employee_id: int, data: EmployeeUpdate, user: str) -> None:
         employee = self._get(employee_id)
+        if employee.anonymized_at:
+            raise BadRequest("Cadastro anonimizado (LGPD) não pode ser alterado")
         before = {field: getattr(employee, field) for field in _FIELDS}
         name_before = employee.name
 
@@ -132,6 +148,140 @@ class EmployeeService:
             user, "funcionario.excluido", f"Excluiu o cadastro de {employee.name}", employee_id=employee.id
         )
         self.repo.delete(employee)
+        self.db.commit()
+
+    # ---------- LGPD ----------
+
+    def export(self, employee_id: int, user: str) -> dict:
+        """Tudo o que o sistema guarda sobre o funcionário (pedido de acesso aos próprios dados)."""
+        employee = self._get(employee_id)
+        db = self.db
+        punches = list(db.scalars(select(Punch).where(Punch.employee_id == employee_id).order_by(Punch.ts)))
+        ids = [p.id for p in punches]
+        changes = list(db.scalars(select(PunchChange).where(PunchChange.punch_id.in_(ids)).order_by(PunchChange.id)))
+        data = {
+            "gerado_em": datetime.now(timezone.utc),
+            "gerado_por": user,
+            "funcionario": {
+                "id": employee.id,
+                "nome": employee.name,
+                "ativo": employee.active,
+                "cadastrado_em": employee.created_at,
+                "admissao": employee.hired_on,
+                "desligamento": employee.terminated_on,
+                "observacao_pin": "O PIN não é guardado, só um código derivado dele (hash), que não permite descobri-lo.",
+            },
+            "jornadas": [
+                {"desde": s.valid_from, "minutos_por_dia": s.daily_minutes, "dias_da_semana": s.workdays}
+                for s in employee.schedules
+            ],
+            "batidas": [
+                {
+                    "id": p.id,
+                    "horario": p.ts,
+                    "tipo": p.type,
+                    "origem": p.source,
+                    "manual": p.manual,
+                    "sem_conexao": p.offline,
+                    "motivo": p.note,
+                    "horario_original": p.original_ts,
+                    "tipo_original": p.original_type,
+                    "excluida_em": p.deleted_at,
+                    "aparelho": p.device,
+                    "comprovante": p.receipt,
+                }
+                for p in punches
+            ],
+            "correcoes_de_batidas": [
+                {
+                    "batida": c.punch_id,
+                    "em": c.at,
+                    "por": c.user,
+                    "acao": c.action,
+                    "antes": {"horario": c.old_ts, "tipo": c.old_type},
+                    "depois": {"horario": c.new_ts, "tipo": c.new_type},
+                    "motivo": c.note,
+                }
+                for c in changes
+            ],
+            "solicitacoes_do_app": [
+                {
+                    "acao": r.action,
+                    "horario": r.ts,
+                    "tipo": r.type,
+                    "observacao": r.note,
+                    "situacao": r.status,
+                    "pedida_em": r.requested_at,
+                    "decidida_em": r.decided_at,
+                    "decidida_por": r.decided_by,
+                    "motivo_da_decisao": r.decision_note,
+                }
+                for r in db.scalars(select(PunchRequest).where(PunchRequest.employee_id == employee_id))
+            ],
+            "celulares": [
+                {
+                    "nome": d.name,
+                    "criada_em": d.created_at,
+                    "criada_por": d.created_by,
+                    "ultimo_uso": d.last_used_at,
+                    "vence_em": d.expires_at,
+                    "revogada_em": d.revoked_at,
+                }
+                for d in db.scalars(select(EmployeeDevice).where(EmployeeDevice.employee_id == employee_id))
+            ],
+            "meses_fechados": [
+                {"mes": c.month, "fechado_em": c.closed_at, "fechado_por": c.closed_by, "ciencia_em": c.acknowledged_at}
+                for c in db.scalars(select(MonthClosure).where(MonthClosure.employee_id == employee_id))
+            ],
+            "auditoria": [
+                {"em": a.at, "por": a.user, "acao": a.action, "descricao": a.summary}
+                for a in db.scalars(
+                    select(AuditEvent).where(AuditEvent.employee_id == employee_id).order_by(AuditEvent.id)
+                )
+            ],
+        }
+        self.audit.record(
+            user, "funcionario.dados_exportados", f"Exportou os dados de {employee.name} (LGPD)", employee_id=employee.id
+        )
+        self.db.commit()
+        return data
+
+    def anonymize(self, employee_id: int, user: str) -> None:
+        """Passado o prazo de guarda, apaga os dados pessoais. As batidas e as horas continuam (sem nome)."""
+        employee = self._get(employee_id)
+        if employee.anonymized_at:
+            raise BadRequest("Este cadastro já foi anonimizado")
+        if not employee.retention_due:
+            raise BadRequest(
+                f"Só é possível anonimizar {settings.retention_years} anos depois do desligamento "
+                "(os registros de ponto precisam ser guardados até lá)"
+            )
+        db = self.db
+        alias = f"Ex-funcionário nº {employee.id}"
+        employee.name = alias
+        employee.pin_hash = hash_pin(secrets.token_hex(16))  # nenhum PIN digitado bate com ele
+        employee.pin_short = False
+        employee.active = False
+        employee.anonymized_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        db.execute(
+            update(EmployeeDevice)
+            .where(EmployeeDevice.employee_id == employee_id)
+            .values(name="Celular", revoked_at=text("COALESCE(revoked_at, now())"))
+        )
+        db.execute(update(Punch).where(Punch.employee_id == employee_id).values(device=None))
+        db.execute(update(PunchRequest).where(PunchRequest.employee_id == employee_id).values(note=None))
+        # Os registros de auditoria dessa pessoa trazem o nome: saem também (exceção prevista no banco)
+        db.execute(text("SET LOCAL ponto.retencao = 'on'"))
+        db.execute(delete(AuditEvent).where(AuditEvent.employee_id == employee_id))
+        db.execute(text("SET LOCAL ponto.retencao = 'off'"))
+        self.audit.record(
+            user,
+            "funcionario.anonimizado",
+            f"Anonimizou o cadastro nº {employee.id} ({settings.retention_years} anos após o desligamento)",
+            employee_id=employee.id,
+            details={"terminated_on": employee.terminated_on, "at": now},
+        )
         self.db.commit()
 
     def _get(self, employee_id: int) -> Employee:

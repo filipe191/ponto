@@ -241,6 +241,7 @@ class ReportService:
         return rows
 
     # ---------- CSV ----------
+    # Separado por ";" (padrão do Excel em português). Textos digitados (nomes, feriados) passam por _text.
 
     @staticmethod
     def _hours(ms: int, signed: bool = False) -> str:
@@ -264,10 +265,10 @@ class ReportService:
             batidas = " | ".join(stamp(p, d.date) for p in d.punches if not p.deleted_at)
             weekday = WEEKDAYS[date.fromisoformat(d.date).weekday()]
             saldo = hours(d.balance_ms, signed=True) if d.closed and (d.expected_ms or d.worked_ms) else ""
-            situacao = STATUS_LABEL[d.status] + (f" ({d.holiday})" if d.holiday else "")
+            situacao = _text(STATUS_LABEL[d.status] + (f" ({d.holiday})" if d.holiday else ""))
             lines.append(
                 f"{d.date};{weekday};{batidas};{hours(d.worked_ms)};{hours(d.night_ms)};{hours(d.expected_ms)};"
-                f"{saldo};{situacao};{' / '.join(d.alerts)}"
+                f"{saldo};{situacao};{_text(' / '.join(d.alerts))}"
             )
         lines.append(
             f"Total;;;{hours(report.total_ms)};{hours(report.night_ms)};{hours(report.expected_ms)};"
@@ -297,7 +298,7 @@ class ReportService:
         for r in rows:
             closure = r.closure
             lines.append(
-                f"{r.employee.name};{hours(r.total_ms)};{hours(r.night_ms)};{hours(r.expected_ms)};"
+                f"{_text(r.employee.name)};{hours(r.total_ms)};{hours(r.night_ms)};{hours(r.expected_ms)};"
                 f"{hours(r.balance_ms, True)};{hours(r.bank_ms, True)};{r.absences};{r.incomplete};{r.alerts};"
                 f"{when(closure.closed_at) if closure else ''};{when(closure.acknowledged_at) if closure else ''}"
             )
@@ -306,3 +307,16 @@ class ReportService:
     @staticmethod
     def csv_filename(report: MonthReport) -> str:
         return f"ponto-{re.sub(r'[^A-Za-z0-9_-]+', '_', report.employee.name)}-{report.month}.csv"
+
+
+def _text(value: str) -> str:
+    """Célula de texto livre no CSV.
+
+    - Começando com = + - @ (ou tab/CR), o Excel trataria como fórmula: ganha um ' na frente.
+    - Com ; aspas ou quebra de linha, vai entre aspas para não criar colunas ou linhas novas.
+    """
+    if value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        value = "'" + value
+    if any(c in value for c in ';"\r\n'):
+        value = '"' + value.replace('"', '""') + '"'
+    return value

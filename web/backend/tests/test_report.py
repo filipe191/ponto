@@ -190,3 +190,30 @@ def test_jornada_personalizada():
     assert [d.expected_ms for d in days] == [0, 6 * HOUR]
     assert days[1].balance_ms == -6 * HOUR
     assert timedelta(milliseconds=days[1].expected_ms) == timedelta(hours=6)
+
+
+def test_csv_neutraliza_formulas_e_separadores():
+    from app.services.report_service import _text
+
+    assert _text("Ana") == "Ana"
+    assert _text("=HYPERLINK(\"http://x\")") == "\"'=HYPERLINK(\"\"http://x\"\")\""
+    assert _text("+5511999") == "'+5511999"
+    assert _text("@SUM(A1)") == "'@SUM(A1)"
+    assert _text("-1") == "'-1"
+    assert _text("Ana; Souza") == '"Ana; Souza"'  # não cria coluna nova
+    assert _text("linha\nnova") == '"linha\nnova"'
+
+
+def test_prazo_de_guarda_conta_a_partir_do_desligamento():
+    from datetime import datetime, timezone
+    from unittest.mock import patch
+
+    hoje = date(2031, 6, 10)
+    with patch("app.models.employee.now_local", return_value=datetime(2031, 6, 10, 12, tzinfo=timezone.utc)):
+        assert not employee().retention_due  # ainda trabalha
+        assert not employee(terminated_on=date(2026, 6, 11)).retention_due  # falta um dia
+        assert employee(terminated_on=date(2026, 6, 10)).retention_due
+        anonimizado = employee(terminated_on=date(2020, 1, 1))
+        anonimizado.anonymized_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
+        assert not anonimizado.retention_due
+    assert hoje.year - 2026 == settings.retention_years

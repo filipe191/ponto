@@ -14,7 +14,7 @@ cp .env.example .env   # só na primeira vez; preencha PGPASSWORD, SECRET_KEY e 
 scripts/deploy.sh
 ```
 
-O `deploy.sh` confere o `.env`, gera o certificado HTTPS se faltar, roda os testes, faz backup do banco e só então sobe os containers.
+O `deploy.sh` confere o `.env`, gera o certificado HTTPS se faltar, roda os testes, procura vulnerabilidades conhecidas nas dependências (`pip-audit`; interrompe o deploy se achar), faz backup do banco e só então sobe os containers. Para pular a checagem de dependências numa emergência (ex.: sem internet): `PULAR_AUDITORIA=1 scripts/deploy.sh`.
 
 - Relógio de ponto: `https://<ip-do-servidor>:9443` (ex.: https://192.168.0.34:9443)
 - Administração: `https://<ip-do-servidor>:9443/admin`
@@ -79,6 +79,8 @@ As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
 | `COOKIE_SECURE`  | `true` (o site só funciona por HTTPS) |
 | `HTTPS_PORT`     | Porta do HTTPS no servidor (padrão `9443`) |
 | `API_DOCS`       | `true` liga a documentação da API em `/api/docs` (desligada por padrão) |
+| `EMPRESA_NOME`   | Nome da empresa no aviso de privacidade (`/privacidade`) |
+| `PRIVACIDADE_CONTATO` | A quem o funcionário pede acesso ou correção dos próprios dados (ex.: "Maria, do RH") |
 
 ## Funcionalidades
 
@@ -91,7 +93,7 @@ As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
 
 **App de celular** (pasta `app/` na raiz do repositório)
 - Este backend atende também o app de iPhone, no contrato `/api/pontos/...` (autenticação pelo cabeçalho `X-API-Key`).
-- O admin gera uma **chave de celular** por funcionário (Funcionários → Celular). A chave aparece uma única vez, só o hash fica no banco, e pode ser revogada.
+- O admin gera uma **chave de celular** por funcionário (Funcionários → Celular). A chave aparece uma única vez, só o hash fica no banco, e pode ser revogada. Ela vale 1 ano (o painel avisa 30 dias antes) e é revogada sozinha depois de 90 dias sem uso.
 - A batida feita na hora no app entra direto no ponto, marcada `cel` (em vermelho se o relógio do celular estiver adiantado em relação ao servidor). Batida lançada depois, correção e exclusão feitas no app viram **solicitações** que o admin aprova ou recusa no card do topo do painel.
 
 **Administração**
@@ -106,6 +108,11 @@ As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
 - **Fechamento do mês:** depois de conferido, o mês é fechado (por funcionário ou para todos). As batidas ficam travadas e o funcionário pode dar ciência no relógio. Reabrir exige motivo e pede uma nova ciência; o fechamento e a ciência anteriores continuam na auditoria e aparecem no espelho.
 - **Auditoria:** cadastro, PIN (sem o valor), jornada, feriados, celulares, admins, logins, relógios e fechamentos ficam registrados com quem, quando, antes e depois. O banco recusa alterar ou apagar esses registros.
 - **Exportação:** CSV do espelho de um funcionário, CSV com o resumo de todos (para a contabilidade) e página de impressão com o espelho de todos, com linha de assinatura (imprima ou salve como PDF).
+
+**Privacidade (LGPD)**
+- **Aviso de privacidade** em `/privacidade` (link no relógio e no login): o que é guardado, para quê, por quanto tempo e a quem pedir acesso. Preencha `EMPRESA_NOME` e `PRIVACIDADE_CONTATO` no `.env`.
+- **Pedido de acesso:** Funcionários → **Dados** baixa em JSON tudo o que o sistema guarda sobre a pessoa.
+- **Retenção:** 5 anos depois do desligamento, o painel avisa e oferece **Anonimizar**. O nome, o PIN e os celulares são apagados; as batidas e as horas continuam, como "Ex-funcionário nº N".
 
 Limites conhecidos: os arquivos AFD/AEJ da Portaria 671 não são gerados (o sistema é para controle interno, não um REP-P registrado no INPI); a prorrogação do horário noturno após as 5h não é calculada; uma batida enviada depois, sem conexão, não muda o tipo (entrada/saída) das batidas já registradas depois dela, e o dia aparece como incompleto para o admin corrigir.
 
@@ -150,7 +157,7 @@ backend/app/
 │   ├── mobile_service.py   # app de celular: chaves, lote, consultas e solicitações
 │   ├── employee_service.py
 │   └── auth_service.py     # administradores e relógios
-├── api/routes/             # health, auth, clock (relógio + espelho do funcionário), mobile (app), admin
+├── api/routes/             # health, auth, clock (relógio + espelho do funcionário), mobile (app), admin, privacy
 └── utils/                  # datas/fuso, horário noturno, feriados nacionais
 ```
 
@@ -165,4 +172,6 @@ docker run --rm -u root -v "$PWD/tests:/app/tests:ro" -v "$PWD/requirements-dev.
   ponto-backend sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q tests"
 ```
 
-Nova mudança no banco: crie `app/db/migrations/versions/0005_<descricao>.py` com `revision = "0005"` e `down_revision = "0004"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
+Nova mudança no banco: crie `app/db/migrations/versions/0008_<descricao>.py` com `revision = "0008"` e `down_revision = "0007"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
+
+Páginas: o HTML fica em `frontend/public/*.html` e o script de cada uma em `frontend/public/js/`. A CSP só aceita scripts desses arquivos (`script-src 'self'`): não coloque `<script>` com código nem `onclick=` dentro do HTML.

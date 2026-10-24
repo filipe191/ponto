@@ -44,6 +44,7 @@ class DeviceOut(BaseModel):
     created_by: str
     last_used_at: datetime | None
     revoked_at: datetime | None
+    expires_at: datetime
 
 
 class DeviceCreate(BaseModel):
@@ -105,3 +106,5 @@ class AuditOut(BaseModel):
 class Alerts(BaseModel):
     pin_blocks: list[AuditOut]  # bloqueios do relógio por PINs errados nas últimas 24h
     short_pins: int  # funcionários ativos com PIN antigo de 4 ou 5 dígitos
+    devices_expiring: int  # chaves de celular que vencem nos próximos dias
+    retention_due: int  # ex-funcionários que passaram do prazo de guarda (anonimizar)
