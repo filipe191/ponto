@@ -3,7 +3,7 @@
 # (registros de ponto devem ser guardados por 5 anos).
 #
 # Uso:  scripts/backup.sh
-# Cron: 15 3 * * * /home/filipe/ponto/scripts/backup.sh >> /home/filipe/ponto/backups/backup.log 2>&1
+# Cron: 15 3 * * * /home/filipe/ponto/web/scripts/backup.sh >> /home/filipe/ponto/web/backups/backup.log 2>&1
 #
 # Variáveis opcionais:
 #   BACKUP_PG_CONTAINER  container do Postgres          (padrão: postgres_db)

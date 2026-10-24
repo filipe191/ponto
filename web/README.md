@@ -9,7 +9,7 @@ Aplicação web de registro de ponto, para uso na rede local.
 ## Colocar no ar
 
 ```bash
-cd ~/ponto
+cd ~/ponto/web
 cp .env.example .env   # só na primeira vez; preencha PGPASSWORD, SECRET_KEY e PIN_KEY
 scripts/deploy.sh
 ```
@@ -121,7 +121,7 @@ backend/app/
 Testes (regras de jornada, CLT, feriados, espelho, tokens e limites):
 
 ```bash
-cd ~/ponto/backend
+cd ~/ponto/web/backend
 docker build -t ponto-backend .
 docker run --rm -u root -v "$PWD/tests:/app/tests:ro" -v "$PWD/requirements-dev.txt:/app/requirements-dev.txt:ro" \
   ponto-backend sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q tests"
