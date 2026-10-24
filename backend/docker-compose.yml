@@ -1,0 +1,33 @@
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: ponto-db
+    # env_file em vez de environment: os valores vao direto do .env para o
+    # container, sem passar por interpolacao. Assim o env do shell nao
+    # sobrescreve nada -- era isso que dava dor de cabeca antes.
+    env_file: .env
+    volumes:
+      - ponto_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"      # 5433 no host pra nao brigar com outro Postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: ponto-api
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  ponto_pgdata:

@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Ponto",
+    "slug": "ponto",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "ponto",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "br.com.aurasoftware.ponto",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "fetch"
+        ],
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSAllowsLocalNetworking": true,
+          "NSExceptionDomains": {
+            "ts.net": {
+              "NSIncludesSubdomains": true,
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            }
+          }
+        }
+      }
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-asset"
+    ],
+    "icon": "./assets/icon.png"
+  }
+}

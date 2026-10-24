@@ -1,0 +1,72 @@
+# ---------- Segredos e configuracao local ----------
+.env
+.env.*
+!.env.example
+*.local
+secrets.*
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.certSigningRequest
+
+# ---------- Backups e temporarios ----------
+*.bak
+*.orig
+*.rej
+*.tmp
+*~
+*.log
+
+# ---------- macOS ----------
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ---------- Editores / IDE ----------
+.vscode/
+.idea/
+*.iml
+*.swp
+
+# ---------- Node / Expo (app) ----------
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.tsbuildinfo
+
+# ---------- iOS / Xcode / CocoaPods ----------
+app/ios/Pods/
+app/ios/build/
+app/ios/.xcode.env.local
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+project.xcworkspace/
+*.ipa
+*.dSYM.zip
+*.jsbundle
+*.hmap
+
+# ---------- Android ----------
+app/android/.gradle/
+app/android/build/
+app/android/app/build/
+app/android/local.properties
+*.keystore
+!debug.keystore
+*.jks
+
+# ---------- Java / Maven (backend) ----------
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+
+# ---------- Ferramentas locais ----------
+.github/modernize/
