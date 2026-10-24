@@ -18,6 +18,7 @@ services:
       PIN_KEY: ${PIN_KEY:?Defina PIN_KEY no .env (openssl rand -hex 32)}
       # O site só funciona por HTTPS (o nginx redireciona), então o cookie é sempre "secure"
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      ADMIN_2FA_REQUIRED: ${ADMIN_2FA_REQUIRED:-true}
       API_DOCS: ${API_DOCS:-false}
     networks:
       - default

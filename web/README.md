@@ -52,7 +52,12 @@ As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
 
 ### Logins
 
-- **Administradores:** o primeiro é criado na primeira subida a partir de `ADMIN_USER`/`ADMIN_PASSWORD`. Os demais são cadastrados em Administração → "Administradores e relógios". Cada pessoa deve ter o próprio login: o histórico de correções registra quem fez cada alteração. Cada um troca a própria senha em `/senha`. Após 5 senhas erradas em 5 minutos o IP fica bloqueado até a janela passar.
+- **Administradores:** o primeiro é criado na primeira subida a partir de `ADMIN_USER`/`ADMIN_PASSWORD`. Os demais são cadastrados em Administração → "Administradores e relógios". Cada pessoa deve ter o próprio login: o histórico de correções registra quem fez cada alteração.
+  - **Senha:** mínimo de 12 caracteres, recusando senhas muito comuns. Senha provisória (a do `.env`, ou a criada por outro admin) ou fora da política obriga a troca antes de usar o painel.
+  - **Verificação em duas etapas (obrigatória):** no primeiro acesso, o admin cadastra a conta num app autenticador (Google Authenticator, Microsoft Authenticator, Bitwarden...) lendo um QR code, e recebe 10 códigos de recuperação para o caso de perder o celular. Depois, o login pede a senha e o código de 6 dígitos. Para desligar a obrigatoriedade: `ADMIN_2FA_REQUIRED=false` no `.env`.
+  - **Sessões:** cada login fica guardado no servidor e vale até sair, por até 30 dias, caindo sozinho após 8 horas sem uso. Em **Conta e segurança** (`/senha`) dá para trocar a senha, gerenciar as duas etapas, ver os aparelhos conectados e encerrá-los. Trocar a senha encerra os outros aparelhos.
+  - Após 5 erros (senha ou código) em 5 minutos o IP fica bloqueado até a janela passar.
+- **Proteção contra CSRF:** toda requisição que altera dados (POST, PATCH, DELETE) com cookie de sessão precisa vir das próprias páginas do ponto (cabeçalho `Origin`). Isso importa porque outros serviços no mesmo IP contam como "mesmo site" para o navegador.
 - **Aparelho do relógio:** não fica logado como admin.
   1. No aparelho, entre como administrador.
   2. Na tela do relógio, toque em **Usar como relógio**. O aparelho passa a só bater ponto (vale 1 ano) e o admin é desconectado dele.
@@ -106,15 +111,24 @@ Limites conhecidos: os arquivos AFD/AEJ da Portaria 671 não são gerados (o sis
 
 `scripts/backup.sh` roda todo dia às 03:15 (cron do usuário `filipe`) e guarda em `backups/`: os últimos 14 diários e um por mês por 5 anos. Log em `backups/backup.log`. O `deploy.sh` também faz um backup antes de cada atualização.
 
-Restaurar (substitui o banco atual — pare o backend antes):
+**Os backups são criptografados.** Cada dump é cifrado com a chave pública `backups/chave-publica.asc`; só a chave **privada**, guardada fora do servidor, decifra. O dump em texto aberto só existe na memória durante a conferência. Assim, uma cópia dos backups levada do servidor não pode ser lida.
+
+- Criar o par de chaves (uma vez): `scripts/backup-chave.sh`. A chave privada sai em `~/ponto-backup-chave-privada.asc`: guarde-a fora do servidor (ex.: anexo no Vaultwarden) e apague daqui com `shred -u ~/ponto-backup-chave-privada.asc`. **Sem ela, nenhum backup pode ser restaurado.**
+- Cópia fora do servidor (opcional): defina `BACKUP_REMOTO` no `.env` com um destino do `rsync` (ex.: `usuario@maquina:/backups/ponto/`, com login por chave SSH). Os arquivos já vão cifrados.
+
+Restaurar (substitui o banco atual — pare o backend antes). Precisa da chave privada; use um chaveiro temporário para ela não ficar no servidor:
 
 ```bash
+export GNUPGHOME=$(mktemp -d)
+gpg --import ponto-backup-chave-privada.asc
 docker compose stop backend
-docker exec -i postgres_db pg_restore -U ponto -d ponto --clean --if-exists --no-owner < backups/ponto-AAAAMMDD-HHMMSS.dump
+gpg --decrypt backups/ponto-AAAAMMDD-HHMMSS.dump.gpg \
+  | docker exec -i postgres_db pg_restore -U ponto -d ponto --clean --if-exists --no-owner
 docker compose start backend
+rm -rf "$GNUPGHOME"; unset GNUPGHOME
 ```
 
-O backup não contém a `PIN_KEY`: sem ela, os PINs e os códigos de comprovante do banco restaurado não funcionam.
+O backup não contém a `PIN_KEY`: sem ela, os PINs, os códigos de comprovante e a verificação em duas etapas dos admins não funcionam no banco restaurado. Guarde-a também fora do servidor.
 
 ## Estrutura do backend
 

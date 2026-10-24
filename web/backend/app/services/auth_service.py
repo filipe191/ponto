@@ -1,26 +1,38 @@
 import secrets
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core import twofactor
 from app.core.config import settings
 from app.core.errors import BadRequest, Conflict, NotFound
+from app.core.passwords import password_problem
 from app.core.security import (
-    ROLE_ADMIN,
     ROLE_KIOSK,
     create_session,
     hash_password,
+    hash_session_token,
+    new_session_token,
     read_session,
     verify_password,
 )
-from app.models import AdminAccount
+from app.models import AdminAccount, AdminSession
 from app.repositories.admin_repository import AdminRepository
 
-MIN_PASSWORD_LENGTH = 6
 KIOSK_SECRET = "kiosk_secret"
 KIOSK_SUBJECT = "relogio"
 # Hash de uma senha qualquer: usuário inexistente gasta o mesmo tempo que senha errada
 _DUMMY_HASH = hash_password(secrets.token_hex(8))
+# A última atividade da sessão é gravada de tempos em tempos, não a cada requisição
+_TOUCH_EVERY = timedelta(minutes=5)
+
+PENDING_PASSWORD = "senha"  # precisa trocar a senha
+PENDING_2FA = "2fa"  # precisa ativar a verificação em duas etapas
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class AuthService:
@@ -32,7 +44,11 @@ class AuthService:
         """Na primeira subida, cria o login com ADMIN_USER/ADMIN_PASSWORD do .env e o segredo dos relógios."""
         if not self.repo.count():
             self.repo.add(
-                AdminAccount(username=settings.admin_user, password_hash=hash_password(settings.admin_password))
+                AdminAccount(
+                    username=settings.admin_user,
+                    password_hash=hash_password(settings.admin_password),
+                    must_change_password=True,  # a senha do .env é provisória
+                )
             )
         if not self.repo.setting(KIOSK_SECRET):
             self.repo.set_setting(KIOSK_SECRET, secrets.token_hex(32))
@@ -43,30 +59,159 @@ class AuthService:
     def authenticate(self, username: str, password: str) -> AdminAccount | None:
         account = self.repo.get_by_username(username)
         valid = verify_password(password, account.password_hash if account else _DUMMY_HASH)
-        return account if account and valid else None
+        if not (account and valid):
+            return None
+        # Senha que não segue mais a política (ex.: criada antes dela): trocar antes de usar o painel
+        if password_problem(password, account.username):
+            account.must_change_password = True
+        return account
 
-    def session_user(self, token: str | None) -> str | None:
-        """Usuário do admin logado, ou None."""
+    def check_second_factor(self, account: AdminAccount, code: str) -> bool:
+        """Código do app autenticador ou um código de recuperação (que deixa de valer depois de usado)."""
+        secret = twofactor.decrypt_secret(account.totp_secret) if account.totp_secret else None
+        if not secret:
+            return False
+        step = twofactor.verify(secret, code, account.totp_last_step)
+        if step is not None:
+            account.totp_last_step = step
+            return True
+        recovery = self.repo.unused_recovery_code(account.id, twofactor.hash_recovery_code(code))
+        if recovery:
+            recovery.used_at = _now()
+            return True
+        return False
 
-        def key_for(username: str) -> str | None:
-            account = self.repo.get_by_username(username)
-            return account.password_hash if account else None
+    def pending(self, account: AdminAccount) -> str | None:
+        """O que o admin precisa resolver antes de usar o painel."""
+        if account.must_change_password:
+            return PENDING_PASSWORD
+        if settings.admin_2fa_required and not account.totp_secret:
+            return PENDING_2FA
+        return None
 
-        return read_session(token, ROLE_ADMIN, key_for)
+    # ---------- Sessões no servidor ----------
 
-    def new_session(self, account: AdminAccount, seconds: int) -> str:
-        return create_session(ROLE_ADMIN, account.username, account.password_hash, seconds)
+    def start_session(self, account: AdminAccount, seconds: int, ip: str | None, user_agent: str | None) -> str:
+        token = new_session_token()
+        self.repo.add_session(
+            AdminSession(
+                admin_id=account.id,
+                token_hash=hash_session_token(token),
+                expires_at=_now() + timedelta(seconds=seconds),
+                ip=ip,
+                user_agent=(user_agent or "")[:300] or None,
+            )
+        )
+        self.db.commit()
+        return token
 
-    def change_password(self, username: str, current: str, new: str) -> AdminAccount:
-        account = self._get_by_username(username)
+    def session_account(self, token: str | None) -> tuple[AdminAccount, AdminSession] | None:
+        """Admin e sessão do token, se ela não tiver sido encerrada, vencida ou ficado parada demais."""
+        if not token:
+            return None
+        session = self.repo.session_by_hash(hash_session_token(token))
+        now = _now()
+        if (
+            not session
+            or session.revoked_at
+            or session.expires_at <= now
+            or now - session.last_seen_at > timedelta(hours=settings.session_idle_hours)
+        ):
+            return None
+        account = self.repo.get(session.admin_id)
+        if not account:
+            return None
+        if now - session.last_seen_at > _TOUCH_EVERY:
+            session.last_seen_at = now
+            self.db.commit()
+        return account, session
+
+    def end_session(self, token: str | None) -> None:
+        session = self.repo.session_by_hash(hash_session_token(token)) if token else None
+        if session and not session.revoked_at:
+            session.revoked_at = _now()
+            self.db.commit()
+
+    def list_sessions(self, account: AdminAccount) -> list[AdminSession]:
+        """Sessões que ainda valem (não encerradas, não vencidas e não paradas além do limite)."""
+        now = _now()
+        idle = timedelta(hours=settings.session_idle_hours)
+        return [s for s in self.repo.active_sessions(account.id, now) if now - s.last_seen_at <= idle]
+
+    def end_session_by_id(self, account: AdminAccount, session_id: int) -> None:
+        for session in self.repo.active_sessions(account.id, _now()):
+            if session.id == session_id:
+                session.revoked_at = _now()
+                self.db.commit()
+                return
+        raise NotFound("Sessão não encontrada")
+
+    def end_other_sessions(self, account: AdminAccount, keep: AdminSession) -> None:
+        self.repo.revoke_sessions(account.id, _now(), keep_id=keep.id)
+        self.db.commit()
+
+    # ---------- Senha ----------
+
+    def change_password(self, account: AdminAccount, current: str, new: str, keep: AdminSession) -> None:
+        """Troca a senha; as outras sessões do admin caem, a atual continua."""
         if not verify_password(current, account.password_hash):
             raise BadRequest("Senha atual incorreta")
-        self._check_password(new)
         if new == current:
             raise BadRequest("A nova senha deve ser diferente da atual")
+        problem = password_problem(new, account.username)
+        if problem:
+            raise BadRequest(problem)
         account.password_hash = hash_password(new)
+        account.must_change_password = False
+        self.repo.revoke_sessions(account.id, _now(), keep_id=keep.id)
         self.db.commit()
-        return account
+
+    # ---------- Verificação em duas etapas ----------
+
+    def totp_setup(self, account: AdminAccount) -> dict:
+        """Gera um segredo novo, ainda pendente: só vale depois de confirmado com um código."""
+        secret = twofactor.new_secret()
+        account.totp_pending = twofactor.encrypt_secret(secret)
+        self.db.commit()
+        uri = twofactor.provisioning_uri(secret, account.username)
+        return {"secret": secret, "uri": uri, "qr": twofactor.qr_data_uri(uri)}
+
+    def totp_enable(self, account: AdminAccount, code: str) -> list[str]:
+        secret = twofactor.decrypt_secret(account.totp_pending) if account.totp_pending else None
+        if not secret:
+            raise BadRequest("Comece a ativação de novo")
+        step = twofactor.verify(secret, code, None)
+        if step is None:
+            raise BadRequest("Código inválido. Confira o horário do celular e tente de novo")
+        account.totp_secret = account.totp_pending
+        account.totp_pending = None
+        account.totp_last_step = step
+        codes = twofactor.new_recovery_codes()
+        self.repo.replace_recovery_codes(account.id, [twofactor.hash_recovery_code(c) for c in codes])
+        self.db.commit()
+        return codes
+
+    def totp_disable(self, account: AdminAccount, password: str, code: str) -> None:
+        if not verify_password(password, account.password_hash):
+            raise BadRequest("Senha incorreta")
+        if not self.check_second_factor(account, code):
+            raise BadRequest("Código inválido")
+        account.totp_secret = None
+        account.totp_pending = None
+        account.totp_last_step = None
+        self.repo.replace_recovery_codes(account.id, [])
+        self.db.commit()
+
+    def new_recovery_codes(self, account: AdminAccount, code: str) -> list[str]:
+        if not self.check_second_factor(account, code):
+            raise BadRequest("Código inválido")
+        codes = twofactor.new_recovery_codes()
+        self.repo.replace_recovery_codes(account.id, [twofactor.hash_recovery_code(c) for c in codes])
+        self.db.commit()
+        return codes
+
+    def recovery_codes_left(self, account: AdminAccount) -> int:
+        return self.repo.recovery_codes_left(account.id)
 
     # ---------- Relógios ----------
 
@@ -89,12 +234,17 @@ class AuthService:
         return self.repo.list()
 
     def create_admin(self, username: str, password: str) -> AdminAccount:
+        """A senha inicial é provisória: o novo admin troca no primeiro acesso e ativa as duas etapas."""
         username = username.strip()
         if not username or "|" in username:
             raise BadRequest("Usuário inválido")
-        self._check_password(password)
+        problem = password_problem(password, username)
+        if problem:
+            raise BadRequest(problem)
         try:
-            account = self.repo.add(AdminAccount(username=username, password_hash=hash_password(password)))
+            account = self.repo.add(
+                AdminAccount(username=username, password_hash=hash_password(password), must_change_password=True)
+            )
             self.db.commit()
         except IntegrityError:
             self.db.rollback()
@@ -109,16 +259,5 @@ class AuthService:
             raise BadRequest("Você não pode excluir a própria conta")
         if self.repo.count() <= 1:
             raise BadRequest("É preciso manter pelo menos um administrador")
-        self.repo.delete(account)
+        self.repo.delete(account)  # as sessões e os códigos de recuperação caem junto (ON DELETE CASCADE)
         self.db.commit()
-
-    def _get_by_username(self, username: str) -> AdminAccount:
-        account = self.repo.get_by_username(username)
-        if not account:
-            raise NotFound("Administrador não encontrado")
-        return account
-
-    @staticmethod
-    def _check_password(password: str) -> None:
-        if len(password) < MIN_PASSWORD_LENGTH:
-            raise BadRequest(f"A senha deve ter pelo menos {MIN_PASSWORD_LENGTH} caracteres")

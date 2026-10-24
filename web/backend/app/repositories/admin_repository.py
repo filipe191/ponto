@@ -1,7 +1,11 @@
-from sqlalchemy import func, select
+from __future__ import annotations
+
+from datetime import datetime
+
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.models import AdminAccount, AppSetting
+from app.models import AdminAccount, AdminRecoveryCode, AdminSession, AppSetting
 
 
 class AdminRepository:
@@ -27,6 +31,53 @@ class AdminRepository:
 
     def delete(self, account: AdminAccount) -> None:
         self.db.delete(account)
+
+    # ---------- Sessões ----------
+
+    def session_by_hash(self, token_hash: str) -> AdminSession | None:
+        return self.db.scalar(select(AdminSession).where(AdminSession.token_hash == token_hash))
+
+    def add_session(self, session: AdminSession) -> AdminSession:
+        self.db.add(session)
+        self.db.flush()
+        return session
+
+    def active_sessions(self, admin_id: int, now: datetime) -> list[AdminSession]:
+        return list(
+            self.db.scalars(
+                select(AdminSession)
+                .where(AdminSession.admin_id == admin_id, AdminSession.revoked_at.is_(None), AdminSession.expires_at > now)
+                .order_by(AdminSession.last_seen_at.desc())
+            )
+        )
+
+    def revoke_sessions(self, admin_id: int, now: datetime, keep_id: int | None = None) -> None:
+        query = update(AdminSession).where(AdminSession.admin_id == admin_id, AdminSession.revoked_at.is_(None))
+        if keep_id is not None:
+            query = query.where(AdminSession.id != keep_id)
+        self.db.execute(query.values(revoked_at=now))
+
+    # ---------- Códigos de recuperação ----------
+
+    def unused_recovery_code(self, admin_id: int, code_hash: str) -> AdminRecoveryCode | None:
+        return self.db.scalar(
+            select(AdminRecoveryCode).where(
+                AdminRecoveryCode.admin_id == admin_id,
+                AdminRecoveryCode.code_hash == code_hash,
+                AdminRecoveryCode.used_at.is_(None),
+            )
+        )
+
+    def recovery_codes_left(self, admin_id: int) -> int:
+        return self.db.scalar(
+            select(func.count())
+            .select_from(AdminRecoveryCode)
+            .where(AdminRecoveryCode.admin_id == admin_id, AdminRecoveryCode.used_at.is_(None))
+        ) or 0
+
+    def replace_recovery_codes(self, admin_id: int, hashes: list[str]) -> None:
+        self.db.query(AdminRecoveryCode).filter(AdminRecoveryCode.admin_id == admin_id).delete()
+        self.db.add_all(AdminRecoveryCode(admin_id=admin_id, code_hash=h) for h in hashes)
 
     # ---------- Valores do sistema ----------
 

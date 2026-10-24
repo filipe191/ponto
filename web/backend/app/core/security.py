@@ -31,6 +31,15 @@ def hash_pin(pin: str) -> str:
     return rehash_legacy_pin(_legacy_pin_hash(pin))
 
 
+def new_session_token() -> str:
+    """Token opaco da sessão do admin (o banco guarda só o hash)."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_session_token(token: str) -> str:
+    return hashlib.sha256(f"sessao|{token}".encode()).hexdigest()
+
+
 def new_device_key() -> str:
     """Chave de acesso do app de celular (aleatória, 256 bits)."""
     return "ponto_" + secrets.token_urlsafe(32)

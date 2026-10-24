@@ -13,7 +13,7 @@
     <a class="brand" href="/">Ponto</a>
     <nav>
       <a href="/">Relógio</a>
-      <a href="/senha">Trocar senha</a>
+      <a href="/senha">Conta e segurança</a>
       <button type="button" id="logout">Sair</button>
     </nav>
   </header>
@@ -115,10 +115,10 @@
         <h2 class="card-title" id="accTitle">Administradores e relógios</h2>
         <p class="card-sub" id="whoami"></p>
       </header>
-      <p class="hint">Cada pessoa que administra o ponto deve ter o próprio login: o histórico de correções registra quem fez cada alteração.</p>
+      <p class="hint">Cada pessoa que administra o ponto deve ter o próprio login: o histórico de correções registra quem fez cada alteração. A senha inicial é provisória: no primeiro acesso, o novo admin troca a senha e ativa a verificação em duas etapas.</p>
       <form class="toolbar" id="admForm">
         <input class="input" type="text" id="admUser" placeholder="Usuário" required autocomplete="off" aria-label="Usuário">
-        <input class="input" type="password" id="admPass" placeholder="Senha inicial (mín. 6)" required minlength="6" autocomplete="new-password" aria-label="Senha inicial">
+        <input class="input" type="password" id="admPass" placeholder="Senha inicial (mín. 12)" required minlength="12" autocomplete="new-password" aria-label="Senha inicial">
         <button class="btn btn-primary" type="submit">Adicionar administrador</button>
       </form>
       <p class="form-error" id="admError" role="alert"></p>
@@ -245,6 +245,8 @@
       });
       const data = await res.json().catch(() => ({}));
       if (res.status === 401) { toLogin(); throw new Error(data.error); }
+      // Senha provisória ou sem verificação em duas etapas: resolve em /senha antes de usar o painel
+      if (res.status === 403 && data.pending) { location.replace('/senha'); throw new Error(data.error); }
       if (!res.ok) throw new Error(data.error || 'Erro');
       return data;
     }

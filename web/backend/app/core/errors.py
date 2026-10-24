@@ -6,9 +6,10 @@ from fastapi.responses import JSONResponse
 
 
 class ApiError(Exception):
-    def __init__(self, status_code: int, message: str):
+    def __init__(self, status_code: int, message: str, **extra):
         self.status_code = status_code
         self.message = message
+        self.extra = extra  # campos a mais na resposta, ex.: {"otp_required": True}
 
 
 class NotFound(ApiError):
@@ -27,8 +28,13 @@ class Conflict(ApiError):
 
 
 class Unauthorized(ApiError):
-    def __init__(self, message: str = "Usuário ou senha inválidos"):
-        super().__init__(401, message)
+    def __init__(self, message: str = "Usuário ou senha inválidos", **extra):
+        super().__init__(401, message, **extra)
+
+
+class Forbidden(ApiError):
+    def __init__(self, message: str, **extra):
+        super().__init__(403, message, **extra)
 
 
 class TooManyRequests(ApiError):
@@ -39,7 +45,7 @@ class TooManyRequests(ApiError):
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(_req: Request, exc: ApiError):
-        return JSONResponse({"error": exc.message}, status_code=exc.status_code)
+        return JSONResponse({"error": exc.message, **exc.extra}, status_code=exc.status_code)
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_req: Request, exc: RequestValidationError):

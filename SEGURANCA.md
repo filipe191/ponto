@@ -27,10 +27,10 @@ O sistema guarda dados pessoais de funcionários (nome, horários de trabalho, f
 | 1 | CA local sem restrição de nomes | Alta | Pequeno | `web/scripts/gerar-certificado.sh` | ✅ Concluído |
 | 2 | Postgres aberto na rede do Tailscale | Alta | Pequeno | Servidor (Postgres compartilhado) | Risco aceito |
 | 3 | Sem firewall no servidor | Alta | Pequeno | Servidor | ✅ Concluído |
-| 4 | Backups sem criptografia e no mesmo disco | Alta | Médio | `web/scripts/backup.sh` | Pendente |
-| 5 | Cookie de admin enviado a outros serviços do mesmo IP / CSRF | Média | Pequeno | Backend + nginx | Pendente |
-| 6 | Sair não invalida a sessão | Média | Médio | Backend | Pendente |
-| 7 | Login de admin fraco | Média | Médio | Backend + painel | Pendente |
+| 4 | Backups sem criptografia e no mesmo disco | Alta | Médio | `web/scripts/backup.sh` | ✅ Criptografia · cópia remota adiada |
+| 5 | Cookie de admin enviado a outros serviços do mesmo IP / CSRF | Média | Pequeno | Backend + nginx | ✅ Concluído |
+| 6 | Sair não invalida a sessão | Média | Médio | Backend | ✅ Concluído |
+| 7 | Login de admin fraco | Média | Médio | Backend + painel | ✅ Concluído |
 | 8 | Auditoria incompleta | Média | Médio | Backend | Pendente |
 | 9 | PIN de 4 dígitos | Média | Pequeno | Backend + relógio | Pendente |
 | 10 | Cartão de hoje expõe todos os colegas | Média | Pequeno | Relógio | Pendente |
@@ -128,6 +128,15 @@ Fora do escopo do ponto: os demais serviços do servidor (Portainer, Grafana, Va
 
 ---
 
+**Status: criptografia concluída em 24/10/2026; cópia fora do servidor adiada.** O destino da cópia ainda não foi escolhido.
+- Cada dump é cifrado com `gpg` usando a chave pública `web/backups/chave-publica.asc`; só a chave privada, fora do servidor, decifra.
+- O dump em texto aberto só existe na memória (`/dev/shm`) durante a conferência e é apagado em seguida.
+- Os backups antigos em texto aberto foram cifrados e destruídos com `shred`.
+- A cópia remota já está pronta no `backup.sh`: basta definir `BACKUP_REMOTO` no `.env` com um destino do `rsync`. Até lá, o log avisa a cada execução.
+- Testado: com a chave privada o backup decifra e restaura; sem ela, recusa (*No secret key*).
+
+**Pendente com você:** guardar `~/ponto-backup-chave-privada.asc` fora do servidor (ex.: Vaultwarden) e apagá-la com `shred -u ~/ponto-backup-chave-privada.asc`.
+
 ## 🟠 Prioridade média
 
 ### 5. Cookie de admin enviado a outros serviços do mesmo IP (e CSRF)
@@ -140,6 +149,10 @@ Fora do escopo do ponto: os demais serviços do servidor (Portainer, Grafana, Va
 - No backend, recusar todo `POST`, `PATCH` e `DELETE` cujo cabeçalho `Origin` não seja o do próprio ponto (o app de celular não manda `Origin` e usa chave própria, então não é afetado).
 - Se possível, acessar o ponto por um nome próprio (ex.: `ponto.local`) em vez do IP, o que isola os cookies dos outros serviços.
 
+**Status: concluído em 24/10/2026.** O backend recusa POST, PUT, PATCH e DELETE com cookie de sessão cujo `Origin` não seja o próprio ponto (mesma origem, em HTTPS), e também os que chegam sem `Origin` (navegadores sempre o enviam). O app de celular não usa cookie e não é afetado. O nginx passou a repassar a porta no `Host` para a comparação. Testado: requisições de outra porta do mesmo IP, em HTTP ou sem `Origin` são recusadas.
+
+O nome próprio (ex.: `ponto.local`) ficou como melhoria opcional: exige um registro no Pi-hole e um certificado novo (com a senha da CA). Com a checagem de `Origin`, o CSRF já está barrado; o nome próprio só evitaria o envio do cookie aos outros serviços.
+
 ### 6. Sair não invalida a sessão
 
 **Problema.** A sessão do admin é um token assinado guardado só no cookie. "Sair" apaga o cookie no navegador, mas o token continua válido.
@@ -151,6 +164,14 @@ Fora do escopo do ponto: os demais serviços do servidor (Portainer, Grafana, Va
 - Adicionar "sair de todos os aparelhos" na tela de senha.
 - Encerrar a sessão após algumas horas sem uso.
 
+**Status: concluído em 24/10/2026.**
+- A sessão do admin agora é um token aleatório com o hash guardado no banco (`admin_sessions`).
+- Sair, trocar a senha, ativar o relógio ou excluir o admin invalidam a sessão na hora.
+- A sessão cai sozinha após 8 horas sem uso e dura no máximo 30 dias.
+- Em **Conta e segurança** (`/senha`): lista dos aparelhos conectados, encerrar um aparelho e "sair de todos os outros".
+
+Testado: um cookie copiado deixa de valer após sair.
+
 ### 7. Login de admin fraco
 
 **Problema.** A senha mínima tem 6 caracteres e não há segundo fator.
@@ -160,6 +181,15 @@ Fora do escopo do ponto: os demais serviços do servidor (Portainer, Grafana, Va
 **Correção.**
 - Exigir no mínimo 12 caracteres e recusar senhas muito comuns.
 - Adicionar segundo fator por código no celular (TOTP, ex.: Google Authenticator), obrigatório para todos os admins.
+
+**Status: concluído em 24/10/2026.**
+- **Senha:** mínimo de 12 caracteres, sem senhas comuns, sem só números, sem o nome de usuário. Senha provisória (a do `.env` ou a criada por outro admin) ou fora da política obriga a troca antes de usar o painel.
+- **Duas etapas obrigatória:** código TOTP de app autenticador, cadastrado por QR code. Os segredos ficam cifrados no banco (com a `PIN_KEY`); um código não pode ser reaproveitado; há 10 códigos de recuperação de uso único (só o hash fica no banco).
+- Erros de código contam no limite de tentativas do login.
+- Para desligar a obrigatoriedade: `ADMIN_2FA_REQUIRED=false`.
+- Testado com o vetor oficial da RFC 6238 e no fluxo completo.
+
+**No primeiro acesso depois do deploy, cada admin vai precisar trocar a senha (se for fraca) e cadastrar o app autenticador.**
 
 ### 8. Auditoria incompleta
 
@@ -251,10 +281,10 @@ Além disso, **reabrir um mês apaga o registro de fechamento junto com a ciênc
 - [x] 1. Recriar a CA com *name constraints* e chave cifrada
 - [x] 2. Postgres no Tailscale — risco aceito (tailnet de um único dono, com ACLs)
 - [x] 3. Ativar firewall (rede local e Tailscale)
-- [ ] 4. Criptografar backups e enviar cópia para fora do servidor
-- [ ] 5. Checar `Origin` nas rotas que alteram dados
-- [ ] 6. Sessões no servidor, "sair de todos", expiração por inatividade
-- [ ] 7. Senha mínima de 12 caracteres e TOTP para admins
+- [x] 4. Criptografar backups — [ ] cópia fora do servidor (definir `BACKUP_REMOTO`)
+- [x] 5. Checar `Origin` nas rotas que alteram dados
+- [x] 6. Sessões no servidor, "sair de todos", expiração por inatividade
+- [x] 7. Senha mínima de 12 caracteres e TOTP para admins
 - [ ] 8. Auditoria geral e histórico preservado na reabertura do mês
 - [ ] 9. PIN de 6 dígitos e bloqueio progressivo
 - [ ] 10. Reduzir os dados mostrados no "Cartão de hoje"

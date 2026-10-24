@@ -63,6 +63,7 @@
     async function get(path) {
       const res = await fetch('/api/admin' + path);
       if (res.status === 401) { location.replace('/login?next=/imprimir'); throw new Error(''); }
+      if (res.status === 403) { location.replace('/senha'); throw new Error(''); }
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Erro');
       return res.json();
     }

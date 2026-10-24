@@ -5,3 +5,5 @@ psycopg[binary]==3.2.9
 pydantic-settings==2.9.1
 tzdata==2025.2
 alembic==1.16.1
+cryptography==44.0.2
+segno==1.6.6

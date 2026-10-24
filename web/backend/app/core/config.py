@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # (as sessões abertas caem quando o container reinicia).
     secret_key: str = ""
     session_days: int = 30
+    # Sessão do admin cai depois de X horas sem uso (além do limite de session_days)
+    session_idle_hours: int = 8
+    # Verificação em duas etapas (código no celular) obrigatória para todos os administradores
+    admin_2fa_required: bool = True
     # Aparelho liberado como relógio (só bate ponto). O admin pode desligar todos de uma vez.
     kiosk_days: int = 365
     # Login do admin feito no próprio aparelho do relógio expira rápido, para não ficar aberto

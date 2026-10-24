@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <title>Trocar senha · Ponto</title>
+  <title>Conta e segurança · Ponto</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -13,78 +13,278 @@
     <nav>
       <a href="/">Relógio</a>
       <a href="/admin">Administração</a>
+      <button type="button" id="logout">Sair</button>
     </nav>
   </header>
 
-  <main class="login-page">
-    <section class="machine" aria-labelledby="title">
-      <div class="readout">
-        <p class="readout-date" id="title">Trocar senha<span id="who"></span></p>
-      </div>
+  <main class="account-page">
+    <h1 class="account-title">Conta e segurança<span id="who"></span></h1>
 
-      <form class="login-form" id="form" novalidate>
+    <div class="notice" id="pending" role="alert" hidden></div>
+
+    <!-- Senha -->
+    <section class="machine" aria-labelledby="pwTitle">
+      <h2 class="account-sub" id="pwTitle">Trocar senha</h2>
+      <form class="login-form" id="pwForm" novalidate>
         <input type="text" id="username" autocomplete="username" hidden>
         <label class="field">
           <span>Senha atual</span>
-          <input id="current" type="password" autocomplete="current-password" required autofocus>
+          <input id="current" type="password" autocomplete="current-password" required>
         </label>
         <label class="field">
           <span>Nova senha</span>
-          <input id="new1" type="password" autocomplete="new-password" minlength="6" required>
+          <input id="new1" type="password" autocomplete="new-password" minlength="12" required>
         </label>
         <label class="field">
           <span>Repita a nova senha</span>
-          <input id="new2" type="password" autocomplete="new-password" minlength="6" required>
+          <input id="new2" type="password" autocomplete="new-password" minlength="12" required>
         </label>
-        <p class="form-hint">Mínimo de 6 caracteres. Seus outros aparelhos conectados precisarão entrar de novo; os relógios continuam funcionando.</p>
-        <p class="form-error" id="error" role="alert"></p>
-        <p class="form-ok" id="ok" role="status"></p>
-        <button class="key key-go" type="submit" id="submit">Salvar nova senha</button>
+        <p class="form-hint">Mínimo de 12 caracteres. Uma frase com palavras soltas é fácil de lembrar e difícil de adivinhar (ex.: “cavalo azul correndo cedo”). Seus outros aparelhos conectados saem; os relógios continuam funcionando.</p>
+        <p class="form-error" id="pwError" role="alert"></p>
+        <p class="form-ok" id="pwOk" role="status"></p>
+        <button class="key key-go" type="submit" id="pwSubmit">Salvar nova senha</button>
       </form>
+    </section>
+
+    <!-- Verificação em duas etapas -->
+    <section class="machine" aria-labelledby="tfTitle">
+      <h2 class="account-sub" id="tfTitle">Verificação em duas etapas</h2>
+      <p class="form-hint">Além da senha, o login pede um código de 6 dígitos de um app autenticador no celular (Google Authenticator, Microsoft Authenticator, Bitwarden...). Quem descobrir sua senha não entra sem o seu celular.</p>
+
+      <div id="tfOff" hidden>
+        <button class="key key-go" type="button" id="tfStart">Ativar</button>
+      </div>
+
+      <div id="tfSetup" hidden>
+        <ol class="steps">
+          <li>No app autenticador, adicione uma conta lendo o QR code (ou digitando a chave).</li>
+          <li>Digite o código de 6 dígitos que aparecer no app.</li>
+        </ol>
+        <img class="qr" id="tfQr" alt="QR code para o app autenticador">
+        <p class="form-hint">Chave: <code class="secret" id="tfSecret"></code></p>
+        <form class="login-form" id="tfConfirm" novalidate>
+          <label class="field">
+            <span>Código do app</span>
+            <input id="tfCode" inputmode="numeric" autocomplete="one-time-code" placeholder="000000">
+          </label>
+          <button class="key key-go" type="submit">Confirmar</button>
+        </form>
+      </div>
+
+      <div id="tfCodes" hidden>
+        <p><b>Códigos de recuperação.</b> Guarde num lugar seguro (ex.: gerenciador de senhas). Cada um entra uma única vez, no lugar do código do app, se você perder o celular. Eles não serão mostrados de novo.</p>
+        <ul class="codes" id="tfCodeList"></ul>
+        <button class="key" type="button" id="tfCopy">Copiar códigos</button>
+        <button class="key key-go" type="button" id="tfDone">Já guardei</button>
+      </div>
+
+      <div id="tfOn" hidden>
+        <p class="form-ok">Ativada. <span id="tfLeft"></span></p>
+        <form class="login-form" id="tfManage" novalidate>
+          <label class="field">
+            <span>Código do app (para gerar novos códigos de recuperação ou desativar)</span>
+            <input id="tfManageCode" inputmode="numeric" autocomplete="one-time-code" placeholder="000000">
+          </label>
+          <label class="field" id="tfPassWrap" hidden>
+            <span>Senha (para desativar)</span>
+            <input id="tfPass" type="password" autocomplete="current-password">
+          </label>
+          <div class="row-actions">
+            <button class="key" type="button" id="tfRecovery">Novos códigos de recuperação</button>
+            <button class="key key-danger" type="button" id="tfDisable">Desativar</button>
+          </div>
+        </form>
+      </div>
+      <p class="form-error" id="tfError" role="alert"></p>
+    </section>
+
+    <!-- Sessões -->
+    <section class="machine" aria-labelledby="sesTitle">
+      <h2 class="account-sub" id="sesTitle">Aparelhos conectados</h2>
+      <p class="form-hint">Cada login fica aberto até você sair, por até 30 dias, e cai sozinho depois de 8 horas sem uso.</p>
+      <ul class="sessions" id="sessions"></ul>
+      <p class="form-error" id="sesError" role="alert"></p>
+      <button class="key" type="button" id="endOthers">Sair de todos os outros aparelhos</button>
     </section>
   </main>
 
   <script>
     const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmtDT = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-    fetch('/api/auth/me').then((r) => r.ok ? r.json() : null).then((me) => {
+    async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
+      const res = await fetch('/api/auth' + path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }).catch(() => null);
+      if (!res) throw new Error('Sem conexão com o servidor. Tente de novo em instantes.');
+      if (res.status === 401) { location.replace('/login?next=/senha'); throw new Error(''); }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Não foi possível concluir.');
+      return data;
+    }
+
+    $('logout').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      location.replace('/');
+    });
+
+    // ---------- Pendências ----------
+
+    async function loadMe() {
+      const me = await api('/admin').catch(() => null);
       if (!me) return;
       $('who').textContent = ` · ${me.user}`;
       $('username').value = me.user;
-    }).catch(() => {});
+      const text = {
+        senha: '<b>Troque sua senha para continuar.</b> A senha atual é provisória ou não segue a política (mínimo de 12 caracteres, nada muito comum).',
+        '2fa': '<b>Ative a verificação em duas etapas para continuar.</b> Ela é obrigatória para todos os administradores.',
+      }[me.pending];
+      $('pending').hidden = !text;
+      $('pending').innerHTML = text ? `${text}` : '';
+      if (!me.pending && sessionStorage.getItem('ponto-pendencia')) {
+        sessionStorage.removeItem('ponto-pendencia');
+        $('pending').hidden = false;
+        $('pending').className = 'notice ok';
+        $('pending').innerHTML = 'Tudo certo. <a href="/admin">Ir para a administração</a>';
+      } else if (me.pending) {
+        sessionStorage.setItem('ponto-pendencia', '1');
+      }
+    }
 
-    $('form').addEventListener('submit', async (e) => {
+    // ---------- Senha ----------
+
+    $('pwForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      $('error').textContent = '';
-      $('ok').textContent = '';
+      $('pwError').textContent = '';
+      $('pwOk').textContent = '';
       const current = $('current').value;
       const novo = $('new1').value;
-      if (!current || !novo) return ($('error').textContent = 'Preencha a senha atual e a nova.');
-      if (novo.length < 6) return ($('error').textContent = 'A nova senha deve ter pelo menos 6 caracteres.');
-      if (novo !== $('new2').value) return ($('error').textContent = 'As duas novas senhas não conferem.');
-
-      $('submit').disabled = true;
-      $('submit').textContent = 'Salvando…';
+      if (!current || !novo) return ($('pwError').textContent = 'Preencha a senha atual e a nova.');
+      if (novo.length < 12) return ($('pwError').textContent = 'A nova senha deve ter pelo menos 12 caracteres.');
+      if (novo !== $('new2').value) return ($('pwError').textContent = 'As duas novas senhas não conferem.');
+      $('pwSubmit').disabled = true;
       try {
-        const res = await fetch('/api/auth/password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ current_password: current, new_password: novo }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 401) return location.replace('/login?next=/senha');
-        if (res.ok) {
-          $('form').reset();
-          $('ok').textContent = 'Senha alterada.';
-        } else {
-          $('error').textContent = data.error || 'Não foi possível trocar a senha.';
-        }
-      } catch {
-        $('error').textContent = 'Sem conexão com o servidor. Tente de novo em instantes.';
-      }
-      $('submit').disabled = false;
-      $('submit').textContent = 'Salvar nova senha';
+        await api('/password', { current_password: current, new_password: novo });
+        $('pwForm').reset();
+        $('pwOk').textContent = 'Senha alterada. Os outros aparelhos foram desconectados.';
+        loadMe();
+        loadSessions();
+      } catch (err) { $('pwError').textContent = err.message; }
+      $('pwSubmit').disabled = false;
     });
+
+    // ---------- Verificação em duas etapas ----------
+
+    function showTf(part) {
+      for (const id of ['tfOff', 'tfSetup', 'tfCodes', 'tfOn']) $(id).hidden = id !== part;
+      $('tfError').textContent = '';
+    }
+
+    async function loadTf() {
+      const s = await api('/2fa').catch((err) => { $('tfError').textContent = err.message; return null; });
+      if (!s) return;
+      if (s.enabled) {
+        $('tfLeft').textContent = `${s.recovery_codes_left} código(s) de recuperação disponíveis.`;
+        showTf('tfOn');
+      } else {
+        showTf('tfOff');
+      }
+    }
+
+    $('tfStart').addEventListener('click', async () => {
+      try {
+        const s = await api('/2fa/setup', {});
+        $('tfQr').src = s.qr;
+        $('tfSecret').textContent = s.secret.replace(/(.{4})/g, '$1 ').trim();
+        $('tfCode').value = '';
+        showTf('tfSetup');
+        $('tfCode').focus();
+      } catch (err) { $('tfError').textContent = err.message; }
+    });
+
+    function showCodes(codes) {
+      $('tfCodeList').innerHTML = codes.map((c) => `<li><code>${esc(c)}</code></li>`).join('');
+      $('tfCodeList').dataset.text = codes.join('\n');
+      showTf('tfCodes');
+    }
+
+    $('tfConfirm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const r = await api('/2fa/enable', { code: $('tfCode').value });
+        showCodes(r.codes);
+        loadMe();
+      } catch (err) { $('tfError').textContent = err.message; }
+    });
+
+    $('tfCopy').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText($('tfCodeList').dataset.text);
+        $('tfCopy').textContent = 'Copiados';
+      } catch { $('tfCopy').textContent = 'Selecione e copie'; }
+    });
+    $('tfDone').addEventListener('click', () => { $('tfCodeList').innerHTML = ''; loadTf(); });
+
+    $('tfRecovery').addEventListener('click', async () => {
+      $('tfPassWrap').hidden = true;
+      try { showCodes((await api('/2fa/recovery', { code: $('tfManageCode').value })).codes); } catch (err) { $('tfError').textContent = err.message; }
+      $('tfManageCode').value = '';
+    });
+
+    $('tfDisable').addEventListener('click', async () => {
+      if ($('tfPassWrap').hidden) {
+        $('tfPassWrap').hidden = false;
+        $('tfError').textContent = 'Digite o código do app e a sua senha e toque em Desativar de novo.';
+        return;
+      }
+      try {
+        await api('/2fa/disable', { password: $('tfPass').value, code: $('tfManageCode').value });
+        $('tfPass').value = '';
+        $('tfManageCode').value = '';
+        $('tfPassWrap').hidden = true;
+        loadTf();
+        loadMe();
+      } catch (err) { $('tfError').textContent = err.message; }
+    });
+
+    // ---------- Sessões ----------
+
+    function device(ua) {
+      if (!ua) return 'Aparelho desconhecido';
+      const os = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Mac OS/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : '';
+      const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Navegador';
+      return os ? `${browser} no ${os}` : browser;
+    }
+
+    async function loadSessions() {
+      let items = [];
+      try { items = await api('/sessions'); } catch (err) { $('sesError').textContent = err.message; }
+      $('sessions').innerHTML = items.map((s) => `
+        <li>
+          <span><b>${esc(device(s.user_agent))}</b>${s.current ? ' <span class="tag-current">este aparelho</span>' : ''}<br>
+            <small>${esc(s.ip || '')} · entrou ${fmtDT(s.created_at)} · último uso ${fmtDT(s.last_seen_at)}</small></span>
+          ${s.current ? '' : `<button class="key" type="button" data-end="${s.id}">Encerrar</button>`}
+        </li>`).join('');
+      $('endOthers').hidden = items.length < 2;
+    }
+
+    $('sessions').addEventListener('click', async (e) => {
+      const id = e.target.closest('[data-end]')?.dataset.end;
+      if (!id) return;
+      try { await api(`/sessions/${id}`, undefined, 'DELETE'); } catch (err) { $('sesError').textContent = err.message; }
+      loadSessions();
+    });
+    $('endOthers').addEventListener('click', async () => {
+      try { await api('/sessions/end-others', {}); } catch (err) { $('sesError').textContent = err.message; }
+      loadSessions();
+    });
+
+    loadMe();
+    loadTf();
+    loadSessions();
   </script>
 </body>
 </html>

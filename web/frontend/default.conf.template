@@ -71,7 +71,8 @@ server {
     # A API faz a própria verificação de sessão
     location /api/ {
         proxy_pass http://backend:3000;
-        proxy_set_header Host $host;
+        # Com a porta: o backend compara com o Origin do navegador (proteção contra CSRF)
+        proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         # Substitui (não acrescenta): o cliente não consegue forjar o IP usado no limite de tentativas
         proxy_set_header X-Forwarded-For $remote_addr;
