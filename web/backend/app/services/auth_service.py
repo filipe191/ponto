@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core import twofactor
 from app.core.config import settings
-from app.core.errors import BadRequest, Conflict, NotFound
+from app.core.errors import BadRequest, Conflict, Forbidden, NotFound
 from app.core.passwords import password_problem
 from app.core.security import (
     ROLE_KIOSK,
@@ -17,12 +17,14 @@ from app.core.security import (
     read_session,
     verify_password,
 )
-from app.models import AdminAccount, AdminSession
+from app.models import AdminAccount, AdminSession, Company
 from app.repositories.admin_repository import AdminRepository
 from app.services.audit import AuditLog
 
-KIOSK_SECRET = "kiosk_secret"
-KIOSK_SUBJECT = "relogio"
+KIOSK_SUBJECT = "relogio"  # sujeito do token do relógio: "relogio:<empresa>"
+# Relógios liberados antes das várias empresas: o token diz só "relogio" e vale para a empresa nº 1,
+# que herdou o segredo deles (migração 0008)
+LEGACY_KIOSK_COMPANY = 1
 # Hash de uma senha qualquer: usuário inexistente gasta o mesmo tempo que senha errada
 _DUMMY_HASH = hash_password(secrets.token_hex(8))
 # A última atividade da sessão é gravada de tempos em tempos, não a cada requisição
@@ -40,20 +42,21 @@ class AuthService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = AdminRepository(db)
-        self.audit = AuditLog(db)
+
+    def audit(self, company_id: int | None) -> AuditLog:
+        return AuditLog(self.db, company_id)
 
     def ensure_setup(self) -> None:
-        """Na primeira subida, cria o login com ADMIN_USER/ADMIN_PASSWORD do .env e o segredo dos relógios."""
+        """Na primeira subida, cria o superadmin com ADMIN_USER/ADMIN_PASSWORD do .env (ele cadastra as empresas)."""
         if not self.repo.count():
             self.repo.add(
                 AdminAccount(
                     username=settings.admin_user,
                     password_hash=hash_password(settings.admin_password),
                     must_change_password=True,  # a senha do .env é provisória
+                    superadmin=True,
                 )
             )
-        if not self.repo.setting(KIOSK_SECRET):
-            self.repo.set_setting(KIOSK_SECRET, secrets.token_hex(32))
         self.db.commit()
 
     # ---------- Login do admin ----------
@@ -65,6 +68,10 @@ class AuthService:
             self.log_login(account, False, ip, "senha errada")
         if not (account and valid):
             return None
+        company = self.repo.company(account.company_id)
+        if not account.superadmin and not (company and company.active):
+            self.log_login(account, False, ip, "empresa desativada")
+            raise Forbidden("Esta empresa está desativada. Fale com o administrador do sistema")
         # Senha que não segue mais a política (ex.: criada antes dela): trocar antes de usar o painel
         if password_problem(password, account.username):
             account.must_change_password = True
@@ -72,10 +79,11 @@ class AuthService:
 
     def log_login(self, account: AdminAccount, ok: bool, ip: str, reason: str = "") -> None:
         """Entradas e tentativas erradas numa conta que existe (usuário inexistente não é registrado)."""
+        audit = self.audit(account.company_id)
         if ok:
-            self.audit.record(account.username, "admin.login", "Entrou no painel", ip=ip)
+            audit.record(account.username, "admin.login", "Entrou no painel", ip=ip)
         else:
-            self.audit.record(account.username, "admin.login_falhou", f"Tentativa de login recusada: {reason}", ip=ip)
+            audit.record(account.username, "admin.login_falhou", f"Tentativa de login recusada: {reason}", ip=ip)
         self.db.commit()
 
     def check_second_factor(self, account: AdminAccount, code: str) -> bool:
@@ -105,9 +113,15 @@ class AuthService:
 
     def start_session(self, account: AdminAccount, seconds: int, ip: str | None, user_agent: str | None) -> str:
         token = new_session_token()
+        company_id = account.company_id
+        if account.superadmin and not self.repo.company(company_id):
+            # Superadmin sem empresa própria: abre a primeira; no painel ele escolhe outra
+            first = self.repo.first_active_company()
+            company_id = first.id if first else None
         self.repo.add_session(
             AdminSession(
                 admin_id=account.id,
+                company_id=company_id,
                 token_hash=hash_session_token(token),
                 expires_at=_now() + timedelta(seconds=seconds),
                 ip=ip,
@@ -133,10 +147,37 @@ class AuthService:
         account = self.repo.get(session.admin_id)
         if not account:
             return None
+        if not account.superadmin:
+            company = self.repo.company(account.company_id)
+            if not (company and company.active):
+                return None  # empresa desativada: os admins dela saem na hora
         if now - session.last_seen_at > _TOUCH_EVERY:
             session.last_seen_at = now
             self.db.commit()
         return account, session
+
+    @staticmethod
+    def session_company(account: AdminAccount, session: AdminSession) -> int | None:
+        """Empresa aberta no painel: a do admin, ou a escolhida pelo superadmin nesta sessão."""
+        return session.company_id if account.superadmin else account.company_id
+
+    def switch_company(self, account: AdminAccount, session: AdminSession, company_id: int, ip: str) -> Company:
+        """O superadmin abre outra empresa no painel. A entrada fica na auditoria da empresa."""
+        if not account.superadmin:
+            raise Forbidden("Só o superadministrador troca de empresa")
+        company = self.repo.company(company_id)
+        if not company:
+            raise NotFound("Empresa não encontrada")
+        if session.company_id != company.id:
+            session.company_id = company.id
+            self.audit(company.id).record(
+                account.username, "admin.empresa_aberta", "Superadministrador abriu o painel desta empresa", ip=ip
+            )
+            self.db.commit()
+        return company
+
+    def company(self, company_id: int | None) -> Company | None:
+        return self.repo.company(company_id)
 
     def end_session(self, token: str | None) -> None:
         session = self.repo.session_by_hash(hash_session_token(token)) if token else None
@@ -176,7 +217,7 @@ class AuthService:
         account.password_hash = hash_password(new)
         account.must_change_password = False
         self.repo.revoke_sessions(account.id, _now(), keep_id=keep.id)
-        self.audit.record(account.username, "admin.senha_trocada", "Trocou a própria senha")
+        self.audit(account.company_id).record(account.username, "admin.senha_trocada", "Trocou a própria senha")
         self.db.commit()
 
     # ---------- Verificação em duas etapas ----------
@@ -201,7 +242,7 @@ class AuthService:
         account.totp_last_step = step
         codes = twofactor.new_recovery_codes()
         self.repo.replace_recovery_codes(account.id, [twofactor.hash_recovery_code(c) for c in codes])
-        self.audit.record(account.username, "admin.2fa_ativada", "Ativou a verificação em duas etapas")
+        self.audit(account.company_id).record(account.username, "admin.2fa_ativada", "Ativou a verificação em duas etapas")
         self.db.commit()
         return codes
 
@@ -214,7 +255,7 @@ class AuthService:
         account.totp_pending = None
         account.totp_last_step = None
         self.repo.replace_recovery_codes(account.id, [])
-        self.audit.record(account.username, "admin.2fa_desativada", "Desativou a verificação em duas etapas")
+        self.audit(account.company_id).record(account.username, "admin.2fa_desativada", "Desativou a verificação em duas etapas")
         self.db.commit()
 
     def new_recovery_codes(self, account: AdminAccount, code: str) -> list[str]:
@@ -222,7 +263,7 @@ class AuthService:
             raise BadRequest("Código inválido")
         codes = twofactor.new_recovery_codes()
         self.repo.replace_recovery_codes(account.id, [twofactor.hash_recovery_code(c) for c in codes])
-        self.audit.record(account.username, "admin.codigos_recuperacao", "Gerou novos códigos de recuperação")
+        self.audit(account.company_id).record(account.username, "admin.codigos_recuperacao", "Gerou novos códigos de recuperação")
         self.db.commit()
         return codes
 
@@ -231,32 +272,50 @@ class AuthService:
 
     # ---------- Relógios ----------
 
-    def is_kiosk(self, token: str | None) -> bool:
-        """Diz se o aparelho está liberado como relógio de ponto."""
-        secret = self.repo.setting(KIOSK_SECRET)
-        return read_session(token, ROLE_KIOSK, lambda _subject: secret) == KIOSK_SUBJECT
+    def kiosk_company(self, token: str | None) -> int | None:
+        """Empresa do aparelho liberado como relógio (None se não for um relógio válido)."""
+        found: list[int] = []
 
-    def new_kiosk(self, user: str, ip: str) -> str:
-        self.audit.record(user, "relogio.ativado", "Liberou um aparelho como relógio de ponto", ip=ip)
+        def key_for(subject: str) -> str | None:
+            if subject == KIOSK_SUBJECT:
+                company_id = LEGACY_KIOSK_COMPANY
+            else:
+                prefix, _, number = subject.partition(":")
+                if prefix != KIOSK_SUBJECT or not number.isdigit():
+                    return None
+                company_id = int(number)
+            company = self.repo.company(company_id)
+            if not (company and company.active):
+                return None
+            found.append(company.id)
+            return company.kiosk_secret
+
+        return found[0] if read_session(token, ROLE_KIOSK, key_for) else None
+
+    def new_kiosk(self, company_id: int, user: str, ip: str) -> str:
+        company = self._company(company_id)
+        self.audit(company.id).record(user, "relogio.ativado", "Liberou um aparelho como relógio de ponto", ip=ip)
         self.db.commit()
-        return create_session(ROLE_KIOSK, KIOSK_SUBJECT, self.repo.setting(KIOSK_SECRET), settings.kiosk_days * 86400)
+        return create_session(
+            ROLE_KIOSK, f"{KIOSK_SUBJECT}:{company.id}", company.kiosk_secret, settings.kiosk_days * 86400
+        )
 
-    def kiosk_disabled(self, user: str, ip: str) -> None:
-        self.audit.record(user, "relogio.desativado", "Desligou o modo relógio de um aparelho", ip=ip)
+    def kiosk_disabled(self, company_id: int, user: str, ip: str) -> None:
+        self.audit(company_id).record(user, "relogio.desativado", "Desligou o modo relógio de um aparelho", ip=ip)
         self.db.commit()
 
-    def reset_kiosks(self, user: str) -> None:
-        """Troca o segredo: todos os aparelhos liberados como relógio precisam ser ativados de novo."""
-        self.repo.set_setting(KIOSK_SECRET, secrets.token_hex(32))
-        self.audit.record(user, "relogio.todos_desligados", "Desligou todos os relógios")
+    def reset_kiosks(self, company_id: int, user: str) -> None:
+        """Troca o segredo da empresa: todos os relógios dela precisam ser ativados de novo."""
+        self._company(company_id).kiosk_secret = secrets.token_hex(32)
+        self.audit(company_id).record(user, "relogio.todos_desligados", "Desligou todos os relógios")
         self.db.commit()
 
     # ---------- Administradores ----------
 
-    def list_admins(self) -> list[AdminAccount]:
-        return self.repo.list()
+    def list_admins(self, company_id: int) -> list[AdminAccount]:
+        return self.repo.list(company_id)
 
-    def create_admin(self, username: str, password: str, user: str) -> AdminAccount:
+    def create_admin(self, company_id: int, username: str, password: str, user: str) -> AdminAccount:
         """A senha inicial é provisória: o novo admin troca no primeiro acesso e ativa as duas etapas."""
         username = username.strip()
         if not username or "|" in username:
@@ -266,23 +325,77 @@ class AuthService:
             raise BadRequest(problem)
         try:
             account = self.repo.add(
-                AdminAccount(username=username, password_hash=hash_password(password), must_change_password=True)
+                AdminAccount(
+                    company_id=company_id,
+                    username=username,
+                    password_hash=hash_password(password),
+                    must_change_password=True,
+                )
             )
-            self.audit.record(user, "admin.criado", f"Criou o administrador {username}")
+            self.audit(company_id).record(user, "admin.criado", f"Criou o administrador {username}")
             self.db.commit()
         except IntegrityError:
             self.db.rollback()
             raise Conflict("Já existe um administrador com esse usuário")
         return account
 
-    def delete_admin(self, admin_id: int, current_user: str) -> None:
+    def delete_admin(self, company_id: int, admin_id: int, current_user: str) -> None:
         account = self.repo.get(admin_id)
-        if not account:
+        if not account or account.company_id != company_id:
             raise NotFound("Administrador não encontrado")
         if account.username == current_user:
             raise BadRequest("Você não pode excluir a própria conta")
-        if self.repo.count() <= 1:
+        if account.superadmin:
+            raise BadRequest("O superadministrador não pode ser excluído pelo painel da empresa")
+        if self.repo.count(company_id) <= 1:
             raise BadRequest("É preciso manter pelo menos um administrador")
-        self.audit.record(current_user, "admin.excluido", f"Excluiu o administrador {account.username}")
+        self.audit(company_id).record(current_user, "admin.excluido", f"Excluiu o administrador {account.username}")
         self.repo.delete(account)  # as sessões e os códigos de recuperação caem junto (ON DELETE CASCADE)
         self.db.commit()
+
+    # ---------- Empresas (só o superadmin) ----------
+
+    def list_companies(self) -> list[Company]:
+        return self.repo.companies()
+
+    def create_company(self, name: str, contact: str, admin_username: str, admin_password: str, user: str) -> Company:
+        """Cadastra a empresa já com o primeiro admin dela (senha provisória, como os demais)."""
+        name = name.strip()
+        if not name:
+            raise BadRequest("Informe o nome da empresa")
+        company = self.repo.add_company(
+            Company(name=name, privacy_contact=contact.strip(), kiosk_secret=secrets.token_hex(32))
+        )
+        self.audit(company.id).record(user, "empresa.criada", f"Cadastrou a empresa {name}")
+        self.create_admin(company.id, admin_username, admin_password, user)  # faz o commit (ou desfaz tudo)
+        return company
+
+    def update_company(
+        self, company_id: int, user: str, name: str | None, contact: str | None, active: bool | None
+    ) -> Company:
+        company = self._company(company_id)
+        changes = []
+        if name is not None and name.strip() and name.strip() != company.name:
+            changes.append(f"nome {company.name} → {name.strip()}")
+            company.name = name.strip()
+        if contact is not None and contact.strip() != company.privacy_contact:
+            changes.append("contato de privacidade alterado")
+            company.privacy_contact = contact.strip()
+        audit = self.audit(company.id)
+        if changes:
+            audit.record(user, "empresa.alterada", "Alterou a empresa: " + "; ".join(changes))
+        if active is not None and active != company.active:
+            company.active = active
+            audit.record(
+                user,
+                "empresa.ativada" if active else "empresa.desativada",
+                "Ativou a empresa" if active else "Desativou a empresa (admins, relógios e celulares param)",
+            )
+        self.db.commit()
+        return company
+
+    def _company(self, company_id: int) -> Company:
+        company = self.repo.company(company_id)
+        if not company:
+            raise NotFound("Empresa não encontrada")
+        return company

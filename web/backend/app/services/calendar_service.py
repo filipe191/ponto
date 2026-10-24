@@ -16,10 +16,10 @@ from app.utils.holidays import national_holidays
 
 
 class HolidayService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, company_id: int):
         self.db = db
-        self.repo = HolidayRepository(db)
-        self.audit = AuditLog(db)
+        self.repo = HolidayRepository(db, company_id)
+        self.audit = AuditLog(db, company_id)
 
     def list(self, year: int) -> list[HolidayOut]:
         national = national_holidays(year)
@@ -59,11 +59,11 @@ class HolidayService:
 class ClosureService:
     """Fechamento do mês: trava as batidas e libera a ciência do funcionário no relógio."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, company_id: int):
         self.db = db
         self.repo = ClosureRepository(db)
-        self.employees = EmployeeRepository(db)
-        self.audit = AuditLog(db)
+        self.employees = EmployeeRepository(db, company_id)
+        self.audit = AuditLog(db, company_id)
 
     def close(self, month: str, employee_id: int | None, user: str) -> int:
         check_month(month)
@@ -95,13 +95,13 @@ class ClosureService:
 
     def reopen(self, employee_id: int, month: str, user: str, note: str) -> None:
         """Reabre o mês. O fechamento e a ciência dados até aqui ficam guardados na auditoria."""
-        closure = self.repo.get(employee_id, check_month(month))
+        employee = self.employees.get(employee_id)
+        closure = self.repo.get(employee_id, check_month(month)) if employee else None
         if not closure:
             raise NotFound("Este mês não está fechado")
         note = note.strip()
         if not note:
             raise BadRequest("Informe o motivo da reabertura")
-        employee = self.employees.get(employee_id)
         ack = (
             f"ciência do funcionário em {to_local(closure.acknowledged_at):%d/%m/%Y %H:%M}"
             if closure.acknowledged_at
@@ -127,15 +127,16 @@ class ClosureService:
 class PortalService:
     """O funcionário consulta o próprio espelho e dá ciência no relógio, identificando-se pelo PIN."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, company_id: int):
         self.db = db
-        self.employees = EmployeeRepository(db)
+        self.company_id = company_id
+        self.employees = EmployeeRepository(db, company_id)
         self.closures = ClosureRepository(db)
-        self.audit = AuditLog(db)
+        self.audit = AuditLog(db, company_id)
 
     def report(self, pin: str, month: str) -> MonthReport:
         employee = self._by_pin(pin)
-        return ReportService(self.db).build(employee, check_month(month), self.closures.get(employee.id, month))
+        return ReportService(self.db, self.company_id).build(employee, check_month(month), self.closures.get(employee.id, month))
 
     def acknowledge(self, pin: str, month: str, ip: str | None = None) -> None:
         employee = self._by_pin(pin)

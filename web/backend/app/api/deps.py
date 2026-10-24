@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import Cookie, Depends, Request
 from sqlalchemy.orm import Session
 
-from app.core.errors import Forbidden, Unauthorized
+from app.core.errors import ApiError, Forbidden, Unauthorized
 from app.core.security import KIOSK_COOKIE, SESSION_COOKIE
 from app.db.session import get_db
 from app.models import AdminAccount, AdminSession
@@ -20,12 +20,22 @@ KioskCookie = Annotated[str | None, Cookie(alias=KIOSK_COOKIE)]
 class Access:
     account: AdminAccount | None  # admin logado neste aparelho
     session: AdminSession | None
-    kiosk: bool  # aparelho liberado como relógio
+    company_id: int | None  # empresa aberta no painel pelo admin
+    kiosk_company_id: int | None  # empresa do aparelho liberado como relógio
     pending: str | None  # o que o admin precisa resolver antes de usar o painel ("senha" ou "2fa")
 
     @property
     def admin_user(self) -> str | None:
         return self.account.username if self.account else None
+
+    @property
+    def kiosk(self) -> bool:
+        return self.kiosk_company_id is not None
+
+    @property
+    def clock_company_id(self) -> int | None:
+        """Empresa da tela do relógio: a do aparelho liberado, ou a do admin logado nele."""
+        return self.kiosk_company_id or self.company_id
 
 
 def get_access(db: DbSession, session: SessionCookie = None, kiosk: KioskCookie = None) -> Access:
@@ -35,7 +45,8 @@ def get_access(db: DbSession, session: SessionCookie = None, kiosk: KioskCookie 
     return Access(
         account=account,
         session=admin_session,
-        kiosk=auth.is_kiosk(kiosk),
+        company_id=auth.session_company(account, admin_session) if account else None,
+        kiosk_company_id=auth.kiosk_company(kiosk),
         pending=auth.pending(account) if account else None,
     )
 
@@ -44,10 +55,16 @@ CurrentAccess = Annotated[Access, Depends(get_access)]
 
 
 def require_clock(access: CurrentAccess) -> Access:
-    """Tela do relógio: aparelho liberado como relógio ou admin logado."""
+    """Tela do relógio: aparelho liberado como relógio ou admin logado (com uma empresa aberta)."""
     if not (access.account or access.kiosk):
         raise Unauthorized("Entre com seu usuário e senha para continuar")
     return access
+
+
+def clock_company(access: Annotated[Access, Depends(require_clock)]) -> int:
+    if not access.clock_company_id:
+        raise _no_company()
+    return access.clock_company_id
 
 
 def require_admin_session(access: CurrentAccess) -> Access:
@@ -71,8 +88,35 @@ def require_admin(access: CurrentAccess) -> str:
     return access.admin_user
 
 
+def _no_company() -> ApiError:
+    return ApiError(409, "Escolha uma empresa para continuar", company_required=True)
+
+
+@dataclass
+class Tenant:
+    """Admin sem pendência e a empresa aberta no painel: tudo o que ele vê e altera é dessa empresa."""
+
+    company_id: int
+    user: str
+
+
+def require_company(access: CurrentAccess, user: Annotated[str, Depends(require_admin)]) -> Tenant:
+    if not access.company_id:
+        raise _no_company()
+    return Tenant(company_id=access.company_id, user=user)
+
+
+def require_superadmin(access: CurrentAccess, user: Annotated[str, Depends(require_admin)]) -> str:
+    if not access.account.superadmin:
+        raise Forbidden("Só o superadministrador pode fazer isso")
+    return user
+
+
 AdminUser = Annotated[str, Depends(require_admin)]
 AdminAccess = Annotated[Access, Depends(require_admin_session)]
+CompanyAdmin = Annotated[Tenant, Depends(require_company)]
+SuperAdmin = Annotated[str, Depends(require_superadmin)]
+ClockCompany = Annotated[int, Depends(clock_company)]
 
 
 def client_ip(request: Request) -> str:

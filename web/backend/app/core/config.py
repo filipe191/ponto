@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     pguser: str = "ponto"
     pgpassword: str = ""
 
-    # Login inicial (tela de ponto e painel de administração). Só é usado para
+    # Login inicial: o superadministrador, que cadastra as empresas. Só é usado para
     # criar a conta na primeira subida; depois a senha fica no banco e é trocada em /senha.
     admin_user: str = "admin"
     admin_password: str = "ponto123"
@@ -68,7 +68,8 @@ class Settings(BaseSettings):
     # LGPD: registros de ponto ficam guardados X anos depois do desligamento (prazo de
     # prescrição trabalhista); depois disso o painel oferece anonimizar o ex-funcionário
     retention_years: int = 5
-    # Aviso de privacidade (/privacidade): quem controla os dados e como pedir acesso ou correção
+    # Nome e contato de privacidade da empresa nº 1, usados só na migração para várias empresas
+    # (0008). Depois disso cada empresa tem os seus no cadastro, editados pelo superadmin no painel.
     empresa_nome: str = ""
     privacidade_contato: str = ""
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
-from app.api.deps import AdminUser, DbSession, require_admin
+from app.api.deps import CompanyAdmin, DbSession, require_admin
 from app.schemas.admin import (
     AdminCreate,
     AdminOut,
@@ -48,25 +48,25 @@ def _csv(content: str, filename: str) -> Response:
 
 
 @router.get("/employees", response_model=list[EmployeeOut])
-def list_employees(db: DbSession):
-    return EmployeeService(db).list()
+def list_employees(db: DbSession, t: CompanyAdmin):
+    return EmployeeService(db, t.company_id).list()
 
 
 @router.post("/employees", response_model=EmployeeCreated, status_code=201)
-def create_employee(body: EmployeeCreate, db: DbSession, user: AdminUser):
-    return EmployeeService(db).create(body, user)
+def create_employee(body: EmployeeCreate, db: DbSession, t: CompanyAdmin):
+    return EmployeeService(db, t.company_id).create(body, t.user)
 
 
 @router.patch("/employees/{employee_id}", response_model=OkResponse)
-def update_employee(employee_id: int, body: EmployeeUpdate, db: DbSession, user: AdminUser):
-    EmployeeService(db).update(employee_id, body, user)
+def update_employee(employee_id: int, body: EmployeeUpdate, db: DbSession, t: CompanyAdmin):
+    EmployeeService(db, t.company_id).update(employee_id, body, t.user)
     return OkResponse()
 
 
 @router.get("/employees/{employee_id}/export")
-def export_employee(employee_id: int, db: DbSession, user: AdminUser):
+def export_employee(employee_id: int, db: DbSession, t: CompanyAdmin):
     """LGPD: tudo o que o sistema guarda sobre o funcionário, em JSON (pedido de acesso aos dados)."""
-    data = EmployeeService(db).export(employee_id, user)
+    data = EmployeeService(db, t.company_id).export(employee_id, t.user)
     return JSONResponse(
         jsonable_encoder(data),
         headers={"Content-Disposition": f'attachment; filename="dados-funcionario-{employee_id}.json"'},
@@ -74,15 +74,15 @@ def export_employee(employee_id: int, db: DbSession, user: AdminUser):
 
 
 @router.post("/employees/{employee_id}/anonymize", response_model=OkResponse)
-def anonymize_employee(employee_id: int, db: DbSession, user: AdminUser):
+def anonymize_employee(employee_id: int, db: DbSession, t: CompanyAdmin):
     """LGPD: apaga os dados pessoais de quem saiu há mais que o prazo de guarda."""
-    EmployeeService(db).anonymize(employee_id, user)
+    EmployeeService(db, t.company_id).anonymize(employee_id, t.user)
     return OkResponse()
 
 
 @router.delete("/employees/{employee_id}", response_model=OkResponse)
-def delete_employee(employee_id: int, db: DbSession, user: AdminUser):
-    EmployeeService(db).delete(employee_id, user)
+def delete_employee(employee_id: int, db: DbSession, t: CompanyAdmin):
+    EmployeeService(db, t.company_id).delete(employee_id, t.user)
     return OkResponse()
 
 
@@ -90,40 +90,40 @@ def delete_employee(employee_id: int, db: DbSession, user: AdminUser):
 
 
 @router.post("/punches", response_model=OkResponse, status_code=201)
-def create_manual_punch(body: ManualPunchCreate, db: DbSession, user: AdminUser):
-    PunchService(db).add_manual(body, user)
+def create_manual_punch(body: ManualPunchCreate, db: DbSession, t: CompanyAdmin):
+    PunchService(db, t.company_id).add_manual(body, t.user)
     return OkResponse()
 
 
 @router.patch("/punches/{punch_id}", response_model=OkResponse)
-def update_punch(punch_id: int, body: PunchUpdate, db: DbSession, user: AdminUser):
-    PunchService(db).update(punch_id, body, user)
+def update_punch(punch_id: int, body: PunchUpdate, db: DbSession, t: CompanyAdmin):
+    PunchService(db, t.company_id).update(punch_id, body, t.user)
     return OkResponse()
 
 
 @router.delete("/punches/{punch_id}", response_model=OkResponse)
-def delete_punch(punch_id: int, db: DbSession, user: AdminUser, note: str = ""):
-    PunchService(db).delete(punch_id, user, note)
+def delete_punch(punch_id: int, db: DbSession, t: CompanyAdmin, note: str = ""):
+    PunchService(db, t.company_id).delete(punch_id, t.user, note)
     return OkResponse()
 
 
 @router.post("/punches/{punch_id}/restore", response_model=OkResponse)
-def restore_punch(punch_id: int, db: DbSession, user: AdminUser):
-    PunchService(db).restore(punch_id, user)
+def restore_punch(punch_id: int, db: DbSession, t: CompanyAdmin):
+    PunchService(db, t.company_id).restore(punch_id, t.user)
     return OkResponse()
 
 
 @router.get("/punches/{punch_id}/history", response_model=list[PunchChangeOut])
-def punch_history(punch_id: int, db: DbSession):
-    return PunchService(db).history(punch_id)
+def punch_history(punch_id: int, db: DbSession, t: CompanyAdmin):
+    return PunchService(db, t.company_id).history(punch_id)
 
 
 # ---------- Relatórios ----------
 
 
 @router.get("/report", response_model=MonthReport)
-def report(db: DbSession, employee: int = 0, month: str = "", format: str = "json"):
-    service = ReportService(db)
+def report(db: DbSession, t: CompanyAdmin, employee: int = 0, month: str = "", format: str = "json"):
+    service = ReportService(db, t.company_id)
     result = service.monthly(employee, month)
     if format == "csv":
         return _csv(service.to_csv(result), service.csv_filename(result))
@@ -131,9 +131,9 @@ def report(db: DbSession, employee: int = 0, month: str = "", format: str = "jso
 
 
 @router.get("/summary", response_model=list[SummaryRow])
-def summary(db: DbSession, month: str = "", format: str = "json"):
+def summary(db: DbSession, t: CompanyAdmin, month: str = "", format: str = "json"):
     """Resumo do mês de todos os funcionários (para a contabilidade)."""
-    service = ReportService(db)
+    service = ReportService(db, t.company_id)
     rows = service.summary(month)
     if format == "csv":
         return _csv(service.summary_csv(month, rows), f"ponto-resumo-{month}.csv")
@@ -144,15 +144,15 @@ def summary(db: DbSession, month: str = "", format: str = "json"):
 
 
 @router.post("/closures", response_model=OkResponse)
-def close_month(body: ClosureRequest, db: DbSession, user: AdminUser):
-    ClosureService(db).close(body.month, body.employee_id, user)
+def close_month(body: ClosureRequest, db: DbSession, t: CompanyAdmin):
+    ClosureService(db, t.company_id).close(body.month, body.employee_id, t.user)
     return OkResponse()
 
 
 @router.delete("/closures/{employee_id}/{month}", response_model=OkResponse)
-def reopen_month(employee_id: int, month: str, db: DbSession, user: AdminUser, note: str = ""):
+def reopen_month(employee_id: int, month: str, db: DbSession, t: CompanyAdmin, note: str = ""):
     """O motivo é obrigatório; o fechamento e a ciência anteriores ficam na auditoria."""
-    ClosureService(db).reopen(employee_id, month, user, note)
+    ClosureService(db, t.company_id).reopen(employee_id, month, t.user, note)
     return OkResponse()
 
 
@@ -160,19 +160,19 @@ def reopen_month(employee_id: int, month: str, db: DbSession, user: AdminUser, n
 
 
 @router.get("/holidays", response_model=list[HolidayOut])
-def list_holidays(db: DbSession, year: int):
-    return HolidayService(db).list(year)
+def list_holidays(db: DbSession, t: CompanyAdmin, year: int):
+    return HolidayService(db, t.company_id).list(year)
 
 
 @router.post("/holidays", response_model=OkResponse, status_code=201)
-def add_holiday(body: HolidayCreate, db: DbSession, user: AdminUser):
-    HolidayService(db).add(body, user)
+def add_holiday(body: HolidayCreate, db: DbSession, t: CompanyAdmin):
+    HolidayService(db, t.company_id).add(body, t.user)
     return OkResponse()
 
 
 @router.delete("/holidays/{day}", response_model=OkResponse)
-def delete_holiday(day: date, db: DbSession, user: AdminUser):
-    HolidayService(db).delete(day, user)
+def delete_holiday(day: date, db: DbSession, t: CompanyAdmin):
+    HolidayService(db, t.company_id).delete(day, t.user)
     return OkResponse()
 
 
@@ -180,36 +180,36 @@ def delete_holiday(day: date, db: DbSession, user: AdminUser):
 
 
 @router.get("/employees/{employee_id}/devices", response_model=list[DeviceOut])
-def list_devices(employee_id: int, db: DbSession):
-    return DeviceService(db).list(employee_id)
+def list_devices(employee_id: int, db: DbSession, t: CompanyAdmin):
+    return DeviceService(db, t.company_id).list(employee_id)
 
 
 @router.post("/employees/{employee_id}/devices", response_model=DeviceCreated, status_code=201)
-def create_device(employee_id: int, body: DeviceCreate, db: DbSession, user: AdminUser):
+def create_device(employee_id: int, body: DeviceCreate, db: DbSession, t: CompanyAdmin):
     """Gera a chave de acesso do app. Ela só aparece nesta resposta."""
-    return DeviceService(db).create(employee_id, body.name, user)
+    return DeviceService(db, t.company_id).create(employee_id, body.name, t.user)
 
 
 @router.delete("/devices/{device_id}", response_model=OkResponse)
-def revoke_device(device_id: int, db: DbSession, user: AdminUser):
-    DeviceService(db).revoke(device_id, user)
+def revoke_device(device_id: int, db: DbSession, t: CompanyAdmin):
+    DeviceService(db, t.company_id).revoke(device_id, t.user)
     return OkResponse()
 
 
 @router.get("/requests", response_model=list[RequestOut])
-def list_requests(db: DbSession, status: str = "pendente"):
-    return RequestService(db).list(status)
+def list_requests(db: DbSession, t: CompanyAdmin, status: str = "pendente"):
+    return RequestService(db, t.company_id).list(status)
 
 
 @router.post("/requests/{request_id}/approve", response_model=OkResponse)
-def approve_request(request_id: int, body: RequestDecision, db: DbSession, user: AdminUser):
-    RequestService(db).approve(request_id, user, body.note)
+def approve_request(request_id: int, body: RequestDecision, db: DbSession, t: CompanyAdmin):
+    RequestService(db, t.company_id).approve(request_id, t.user, body.note)
     return OkResponse()
 
 
 @router.post("/requests/{request_id}/reject", response_model=OkResponse)
-def reject_request(request_id: int, body: RequestDecision, db: DbSession, user: AdminUser):
-    RequestService(db).reject(request_id, user, body.note)
+def reject_request(request_id: int, body: RequestDecision, db: DbSession, t: CompanyAdmin):
+    RequestService(db, t.company_id).reject(request_id, t.user, body.note)
     return OkResponse()
 
 
@@ -217,26 +217,26 @@ def reject_request(request_id: int, body: RequestDecision, db: DbSession, user: 
 
 
 @router.get("/admins", response_model=list[AdminOut])
-def list_admins(db: DbSession):
-    return AuthService(db).list_admins()
+def list_admins(db: DbSession, t: CompanyAdmin):
+    return AuthService(db).list_admins(t.company_id)
 
 
 @router.post("/admins", response_model=OkResponse, status_code=201)
-def create_admin(body: AdminCreate, db: DbSession, user: AdminUser):
-    AuthService(db).create_admin(body.username, body.password, user)
+def create_admin(body: AdminCreate, db: DbSession, t: CompanyAdmin):
+    AuthService(db).create_admin(t.company_id, body.username, body.password, t.user)
     return OkResponse()
 
 
 @router.delete("/admins/{admin_id}", response_model=OkResponse)
-def delete_admin(admin_id: int, db: DbSession, user: AdminUser):
-    AuthService(db).delete_admin(admin_id, user)
+def delete_admin(admin_id: int, db: DbSession, t: CompanyAdmin):
+    AuthService(db).delete_admin(t.company_id, admin_id, t.user)
     return OkResponse()
 
 
 @router.post("/kiosks/reset", response_model=OkResponse)
-def reset_kiosks(db: DbSession, user: AdminUser):
+def reset_kiosks(db: DbSession, t: CompanyAdmin):
     """Desliga todos os aparelhos liberados como relógio (ex.: tablet perdido)."""
-    AuthService(db).reset_kiosks(user)
+    AuthService(db).reset_kiosks(t.company_id, t.user)
     return OkResponse()
 
 
@@ -244,18 +244,18 @@ def reset_kiosks(db: DbSession, user: AdminUser):
 
 
 @router.get("/audit", response_model=list[AuditOut])
-def audit(db: DbSession, employee: int = 0, action: str = "", before: int = 0, limit: int = 50):
+def audit(db: DbSession, t: CompanyAdmin, employee: int = 0, action: str = "", before: int = 0, limit: int = 50):
     """Mais recentes primeiro; `before` (id) pagina para trás."""
-    return AuditLog(db).list(employee or None, action, before or None, limit)
+    return AuditLog(db, t.company_id).list(employee or None, action, before or None, limit)
 
 
 @router.get("/alerts", response_model=Alerts)
-def alerts(db: DbSession):
+def alerts(db: DbSession, t: CompanyAdmin):
     """Avisos do topo do painel: bloqueios do relógio, PINs curtos, chaves vencendo e prazo de guarda."""
-    employees = EmployeeService(db).list()
+    employees = EmployeeService(db, t.company_id).list()
     return Alerts(
-        pin_blocks=AuditLog(db).recent(PIN_BLOCKED, hours=24),
+        pin_blocks=AuditLog(db, t.company_id).recent(PIN_BLOCKED, hours=24),
         short_pins=sum(e.pin_short and e.active for e in employees),
-        devices_expiring=DeviceService(db).expiring(),
+        devices_expiring=DeviceService(db, t.company_id).expiring(),
         retention_due=sum(e.retention_due for e in employees),
     )

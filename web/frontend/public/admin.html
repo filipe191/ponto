@@ -10,7 +10,11 @@
 </head>
 <body>
   <header class="bar">
-    <a class="brand" href="/">Ponto</a>
+    <div class="bar-start">
+      <a class="brand" href="/">Ponto</a>
+      <span class="bar-company" id="companyName"></span>
+      <select class="bar-company-pick" id="companyPick" aria-label="Empresa aberta no painel" hidden></select>
+    </div>
     <nav>
       <a href="/">Relógio</a>
       <a href="/senha">Conta e segurança</a>
@@ -19,6 +23,31 @@
   </header>
 
   <main class="admin-page">
+    <!-- Só o superadministrador: cadastro das empresas atendidas pelo sistema -->
+    <section class="card" aria-labelledby="coTitle" id="coCard" hidden>
+      <header class="card-head">
+        <h2 class="card-title" id="coTitle">Empresas</h2>
+      </header>
+      <p class="hint" id="coHint">Cada empresa tem os próprios funcionários, feriados, administradores, relógios e auditoria; uma não enxerga os dados da outra. Para trabalhar numa empresa, abra-a no seletor ao lado de “Ponto”. O contato aparece no aviso de privacidade que os funcionários da empresa leem.</p>
+      <form class="toolbar" id="coForm">
+        <input class="input grow" type="text" id="coName" placeholder="Nome da empresa" required autocomplete="off" aria-label="Nome da empresa">
+        <input class="input grow" type="text" id="coContact" placeholder="Contato para privacidade (e-mail ou telefone do RH)" autocomplete="off" aria-label="Contato para privacidade">
+        <input class="input" type="text" id="coAdmUser" placeholder="Usuário do 1º admin" required autocomplete="off" aria-label="Usuário do primeiro administrador">
+        <input class="input" type="password" id="coAdmPass" placeholder="Senha inicial (mín. 12)" required minlength="12" autocomplete="new-password" aria-label="Senha inicial do primeiro administrador">
+        <button class="btn btn-primary" type="submit" id="coSubmit">Cadastrar empresa</button>
+        <button class="btn" type="button" id="coCancel" hidden>Cancelar</button>
+      </form>
+      <p class="form-error" id="coError" role="alert"></p>
+      <div class="table-wrap">
+        <table class="timecard">
+          <thead><tr><th>Empresa</th><th>Contato para privacidade</th><th></th></tr></thead>
+          <tbody id="companies"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Tudo daqui para baixo é da empresa aberta no painel -->
+    <div class="company-area" id="companyArea">
     <section class="card alerts-card" aria-labelledby="alertsTitle" id="alertsCard" hidden>
       <header class="card-head">
         <h2 class="card-title" id="alertsTitle">Avisos de segurança</h2>
@@ -159,6 +188,7 @@
           <option value="feriado.">Feriados</option>
           <option value="admin.">Administradores e logins</option>
           <option value="relogio.">Relógios</option>
+          <option value="empresa.">Empresa</option>
         </select>
       </div>
       <p class="form-error" id="audError" role="alert"></p>
@@ -170,6 +200,7 @@
       </div>
       <div class="toolbar"><button class="btn" type="button" id="audMore" hidden>Carregar mais</button></div>
     </section>
+    </div>
   </main>
 
   <!-- Cadastro / edição de funcionário -->

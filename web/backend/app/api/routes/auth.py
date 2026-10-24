@@ -5,12 +5,22 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
-from app.api.deps import AdminAccess, AdminUser, CurrentAccess, DbSession, client_ip, require_clock
+from app.api.deps import (
+    AdminAccess,
+    AdminUser,
+    CompanyAdmin,
+    CurrentAccess,
+    DbSession,
+    SuperAdmin,
+    client_ip,
+    require_clock,
+)
 from app.core.config import settings
 from app.core.errors import TooManyRequests, Unauthorized
 from app.core.passwords import MIN_LENGTH
 from app.core.ratelimit import AttemptLimiter
 from app.core.security import KIOSK_COOKIE, SESSION_COOKIE
+from app.schemas.admin import CompanySwitch
 from app.schemas.common import OkResponse
 from app.services.auth_service import AuthService
 
@@ -36,6 +46,22 @@ class Me(BaseModel):
     admin: bool
     kiosk: bool
     pending: str | None = None  # "senha" ou "2fa": o que falta resolver antes de usar o painel
+    superadmin: bool = False
+    company_id: int | None = None  # empresa aberta (no painel, ou a do relógio em /me)
+    company: str | None = None  # nome dela
+
+
+def _me(db, access, company_id: int | None, pending: str | None = None) -> Me:
+    company = AuthService(db).company(company_id)
+    return Me(
+        user=access.admin_user,
+        admin=bool(access.account),
+        kiosk=access.kiosk,
+        pending=pending,
+        superadmin=bool(access.account and access.account.superadmin),
+        company_id=company.id if company else None,
+        company=company.name if company else None,
+    )
 
 
 class SessionOut(BaseModel):
@@ -109,7 +135,13 @@ def login(body: LoginRequest, request: Request, response: Response, db: DbSessio
     seconds = settings.admin_on_kiosk_minutes * 60 if access.kiosk else settings.session_days * 86400
     token = auth.start_session(account, seconds, ip, request.headers.get("user-agent"))
     _set_cookie(response, SESSION_COOKIE, token, seconds)
-    return Me(user=account.username, admin=True, kiosk=access.kiosk, pending=auth.pending(account))
+    return Me(
+        user=account.username,
+        admin=True,
+        kiosk=access.kiosk,
+        pending=auth.pending(account),
+        superadmin=account.superadmin,
+    )
 
 
 @router.post("/logout", response_model=OkResponse)
@@ -121,30 +153,40 @@ def logout(request: Request, response: Response, db: DbSession):
 
 
 @router.get("/me", response_model=Me, dependencies=[Depends(require_clock)])
-def me(access: CurrentAccess):
+def me(db: DbSession, access: CurrentAccess):
     """Usado também pelo nginx (auth_request) para proteger a tela do relógio."""
-    return Me(user=access.admin_user, admin=bool(access.account), kiosk=access.kiosk, pending=access.pending)
+    return _me(db, access, access.clock_company_id, access.pending)
 
 
 @router.get("/admin", response_model=Me)
-def admin_me(access: AdminAccess):
+def admin_me(db: DbSession, access: AdminAccess):
     """Usado pelo nginx (auth_request) para proteger /admin e /senha (abre mesmo com pendência)."""
-    return Me(user=access.admin_user, admin=True, kiosk=access.kiosk, pending=access.pending)
+    return _me(db, access, access.company_id, access.pending)
+
+
+@router.post("/company", response_model=Me)
+def switch_company(body: CompanySwitch, request: Request, db: DbSession, access: CurrentAccess, _user: SuperAdmin):
+    """O superadmin abre outra empresa no painel."""
+    AuthService(db).switch_company(access.account, access.session, body.company_id, client_ip(request))
+    return _me(db, access, body.company_id, access.pending)
 
 
 @router.post("/kiosk", response_model=OkResponse)
-def enable_kiosk(request: Request, response: Response, db: DbSession, user: AdminUser):
-    """Libera este aparelho como relógio e desconecta o admin dele."""
+def enable_kiosk(request: Request, response: Response, db: DbSession, t: CompanyAdmin):
+    """Libera este aparelho como relógio da empresa aberta e desconecta o admin dele."""
     auth = AuthService(db)
-    _set_cookie(response, KIOSK_COOKIE, auth.new_kiosk(user, client_ip(request)), settings.kiosk_days * 86400)
+    token = auth.new_kiosk(t.company_id, t.user, client_ip(request))
+    _set_cookie(response, KIOSK_COOKIE, token, settings.kiosk_days * 86400)
     auth.end_session(request.cookies.get(SESSION_COOKIE))
     response.delete_cookie(SESSION_COOKIE, path="/")
     return OkResponse()
 
 
 @router.delete("/kiosk", response_model=OkResponse)
-def disable_kiosk(request: Request, response: Response, db: DbSession, user: AdminUser):
-    AuthService(db).kiosk_disabled(user, client_ip(request))
+def disable_kiosk(request: Request, response: Response, db: DbSession, access: CurrentAccess, user: AdminUser):
+    company_id = access.kiosk_company_id or access.company_id
+    if company_id:
+        AuthService(db).kiosk_disabled(company_id, user, client_ip(request))
     response.delete_cookie(KIOSK_COOKIE, path="/")
     return OkResponse()
 

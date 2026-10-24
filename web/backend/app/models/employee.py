@@ -13,10 +13,13 @@ if TYPE_CHECKING:
 
 class Employee(Base):
     __tablename__ = "employees"
+    # O PIN identifica o funcionário no relógio da empresa: só precisa ser único dentro dela
+    __table_args__ = (UniqueConstraint("company_id", "pin_hash", name="employees_company_pin_key"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="RESTRICT"), index=True)
     name: Mapped[str] = mapped_column(String)
-    pin_hash: Mapped[str] = mapped_column(String, unique=True)
+    pin_hash: Mapped[str] = mapped_column(String)
     # PIN de 4 ou 5 dígitos, de antes da regra de 6: continua valendo, mas o admin deve trocar
     pin_short: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("FALSE"))
     # Dados pessoais apagados depois do prazo de guarda (LGPD); as batidas ficam, sem o nome

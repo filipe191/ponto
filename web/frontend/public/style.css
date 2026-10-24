@@ -90,6 +90,7 @@ p { margin: 0; }
 
 .bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -104,6 +105,19 @@ p { margin: 0; }
   font-weight: 800;
   font-stretch: 125%;
   letter-spacing: -0.01em;
+}
+.bar-start { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; min-width: 0; }
+/* Empresa do relógio ou aberta no painel */
+.bar-company { color: var(--machine-dim); font-size: 0.95rem; overflow-wrap: anywhere; }
+.bar-company-pick {
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--machine-dim);
+  border-radius: 8px;
+  background: var(--machine);
+  color: var(--machine-text);
+  font: inherit;
+  font-size: 0.95rem;
 }
 .bar nav { display: flex; gap: 20px; }
 .bar nav a, .bar nav button {

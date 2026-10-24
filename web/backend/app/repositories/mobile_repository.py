@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import EmployeeDevice, Punch, PunchRequest, RequestStatus
+from app.models import Employee, EmployeeDevice, Punch, PunchRequest, RequestStatus
 
 
 class DeviceRepository:
@@ -28,10 +28,16 @@ class DeviceRepository:
         self.db.flush()
         return device
 
-    def count_active_expiring(self, now: datetime, until: datetime) -> int:
+    def count_active_expiring(self, company_id: int, now: datetime, until: datetime) -> int:
         return self.db.scalar(
-            select(func.count()).where(
-                EmployeeDevice.revoked_at.is_(None), EmployeeDevice.expires_at > now, EmployeeDevice.expires_at <= until
+            select(func.count())
+            .select_from(EmployeeDevice)
+            .join(Employee, Employee.id == EmployeeDevice.employee_id)
+            .where(
+                Employee.company_id == company_id,
+                EmployeeDevice.revoked_at.is_(None),
+                EmployeeDevice.expires_at > now,
+                EmployeeDevice.expires_at <= until,
             )
         )
 
@@ -62,8 +68,13 @@ class RequestRepository:
             )
         )
 
-    def list(self, status: str | None) -> list[PunchRequest]:
-        query = select(PunchRequest).options(joinedload(PunchRequest.employee), joinedload(PunchRequest.punch))
+    def list(self, company_id: int, status: str | None) -> list[PunchRequest]:
+        query = (
+            select(PunchRequest)
+            .join(Employee, Employee.id == PunchRequest.employee_id)
+            .where(Employee.company_id == company_id)
+            .options(joinedload(PunchRequest.employee), joinedload(PunchRequest.punch))
+        )
         if status:
             query = query.where(PunchRequest.status == status)
         return list(self.db.scalars(query.order_by(PunchRequest.requested_at.desc()).limit(200)))

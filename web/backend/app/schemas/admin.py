@@ -9,6 +9,7 @@ class AdminOut(BaseModel):
     id: int
     username: str
     updated_at: datetime
+    superadmin: bool
 
 
 class AdminCreate(BaseModel):
@@ -108,3 +109,31 @@ class Alerts(BaseModel):
     short_pins: int  # funcionários ativos com PIN antigo de 4 ou 5 dígitos
     devices_expiring: int  # chaves de celular que vencem nos próximos dias
     retention_due: int  # ex-funcionários que passaram do prazo de guarda (anonimizar)
+
+
+class CompanyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    privacy_contact: str
+    active: bool
+    created_at: datetime
+
+
+class CompanyCreate(BaseModel):
+    name: str = ""
+    privacy_contact: str = ""
+    # Primeiro administrador da empresa (senha provisória: troca no primeiro acesso)
+    admin_username: str = ""
+    admin_password: str = ""
+
+
+class CompanyUpdate(BaseModel):
+    name: str | None = None
+    privacy_contact: str | None = None
+    active: bool | None = None
+
+
+class CompanySwitch(BaseModel):
+    company_id: int

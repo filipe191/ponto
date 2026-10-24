@@ -27,7 +27,7 @@ O sistema guarda dados pessoais de funcionários (nome, horários de trabalho, f
 | 1 | CA local sem restrição de nomes | Alta | Pequeno | `web/scripts/gerar-certificado.sh` | ✅ Concluído |
 | 2 | Postgres aberto na rede do Tailscale | Alta | Pequeno | Servidor (Postgres compartilhado) | Risco aceito |
 | 3 | Sem firewall no servidor | Alta | Pequeno | Servidor | ✅ Concluído |
-| 4 | Backups sem criptografia e no mesmo disco | Alta | Médio | `web/scripts/backup.sh` | ✅ Criptografia · cópia remota adiada |
+| 4 | Backups sem criptografia e no mesmo disco | Alta | Médio | `web/scripts/backup.sh` | ✅ Criptografia · cópia remota aguarda o servidor de backup |
 | 5 | Cookie de admin enviado a outros serviços do mesmo IP / CSRF | Média | Pequeno | Backend + nginx | ✅ Concluído |
 | 6 | Sair não invalida a sessão | Média | Médio | Backend | ✅ Concluído |
 | 7 | Login de admin fraco | Média | Médio | Backend + painel | ✅ Concluído |
@@ -36,9 +36,9 @@ O sistema guarda dados pessoais de funcionários (nome, horários de trabalho, f
 | 10 | Cartão de hoje expõe todos os colegas | Média | Pequeno | Relógio | ✅ Concluído |
 | 11 | Fórmulas no CSV | Baixa | Pequeno | Backend | ✅ Concluído |
 | 12 | Scripts dentro das páginas (CSP fraco) | Baixa | Médio | Frontend | ✅ Concluído |
-| 13 | Dependências sem checagem de vulnerabilidades | Baixa | Pequeno | `web/scripts/deploy.sh` | ✅ Backend · app parcial |
+| 13 | Dependências sem checagem de vulnerabilidades | Baixa | Pequeno | `web/scripts/deploy.sh` | ✅ Concluído |
 | 14 | Chaves de celular não expiram | Baixa | Pequeno | Backend | ✅ Concluído |
-| 15 | Processo de LGPD | Baixa | Médio | Documentação | ✅ Concluído · preencher empresa e contato |
+| 15 | Processo de LGPD | Baixa | Médio | Documentação | ✅ Concluído · empresa e contato no cadastro de cada empresa |
 
 Os itens 2 e 3 mexem em infraestrutura compartilhada com outros sistemas do servidor. Combine antes de aplicar.
 
@@ -128,7 +128,7 @@ Fora do escopo do ponto: os demais serviços do servidor (Portainer, Grafana, Va
 
 ---
 
-**Status: criptografia concluída em 24/10/2026; cópia fora do servidor adiada.** O destino da cópia ainda não foi escolhido.
+**Status: criptografia concluída em 24/10/2026; cópia fora do servidor adiada.** O destino será um servidor de backup próprio, ainda não montado. Quando ele estiver no ar, defina `BACKUP_REMOTO`.
 - Cada dump é cifrado com `gpg` usando a chave pública `web/backups/chave-publica.asc`; só a chave privada, fora do servidor, decifra.
 - O dump em texto aberto só existe na memória (`/dev/shm`) durante a conferência e é apagado em seguida.
 - Os backups antigos em texto aberto foram cifrados e destruídos com `shred`.
@@ -285,6 +285,7 @@ Testado na cópia do banco de produção, inclusive a recusa de alteração dire
 - O `deploy.sh` roda o `pip-audit` no backend e **interrompe o deploy** se houver falha conhecida. Em emergência (ex.: sem internet), pule com `PULAR_AUDITORIA=1 scripts/deploy.sh`.
 - A primeira checagem achou 24 falhas no backend (Starlette e cryptography). Foram corrigidas atualizando `fastapi` (0.115 → 0.162), `starlette` (0.46 → 1.10) e `cryptography` (44 → 50). Os testes e os roteiros de ponta a ponta passaram com as versões novas.
 - **App de celular:** o `npm audit` só avisa, porque o app não é publicado pelo `deploy.sh`. As correções que não mudam versões principais foram aplicadas (29 → 24 falhas), e o app continua compilando e gerando o pacote do iOS. As 24 restantes estão nas ferramentas de build do Expo (CLI, Metro, servidor de desenvolvimento), não no código que vai para o iPhone. Elas só saem atualizando o Expo SDK 52 para uma versão atual, o que exige testar o app num Mac/iPhone.
+- **Testado no iPhone em 24/10/2026:** o app funciona normalmente com as correções aplicadas. As falhas restantes ficam como risco aceito por estarem só nas ferramentas de build; reavalie ao atualizar o Expo SDK.
 
 ### 14. Chaves de celular não expiram
 
@@ -307,7 +308,7 @@ Testado na cópia do banco de produção, inclusive a recusa de alteração dire
 - Canal para o funcionário pedir acesso ou correção dos próprios dados.
 
 **Status: concluído em 24/10/2026.**
-- **Aviso de privacidade** em `/privacidade`, público e com link no relógio e no login. Ele diz o que é guardado, para quê (obrigação legal da CLT, sem depender de consentimento), com quem é compartilhado, por quanto tempo e a quem pedir acesso ou correção. **Preencha `EMPRESA_NOME` e `PRIVACIDADE_CONTATO` no `.env`**; sem eles a página usa um texto genérico. O texto é um modelo: vale uma revisão por quem cuida da parte jurídica da empresa.
+- **Aviso de privacidade** em `/privacidade`, público e com link no relógio e no login. Ele diz o que é guardado, para quê (obrigação legal da CLT, sem depender de consentimento), com quem é compartilhado, por quanto tempo e a quem pedir acesso ou correção. O nome e o contato vêm do **cadastro da empresa** (Administração → Empresas, só o superadmin), porque o sistema atende várias empresas no mesmo servidor. A página mostra a empresa do relógio ou do admin logado no aparelho; sem eles, usa um texto genérico. **Preencha o contato de cada empresa ao cadastrá-la.** O texto é um modelo: vale uma revisão por quem cuida da parte jurídica da empresa.
 - **Pedido de acesso:** o botão **Dados** na lista de funcionários baixa, em JSON, tudo o que o sistema guarda sobre a pessoa (cadastro, jornadas, batidas, correções, solicitações, celulares, fechamentos e auditoria), sem hashes de PIN ou chave. Cada exportação fica na auditoria.
 - **Retenção:** 5 anos depois do desligamento, o painel avisa e mostra o botão **Anonimizar**. Ele troca o nome por "Ex-funcionário nº N", invalida o PIN, revoga e renomeia os celulares, tira o nome do aparelho das batidas e as observações das solicitações, e apaga os registros de auditoria da pessoa. É a única exceção à regra de que a auditoria nunca é apagada, e o banco só a aceita dentro dessa operação. As batidas e as horas continuam, sem identificação.
 - **Backups:** os mensais são guardados por 5 anos e então descartados. Assim, um cadastro anonimizado ainda pode existir em backups antigos por até 5 anos.
@@ -319,7 +320,7 @@ Testado na cópia do banco de produção, inclusive a recusa de alteração dire
 - [x] 1. Recriar a CA com *name constraints* e chave cifrada
 - [x] 2. Postgres no Tailscale — risco aceito (tailnet de um único dono, com ACLs)
 - [x] 3. Ativar firewall (rede local e Tailscale)
-- [x] 4. Criptografar backups — [ ] cópia fora do servidor (definir `BACKUP_REMOTO`)
+- [x] 4. Criptografar backups — [ ] cópia fora do servidor (definir `BACKUP_REMOTO` quando o servidor de backup estiver montado)
 - [x] 5. Checar `Origin` nas rotas que alteram dados
 - [x] 6. Sessões no servidor, "sair de todos", expiração por inatividade
 - [x] 7. Senha mínima de 12 caracteres e TOTP para admins
@@ -328,6 +329,6 @@ Testado na cópia do banco de produção, inclusive a recusa de alteração dire
 - [x] 10. Reduzir os dados mostrados no "Cartão de hoje"
 - [x] 11. Neutralizar fórmulas no CSV
 - [x] 12. Scripts em arquivos `.js` e CSP sem `'unsafe-inline'`
-- [x] 13. `pip-audit` e `npm audit` no deploy — [ ] atualizar o Expo SDK do app (falhas nas ferramentas de build)
+- [x] 13. `pip-audit` e `npm audit` no deploy; app testado no iPhone
 - [x] 14. Validade das chaves de celular
-- [x] 15. Aviso de privacidade e regra de retenção — [ ] preencher `EMPRESA_NOME` e `PRIVACIDADE_CONTATO` no `.env`
+- [x] 15. Aviso de privacidade e regra de retenção — [ ] preencher o contato de privacidade de cada empresa no cadastro

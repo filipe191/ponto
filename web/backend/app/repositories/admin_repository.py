@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.models import AdminAccount, AdminRecoveryCode, AdminSession, AppSetting
+from app.models import AdminAccount, AdminRecoveryCode, AdminSession, AppSetting, Company
 
 
 class AdminRepository:
@@ -18,11 +18,19 @@ class AdminRepository:
     def get_by_username(self, username: str) -> AdminAccount | None:
         return self.db.scalar(select(AdminAccount).where(AdminAccount.username == username))
 
-    def list(self) -> list[AdminAccount]:
-        return list(self.db.scalars(select(AdminAccount).order_by(AdminAccount.username)))
+    def list(self, company_id: int) -> list[AdminAccount]:
+        return list(
+            self.db.scalars(
+                select(AdminAccount).where(AdminAccount.company_id == company_id).order_by(AdminAccount.username)
+            )
+        )
 
-    def count(self) -> int:
-        return self.db.scalar(select(func.count()).select_from(AdminAccount)) or 0
+    def count(self, company_id: int | None = None) -> int:
+        """Admins da empresa (ou de todo o sistema, sem empresa)."""
+        query = select(func.count()).select_from(AdminAccount)
+        if company_id is not None:
+            query = query.where(AdminAccount.company_id == company_id)
+        return self.db.scalar(query) or 0
 
     def add(self, account: AdminAccount) -> AdminAccount:
         self.db.add(account)
@@ -78,6 +86,22 @@ class AdminRepository:
     def replace_recovery_codes(self, admin_id: int, hashes: list[str]) -> None:
         self.db.query(AdminRecoveryCode).filter(AdminRecoveryCode.admin_id == admin_id).delete()
         self.db.add_all(AdminRecoveryCode(admin_id=admin_id, code_hash=h) for h in hashes)
+
+    # ---------- Empresas ----------
+
+    def company(self, company_id: int | None) -> Company | None:
+        return self.db.get(Company, company_id) if company_id else None
+
+    def companies(self) -> list[Company]:
+        return list(self.db.scalars(select(Company).order_by(Company.name, Company.id)))
+
+    def first_active_company(self) -> Company | None:
+        return self.db.scalar(select(Company).where(Company.active).order_by(Company.id).limit(1))
+
+    def add_company(self, company: Company) -> Company:
+        self.db.add(company)
+        self.db.flush()
+        return company
 
     # ---------- Valores do sistema ----------
 

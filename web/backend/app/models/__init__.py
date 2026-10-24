@@ -1,5 +1,6 @@
 from app.models.admin_account import AdminAccount, AdminRecoveryCode, AdminSession
 from app.models.audit import AuditEvent
+from app.models.company import Company
 from app.models.employee import Employee, EmployeeSchedule
 from app.models.punch import (
     Punch,
@@ -19,6 +20,7 @@ __all__ = [
     "AdminSession",
     "AppSetting",
     "AuditEvent",
+    "Company",
     "Employee",
     "EmployeeDevice",
     "EmployeeSchedule",

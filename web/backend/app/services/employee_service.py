@@ -37,11 +37,11 @@ def schedule_label(minutes: int, workdays: str) -> str:
 
 
 class EmployeeService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, company_id: int):
         self.db = db
-        self.repo = EmployeeRepository(db)
+        self.repo = EmployeeRepository(db, company_id)
         self.punches = PunchRepository(db)
-        self.audit = AuditLog(db)
+        self.audit = AuditLog(db, company_id)
 
     def list(self) -> list[Employee]:
         return self.repo.list()

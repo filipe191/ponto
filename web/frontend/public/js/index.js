@@ -30,6 +30,7 @@ async function loadMe() {
   if (res?.status === 401) return toLogin();
   if (!res?.ok) return;
   me = await res.json();
+  $('company').textContent = me.company || '';
   document.querySelectorAll('[data-admin]').forEach((el) => { el.hidden = !me.admin; });
   $('kiosk').textContent = me.kiosk ? 'Desligar relógio' : 'Usar como relógio';
 }
@@ -38,10 +39,12 @@ loadMe();
 $('kiosk').addEventListener('click', async () => {
   const ask = me.kiosk
     ? 'Desligar o modo relógio neste aparelho?\n\nPara voltar a bater ponto aqui será preciso entrar de novo.'
-    : 'Usar este aparelho como relógio de ponto?\n\nOs funcionários poderão bater o ponto aqui, e a sua conta de administrador será desconectada deste aparelho.';
+    : `Usar este aparelho como relógio de ponto${me.company ? ` da empresa ${me.company}` : ''}?\n\nOs funcionários dela poderão bater o ponto aqui, e a sua conta de administrador será desconectada deste aparelho.`;
   if (!confirm(ask)) return;
   const res = await fetch('/api/auth/kiosk', { method: me.kiosk ? 'DELETE' : 'POST' }).catch(() => null);
   if (res?.status === 401) return toLogin();
+  // Superadmin sem empresa aberta: escolhe uma no painel antes de liberar o relógio
+  if (res?.status === 409) return alert((await res.json().catch(() => ({}))).error || 'Escolha uma empresa no painel');
   loadMe();
 });
 

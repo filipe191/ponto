@@ -31,8 +31,11 @@ def _plain(value):
 
 
 class AuditLog:
-    def __init__(self, db: Session):
+    """Auditoria de uma empresa: grava nela e só lista o que é dela."""
+
+    def __init__(self, db: Session, company_id: int | None):
         self.db = db
+        self.company_id = company_id
 
     def record(
         self,
@@ -46,6 +49,7 @@ class AuditLog:
     ) -> None:
         self.db.add(
             AuditEvent(
+                company_id=self.company_id,
                 user=user,
                 action=action,
                 summary=summary,
@@ -59,7 +63,7 @@ class AuditLog:
         self, employee_id: int | None = None, action: str = "", before: int | None = None, limit: int = 50
     ) -> list[AuditEvent]:
         """Mais recentes primeiro; `action` filtra pelo prefixo (ex.: "mes." pega fechar e reabrir)."""
-        query = select(AuditEvent)
+        query = select(AuditEvent).where(AuditEvent.company_id == self.company_id)
         if employee_id:
             query = query.where(AuditEvent.employee_id == employee_id)
         if action:
@@ -74,6 +78,7 @@ class AuditLog:
             self.db.scalars(
                 select(AuditEvent)
                 .where(
+                    AuditEvent.company_id == self.company_id,
                     AuditEvent.action == "mes.reaberto",
                     AuditEvent.employee_id == employee_id,
                     AuditEvent.details["month"].astext == month,
@@ -87,7 +92,7 @@ class AuditLog:
         return list(
             self.db.scalars(
                 select(AuditEvent)
-                .where(AuditEvent.action == action, AuditEvent.at >= since)
+                .where(AuditEvent.company_id == self.company_id, AuditEvent.action == action, AuditEvent.at >= since)
                 .order_by(AuditEvent.id.desc())
             )
         )

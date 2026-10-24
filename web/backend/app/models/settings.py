@@ -40,6 +40,7 @@ class Holiday(Base):
 
     __tablename__ = "holidays"
 
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="RESTRICT"), primary_key=True)
     date: Mapped[date] = mapped_column(Date, primary_key=True)
     name: Mapped[str] = mapped_column(String)
 

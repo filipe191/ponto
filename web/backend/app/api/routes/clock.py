@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, Request
 
-from app.api.deps import DbSession, client_ip, require_clock
+from app.api.deps import ClockCompany, DbSession, client_ip, require_clock
 from app.core.errors import NotFound, TooManyRequests
 from app.core.ratelimit import EscalatingLimiter
 from app.schemas.common import OkResponse
@@ -29,7 +29,7 @@ def _wait_text(seconds: int) -> str:
     return f"{hours} hora{'s' if hours > 1 else ''}"
 
 
-def _with_pin_limit(request: Request, db: DbSession, action):
+def _with_pin_limit(request: Request, db: DbSession, company_id: int, action):
     ip = client_ip(request)
     wait = pin_attempts.blocked_for(ip)
     if wait:
@@ -40,7 +40,7 @@ def _with_pin_limit(request: Request, db: DbSession, action):
         db.rollback()
         blocked = pin_attempts.fail(ip)
         if blocked:
-            AuditLog(db).record(
+            AuditLog(db, company_id).record(
                 CLOCK_USER,
                 PIN_BLOCKED,
                 f"Relógio bloqueado por {_wait_text(blocked)} depois de vários PINs errados seguidos",
@@ -52,19 +52,24 @@ def _with_pin_limit(request: Request, db: DbSession, action):
 
 
 @router.post("/punch", response_model=PunchResult, status_code=201)
-def punch(body: PunchRequest, request: Request, db: DbSession):
-    return _with_pin_limit(request, db, lambda: PunchService(db).register(body.pin, body.offline_ts))
+def punch(body: PunchRequest, request: Request, db: DbSession, company_id: ClockCompany):
+    return _with_pin_limit(
+        request, db, company_id, lambda: PunchService(db, company_id).register(body.pin, body.offline_ts)
+    )
 
 
 # ---------- Espelho do próprio funcionário (com o PIN) ----------
 
 
 @router.post("/portal/report", response_model=MonthReport)
-def my_report(body: MyReportRequest, request: Request, db: DbSession):
-    return _with_pin_limit(request, db, lambda: PortalService(db).report(body.pin, body.month))
+def my_report(body: MyReportRequest, request: Request, db: DbSession, company_id: ClockCompany):
+    return _with_pin_limit(
+        request, db, company_id, lambda: PortalService(db, company_id).report(body.pin, body.month)
+    )
 
 
 @router.post("/portal/ack", response_model=OkResponse)
-def acknowledge(body: MyReportRequest, request: Request, db: DbSession):
-    _with_pin_limit(request, db, lambda: PortalService(db).acknowledge(body.pin, body.month, client_ip(request)))
+def acknowledge(body: MyReportRequest, request: Request, db: DbSession, company_id: ClockCompany):
+    portal = PortalService(db, company_id)
+    _with_pin_limit(request, db, company_id, lambda: portal.acknowledge(body.pin, body.month, client_ip(request)))
     return OkResponse()

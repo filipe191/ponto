@@ -15,8 +15,11 @@ let editingEmp = null;  // funcionário aberto na janela (null = novo)
 // Sessão do admin expirada ou encerrada: volta para o login
 const toLogin = () => location.replace('/login?next=/admin');
 
-async function api(path, opts = {}) {
-  const res = await fetch('/api/admin' + path, {
+// Rotas da empresa aberta no painel
+const api = (path, opts) => request('/api/admin' + path, opts);
+
+async function request(url, opts = {}) {
+  const res = await fetch(url, {
     ...opts,
     headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
   });
@@ -522,9 +525,9 @@ async function loadAdmins() {
   try { admins = await api('/admins'); } catch (err) { $('admError').textContent = err.message; }
   $('admins').innerHTML = admins.map((a) => `
     <tr>
-      <td class="who">${esc(a.username)}${a.username === currentUser ? ' <span class="muted">(você)</span>' : ''}</td>
+      <td class="who">${esc(a.username)}${a.username === currentUser ? ' <span class="muted">(você)</span>' : ''}${a.superadmin ? ' <span class="muted">· superadministrador</span>' : ''}</td>
       <td>${fmtDT(a.updated_at)}</td>
-      <td class="actions">${a.username === currentUser ? '' : `<button class="btn btn-sm btn-danger" data-adm="${a.id}" data-name="${esc(a.username)}">Excluir</button>`}</td>
+      <td class="actions">${a.username === currentUser || a.superadmin ? '' : `<button class="btn btn-sm btn-danger" data-adm="${a.id}" data-name="${esc(a.username)}">Excluir</button>`}</td>
     </tr>`).join('');
 }
 
@@ -734,15 +737,127 @@ $('audEmp').addEventListener('change', () => loadAudit());
 $('audKind').addEventListener('change', () => loadAudit());
 $('audMore').addEventListener('click', () => loadAudit(true));
 
-// A página só abre com o login do admin (o nginx confere o cookie antes)
-loadRequests();
-setInterval(loadRequests, 60000);
-fetch('/api/auth/admin').then((r) => (r.ok ? r.json() : null)).then((me) => {
-  currentUser = me?.user || '';
-  $('whoami').textContent = currentUser ? `Você entrou como ${currentUser}` : '';
+// ---------- Empresas (só o superadministrador) ----------
+
+let companies = [];
+let editingCompany = null; // empresa sendo editada no formulário (null = nova)
+
+async function loadCompanies(openId) {
+  try { companies = await request('/api/companies'); } catch (err) { $('coError').textContent = err.message; return; }
+  $('companies').innerHTML = companies.length
+    ? companies.map((c) => `
+        <tr>
+          <td class="who">${esc(c.name)}${c.active ? '' : '<span class="tag inativo">desativada</span>'}${c.id === openId ? ' <span class="muted">(aberta)</span>' : ''}</td>
+          <td>${c.privacy_contact ? esc(c.privacy_contact) : '<span class="muted">—</span>'}</td>
+          <td class="actions">
+            ${c.id === openId ? '' : `<button class="btn btn-sm" data-co="open" data-id="${c.id}">Abrir</button>`}
+            <button class="btn btn-sm" data-co="edit" data-id="${c.id}">Editar</button>
+            <button class="btn btn-sm${c.active ? ' btn-danger' : ''}" data-co="toggle" data-id="${c.id}">${c.active ? 'Desativar' : 'Ativar'}</button>
+          </td>
+        </tr>`).join('')
+    : '<tr><td colspan="3" class="empty">Nenhuma empresa cadastrada. Cadastre a primeira acima.</td></tr>';
+  $('companyPick').innerHTML = (openId ? '' : '<option value="">Escolha uma empresa</option>')
+    + companies.map((c) => `<option value="${c.id}">${esc(c.name)}${c.active ? '' : ' (desativada)'}</option>`).join('');
+  $('companyPick').value = openId || '';
+  $('companyPick').hidden = !companies.length;
+}
+
+// Abrir outra empresa recarrega o painel inteiro: nada da anterior fica na tela
+async function openCompany(id) {
+  try {
+    await request('/api/auth/company', { method: 'POST', body: JSON.stringify({ company_id: Number(id) }) });
+    location.reload();
+  } catch (err) { $('coError').textContent = err.message; }
+}
+
+function companyForm(company = null) {
+  editingCompany = company;
+  $('coName').value = company?.name || '';
+  $('coContact').value = company?.privacy_contact || '';
+  // O primeiro admin só é pedido no cadastro; depois, os admins são criados no painel da empresa
+  for (const id of ['coAdmUser', 'coAdmPass']) {
+    $(id).hidden = !!company;
+    $(id).required = !company;
+    $(id).value = '';
+  }
+  $('coSubmit').textContent = company ? 'Salvar empresa' : 'Cadastrar empresa';
+  $('coCancel').hidden = !company;
+  $('coError').textContent = '';
+  if (company) $('coName').focus();
+}
+
+$('companyPick').addEventListener('change', () => { if ($('companyPick').value) openCompany($('companyPick').value); });
+$('coCancel').addEventListener('click', () => companyForm());
+$('coForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('coError').textContent = '';
+  const body = { name: $('coName').value, privacy_contact: $('coContact').value };
+  try {
+    if (editingCompany) {
+      await request(`/api/companies/${editingCompany.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      if (editingCompany.id === openCompanyId) $('companyName').textContent = body.name.trim();
+    } else {
+      body.admin_username = $('coAdmUser').value;
+      body.admin_password = $('coAdmPass').value;
+      const created = await request('/api/companies', { method: 'POST', body: JSON.stringify(body) });
+      if (!openCompanyId) return openCompany(created.id); // primeira empresa: já abre
+    }
+    companyForm();
+    loadCompanies(openCompanyId);
+    if (openCompanyId) loadAudit();
+  } catch (err) { $('coError').textContent = err.message; }
+});
+$('companies').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-co]');
+  if (!btn) return;
+  const company = companies.find((c) => String(c.id) === btn.dataset.id);
+  $('coError').textContent = '';
+  if (btn.dataset.co === 'open') return openCompany(company.id);
+  if (btn.dataset.co === 'edit') return companyForm(company);
+  if (company.active) {
+    const ok = await ask({
+      title: `Desativar ${company.name}?`,
+      message: 'Os administradores da empresa saem na hora e não conseguem entrar, os relógios e os celulares dela param de registrar ponto. Nada é apagado: ao reativar, tudo volta a funcionar.',
+      ok: 'Desativar',
+      danger: true,
+    });
+    if (ok === null) return;
+  }
+  try {
+    await request(`/api/companies/${company.id}`, { method: 'PATCH', body: JSON.stringify({ active: !company.active }) });
+  } catch (err) { $('coError').textContent = err.message; }
+  loadCompanies(openCompanyId);
+  if (openCompanyId) loadAudit();
+});
+
+// ---------- Início ----------
+
+let openCompanyId = null;
+
+function loadCompanyArea() {
+  loadRequests();
+  setInterval(loadRequests, 60000);
   loadAdmins();
+  loadEmployees().then(() => { loadReport(); loadAudit(); }).catch((err) => { $('empError').textContent = err.message; });
+  loadHolidays();
+  loadAlerts();
+  setInterval(loadAlerts, 60000);
+}
+
+// A página só abre com o login do admin (o nginx confere o cookie antes)
+fetch('/api/auth/admin').then((r) => (r.ok ? r.json() : null)).then((me) => {
+  if (!me) return toLogin();
+  if (me.pending) return location.replace('/senha');
+  currentUser = me.user || '';
+  openCompanyId = me.company_id;
+  $('whoami').textContent = currentUser ? `Você entrou como ${currentUser}` : '';
+  $('companyName').textContent = me.superadmin ? '' : me.company || '';
+  $('companyName').hidden = me.superadmin;
+  $('coCard').hidden = !me.superadmin;
+  $('companyArea').hidden = !openCompanyId;
+  if (me.superadmin) {
+    loadCompanies(openCompanyId);
+    if (!openCompanyId) $('coHint').insertAdjacentHTML('beforeend', ' <b>Nenhuma empresa aberta:</b> cadastre uma ou abra uma da lista.');
+  }
+  if (openCompanyId) loadCompanyArea();
 }).catch(() => {});
-loadEmployees().then(() => { loadReport(); loadAudit(); }).catch((err) => { $('empError').textContent = err.message; });
-loadHolidays();
-loadAlerts();
-setInterval(loadAlerts, 60000);

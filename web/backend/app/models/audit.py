@@ -14,6 +14,8 @@ class AuditEvent(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Empresa onde aconteceu (vazia só nos eventos de um superadmin fora de uma empresa)
+    company_id: Mapped[int | None] = mapped_column(Integer)
     # Admin que fez a ação, ou "relógio" / "funcionário" para o que acontece na tela do relógio
     user: Mapped[str] = mapped_column(String)
     action: Mapped[str] = mapped_column(String)  # ex.: "funcionario.alterado", "mes.reaberto"

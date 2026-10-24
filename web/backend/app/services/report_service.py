@@ -155,11 +155,12 @@ def build_days(
 
 
 class ReportService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, company_id: int):
         self.db = db
-        self.employees = EmployeeRepository(db)
+        self.company_id = company_id
+        self.employees = EmployeeRepository(db, company_id)
         self.punches = PunchRepository(db)
-        self.holidays = HolidayRepository(db)
+        self.holidays = HolidayRepository(db, company_id)
         self.closures = ClosureRepository(db)
 
     def monthly(self, employee_id: int, month: str) -> MonthReport:
@@ -177,7 +178,7 @@ class ReportService:
                 closed_by=e.details.get("closed_by"),
                 acknowledged_at=e.details.get("acknowledged_at"),
             )
-            for e in AuditLog(self.db).reopenings(employee.id, month)
+            for e in AuditLog(self.db, self.company_id).reopenings(employee.id, month)
         ]
         return report
 
@@ -218,7 +219,7 @@ class ReportService:
         check_month(month)
         start, end = month_bounds(*parse_month(month))
         first_day, last_day = start.date(), (end - timedelta(days=1)).date()
-        closures = self.closures.list_for_month(month)
+        closures = self.closures.list_for_month(month, self.company_id)
         rows = []
         for employee in self.employees.list():
             if employee.hired_on > last_day or (employee.terminated_on and employee.terminated_on < first_day):

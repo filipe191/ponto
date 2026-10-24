@@ -50,19 +50,29 @@ sudo scripts/firewall.sh status     # mostra as regras e os contadores
 
 As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
 
+### Várias empresas
+
+Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionários, feriados, administradores, relógios, celulares e auditoria, e uma não enxerga os dados da outra.
+
+- **Superadministrador:** criado na primeira subida a partir de `ADMIN_USER`/`ADMIN_PASSWORD`. Em Administração → **Empresas** ele cadastra cada empresa já com o primeiro admin dela, edita o nome e o contato de privacidade, e desativa ou reativa a empresa. Para trabalhar numa empresa, ele a escolhe no seletor ao lado de "Ponto"; cada entrada fica na auditoria da empresa.
+- **Admins de uma empresa** só veem e alteram a própria empresa.
+- **Empresa desativada:** os admins dela saem na hora e não conseguem entrar, e os relógios e os celulares dela param. Nada é apagado; ao reativar, tudo volta.
+- **PIN:** é único dentro de cada empresa, então duas empresas podem ter funcionários com o mesmo PIN. O relógio sabe de qual empresa é pela liberação do aparelho.
+- **Instalação que já existia antes das várias empresas:** os dados viram a empresa nº 1, com nome e contato tirados de `EMPRESA_NOME` e `PRIVACIDADE_CONTATO`. O admin mais antigo vira superadmin, e os relógios já liberados continuam funcionando.
+
 ### Logins
 
-- **Administradores:** o primeiro é criado na primeira subida a partir de `ADMIN_USER`/`ADMIN_PASSWORD`. Os demais são cadastrados em Administração → "Administradores e relógios". Cada pessoa deve ter o próprio login: o histórico de correções registra quem fez cada alteração.
+- **Administradores:** o superadmin é criado na primeira subida (veja acima). Os admins de cada empresa são cadastrados em Administração → "Administradores e relógios". Cada pessoa deve ter o próprio login: o histórico de correções registra quem fez cada alteração. O nome de usuário é único no sistema todo.
   - **Senha:** mínimo de 12 caracteres, recusando senhas muito comuns. Senha provisória (a do `.env`, ou a criada por outro admin) ou fora da política obriga a troca antes de usar o painel.
   - **Verificação em duas etapas (obrigatória):** no primeiro acesso, o admin cadastra a conta num app autenticador (Google Authenticator, Microsoft Authenticator, Bitwarden...) lendo um QR code, e recebe 10 códigos de recuperação para o caso de perder o celular. Depois, o login pede a senha e o código de 6 dígitos. Para desligar a obrigatoriedade: `ADMIN_2FA_REQUIRED=false` no `.env`.
   - **Sessões:** cada login fica guardado no servidor e vale até sair, por até 30 dias, caindo sozinho após 8 horas sem uso. Em **Conta e segurança** (`/senha`) dá para trocar a senha, gerenciar as duas etapas, ver os aparelhos conectados e encerrá-los. Trocar a senha encerra os outros aparelhos.
   - Após 5 erros (senha ou código) em 5 minutos o IP fica bloqueado até a janela passar.
 - **Proteção contra CSRF:** toda requisição que altera dados (POST, PATCH, DELETE) com cookie de sessão precisa vir das próprias páginas do ponto (cabeçalho `Origin`). Isso importa porque outros serviços no mesmo IP contam como "mesmo site" para o navegador.
 - **Aparelho do relógio:** não fica logado como admin.
-  1. No aparelho, entre como administrador.
-  2. Na tela do relógio, toque em **Usar como relógio**. O aparelho passa a só bater ponto (vale 1 ano) e o admin é desconectado dele.
+  1. No aparelho, entre como administrador (o superadmin escolhe antes a empresa no painel).
+  2. Na tela do relógio, toque em **Usar como relógio**. O aparelho passa a só bater ponto, e só para os funcionários da empresa (vale 1 ano). O nome da empresa aparece no topo, e o admin é desconectado do aparelho.
   3. Para administrar a partir dele, toque em **Administração** e entre: nesse aparelho o login do admin dura 30 minutos. Use **Sair** ao terminar.
-  4. Perdeu um tablet? Administração → **Desligar todos os relógios** e ative de novo os que continuam em uso.
+  4. Perdeu um tablet? Administração → **Desligar todos os relógios** e ative de novo os que continuam em uso. Isso desliga só os relógios da empresa aberta.
 - **PIN:** de 6 a 8 dígitos (botão **Gerar PIN** no cadastro). PINs antigos de 4 ou 5 dígitos ainda valem, mas aparecem como "PIN curto" no painel para serem trocados.
 - Dez PINs errados em 5 minutos pausam o relógio por 5 minutos; cada nova rodada de erros dobra a pausa (até 24 h). Cada bloqueio aparece em **Avisos de segurança** no topo do painel.
 
@@ -72,15 +82,15 @@ As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
 |------------------|-----------|
 | `PGUSER`         | Usuário do Postgres (`ponto`) |
 | `PGPASSWORD`     | Senha desse usuário |
-| `ADMIN_USER`     | Usuário do primeiro administrador (só na primeira subida) |
+| `ADMIN_USER`     | Usuário do superadministrador (só na primeira subida) |
 | `ADMIN_PASSWORD` | Senha inicial dele (só na primeira subida) |
 | `SECRET_KEY`     | Assina os cookies. Sem ela, todos os logins e relógios caem a cada reinício |
 | `PIN_KEY`        | **Obrigatória.** Chave do hash dos PINs e dos códigos de comprovante. **Nunca troque**: todos os PINs deixam de funcionar. Guarde uma cópia num gerenciador de senhas, separada do backup |
 | `COOKIE_SECURE`  | `true` (o site só funciona por HTTPS) |
 | `HTTPS_PORT`     | Porta do HTTPS no servidor (padrão `9443`) |
 | `API_DOCS`       | `true` liga a documentação da API em `/api/docs` (desligada por padrão) |
-| `EMPRESA_NOME`   | Nome da empresa no aviso de privacidade (`/privacidade`) |
-| `PRIVACIDADE_CONTATO` | A quem o funcionário pede acesso ou correção dos próprios dados (ex.: "Maria, do RH") |
+| `EMPRESA_NOME`   | Só para instalações anteriores às várias empresas: nome da empresa nº 1 na migração. Depois, o nome fica no cadastro da empresa |
+| `PRIVACIDADE_CONTATO` | Idem: contato de privacidade da empresa nº 1 na migração |
 
 ## Funcionalidades
 
@@ -110,7 +120,7 @@ As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
 - **Exportação:** CSV do espelho de um funcionário, CSV com o resumo de todos (para a contabilidade) e página de impressão com o espelho de todos, com linha de assinatura (imprima ou salve como PDF).
 
 **Privacidade (LGPD)**
-- **Aviso de privacidade** em `/privacidade` (link no relógio e no login): o que é guardado, para quê, por quanto tempo e a quem pedir acesso. Preencha `EMPRESA_NOME` e `PRIVACIDADE_CONTATO` no `.env`.
+- **Aviso de privacidade** em `/privacidade` (link no relógio e no login): o que é guardado, para quê, por quanto tempo e a quem pedir acesso. O nome e o contato vêm do cadastro da empresa do relógio (Administração → Empresas). Num aparelho sem relógio liberado nem admin logado, a página usa um texto genérico.
 - **Pedido de acesso:** Funcionários → **Dados** baixa em JSON tudo o que o sistema guarda sobre a pessoa.
 - **Retenção:** 5 anos depois do desligamento, o painel avisa e oferece **Anonimizar**. O nome, o PIN e os celulares são apagados; as batidas e as horas continuam, como "Ex-funcionário nº N".
 

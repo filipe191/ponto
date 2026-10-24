@@ -9,6 +9,8 @@
 }
 
 [hidden] { display: none !important; }
+/* Cartões da empresa aberta: o invólucro não interfere na grade da página */
+.company-area { display: contents; }
 .muted { color: var(--muted); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 .pos { color: var(--ink-in); }

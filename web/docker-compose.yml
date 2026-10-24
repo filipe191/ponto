@@ -19,7 +19,7 @@ services:
       # O site só funciona por HTTPS (o nginx redireciona), então o cookie é sempre "secure"
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       ADMIN_2FA_REQUIRED: ${ADMIN_2FA_REQUIRED:-true}
-      # Aviso de privacidade (/privacidade)
+      # Nome e contato da empresa nº 1 na migração para várias empresas (depois ficam no cadastro)
       EMPRESA_NOME: ${EMPRESA_NOME:-}
       PRIVACIDADE_CONTATO: ${PRIVACIDADE_CONTATO:-}
       API_DOCS: ${API_DOCS:-false}

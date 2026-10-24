@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.errors import BadRequest, NotFound, Unauthorized
 from app.core.security import hash_device_key, new_device_key
 from app.models import (
+    Company,
     Employee,
     EmployeeDevice,
     Punch,
@@ -77,25 +78,32 @@ def to_batida(punch: Punch) -> BatidaServidor:
 
 
 class DeviceService:
-    """Chaves de acesso do app, geradas pelo admin para cada funcionário."""
+    """Chaves de acesso do app, geradas pelo admin para cada funcionário.
 
-    def __init__(self, db: Session):
+    `company_id` é a empresa do admin; a autenticação do app não precisa dela (a chave já diz quem é).
+    """
+
+    def __init__(self, db: Session, company_id: int | None = None):
         self.db = db
+        self.company_id = company_id
         self.repo = DeviceRepository(db)
-        self.employees = EmployeeRepository(db)
+        self.employees = EmployeeRepository(db, company_id)
 
     def authenticate(self, key: str | None) -> tuple[Employee, EmployeeDevice]:
         device = self.repo.by_key_hash(hash_device_key(key)) if key else None
+        employee = self.db.get(Employee, device.employee_id) if device else None
         if device and not device.revoked_at:
-            self._revoke_if_idle(device)
+            self._revoke_if_idle(device, employee)
         if not device or device.revoked_at:
             raise Unauthorized("Chave de acesso inválida")
         now = datetime.now(timezone.utc)
         if device.expires_at <= now:
             raise Unauthorized("Chave de acesso vencida. Peça uma nova ao administrador")
-        employee = self.employees.get(device.employee_id)
         if not employee or not employee.active:
             raise Unauthorized("Funcionário desativado")
+        company = self.db.get(Company, employee.company_id)
+        if not company or not company.active:
+            raise Unauthorized("Empresa desativada")
         # Grava o último uso de vez em quando, não a cada requisição
         if not device.last_used_at or now - device.last_used_at > timedelta(minutes=5):
             device.last_used_at = now
@@ -103,25 +111,27 @@ class DeviceService:
         return employee, device
 
     def list(self, employee_id: int) -> list[EmployeeDevice]:
+        employee = self.employees.get(employee_id)
+        if not employee:
+            raise NotFound("Funcionário não encontrado")
         devices = self.repo.list_for_employee(employee_id)
         for device in devices:
             if not device.revoked_at:
-                self._revoke_if_idle(device)
+                self._revoke_if_idle(device, employee)
         return devices
 
     def expiring(self) -> int:
         """Chaves ativas que vencem nos próximos settings.device_warn_days dias (aviso no painel)."""
         now = datetime.now(timezone.utc)
-        return self.repo.count_active_expiring(now, now + timedelta(days=settings.device_warn_days))
+        return self.repo.count_active_expiring(self.company_id, now, now + timedelta(days=settings.device_warn_days))
 
-    def _revoke_if_idle(self, device: EmployeeDevice) -> None:
+    def _revoke_if_idle(self, device: EmployeeDevice, employee: Employee | None) -> None:
         """Chave parada há muito tempo (celular trocado, perdido, esquecido) é revogada sozinha."""
         now = datetime.now(timezone.utc)
         if now - (device.last_used_at or device.created_at) <= timedelta(days=settings.device_idle_days):
             return
         device.revoked_at = now
-        employee = self.employees.get(device.employee_id)
-        AuditLog(self.db).record(
+        AuditLog(self.db, employee.company_id if employee else None).record(
             "sistema",
             "celular.revogado",
             f"Revogou sozinho a chave do celular \"{device.name}\" de {employee.name if employee else '?'}: "
@@ -145,7 +155,7 @@ class DeviceService:
                 expires_at=datetime.now(timezone.utc) + timedelta(days=settings.device_key_days),
             )
         )
-        AuditLog(self.db).record(
+        AuditLog(self.db, self.company_id).record(
             user,
             "celular.chave_gerada",
             f"Gerou a chave do app para o celular \"{name}\" de {employee.name}",
@@ -166,12 +176,12 @@ class DeviceService:
 
     def revoke(self, device_id: int, user: str) -> None:
         device = self.repo.get(device_id)
-        if not device:
+        employee = self.employees.get(device.employee_id) if device else None
+        if not employee:
             raise NotFound("Celular não encontrado")
         if not device.revoked_at:
             device.revoked_at = datetime.now(timezone.utc)
-            employee = self.employees.get(device.employee_id)
-            AuditLog(self.db).record(
+            AuditLog(self.db, self.company_id).record(
                 user,
                 "celular.revogado",
                 f"Revogou a chave do celular \"{device.name}\" de {employee.name if employee else '?'}",
@@ -273,7 +283,7 @@ class MobileService:
 
     def summary(self, month: str) -> ResumoMes:
         """Resumo do mês calculado pelas mesmas regras do espelho (CLT, feriados, jornada)."""
-        report = ReportService(self.db).build(self.employee, check_month(month), None)
+        report = ReportService(self.db, self.employee.company_id).build(self.employee, check_month(month), None)
         start, end = month_bounds(*parse_month(month))
         by_id = {p.id: p for p in punches_between(self.db, self.employee.id, start - settings.max_shift, end + settings.max_shift)}
         dias = []
@@ -343,8 +353,9 @@ class MobileService:
 class RequestService:
     """Admin aprova ou recusa os pedidos feitos pelo app."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, company_id: int):
         self.db = db
+        self.company_id = company_id
         self.repo = RequestRepository(db)
 
     def list(self, status: str | None) -> list[RequestOut]:
@@ -365,14 +376,14 @@ class RequestService:
                 decided_by=r.decided_by,
                 decision_note=r.decision_note,
             )
-            for r in self.repo.list(status or None)
+            for r in self.repo.list(self.company_id, status or None)
         ]
 
     def approve(self, request_id: int, user: str, note: str = "") -> None:
         request = self._pending(request_id)
         when = f"{to_local(request.requested_at):%d/%m/%Y %H:%M}"
         reason = f"{request.note or REQUEST_NOTE} (pedido no app em {when})"
-        punches = PunchService(self.db, autocommit=False)
+        punches = PunchService(self.db, self.company_id, autocommit=False)
         if request.action == RequestAction.INCLUIR:
             punches.add_manual(
                 ManualPunchCreate(employee_id=request.employee_id, ts=request.ts, type=request.type, note=reason),
@@ -397,7 +408,7 @@ class RequestService:
 
     def _pending(self, request_id: int) -> PunchRequest:
         request = self.repo.get(request_id)
-        if not request:
+        if not request or request.employee.company_id != self.company_id:
             raise NotFound("Solicitação não encontrada")
         if request.status != RequestStatus.PENDENTE:
             raise BadRequest("Esta solicitação já foi decidida")

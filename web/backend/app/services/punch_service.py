@@ -24,11 +24,12 @@ def _with_tz(ts: datetime) -> datetime:
 
 
 class PunchService:
-    def __init__(self, db: Session, autocommit: bool = True):
+    def __init__(self, db: Session, company_id: int, autocommit: bool = True):
         self.db = db
+        self.company_id = company_id
         # False: quem chama faz o commit (ex.: aprovar uma solicitação e marcá-la na mesma transação)
         self.autocommit = autocommit
-        self.employees = EmployeeRepository(db)
+        self.employees = EmployeeRepository(db, company_id)
         self.punches = PunchRepository(db)
         self.closures = ClosureRepository(db)
 
@@ -180,6 +181,7 @@ class PunchService:
 
     def _get(self, punch_id: int) -> Punch:
         punch = self.punches.get(punch_id)
-        if not punch:
+        # Batida de funcionário de outra empresa: para esta empresa, ela não existe
+        if not punch or punch.employee.company_id != self.company_id:
             raise NotFound("Batida não encontrada")
         return punch
