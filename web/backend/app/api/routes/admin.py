@@ -5,7 +5,18 @@ from datetime import date
 from fastapi import APIRouter, Depends, Response
 
 from app.api.deps import AdminUser, DbSession, require_admin
-from app.schemas.admin import AdminCreate, AdminOut, ClosureRequest, HolidayCreate, HolidayOut
+from app.schemas.admin import (
+    AdminCreate,
+    AdminOut,
+    ClosureRequest,
+    DeviceCreate,
+    DeviceCreated,
+    DeviceOut,
+    HolidayCreate,
+    HolidayOut,
+    RequestDecision,
+    RequestOut,
+)
 from app.schemas.common import OkResponse
 from app.schemas.employee import EmployeeCreate, EmployeeCreated, EmployeeOut, EmployeeUpdate
 from app.schemas.punch import ManualPunchCreate, PunchChangeOut, PunchUpdate
@@ -13,6 +24,7 @@ from app.schemas.report import MonthReport, SummaryRow
 from app.services.auth_service import AuthService
 from app.services.calendar_service import ClosureService, HolidayService
 from app.services.employee_service import EmployeeService
+from app.services.mobile_service import DeviceService, RequestService
 from app.services.punch_service import PunchService
 from app.services.report_service import ReportService
 
@@ -138,6 +150,43 @@ def add_holiday(body: HolidayCreate, db: DbSession):
 @router.delete("/holidays/{day}", response_model=OkResponse)
 def delete_holiday(day: date, db: DbSession):
     HolidayService(db).delete(day)
+    return OkResponse()
+
+
+# ---------- App de celular: chaves e solicitações ----------
+
+
+@router.get("/employees/{employee_id}/devices", response_model=list[DeviceOut])
+def list_devices(employee_id: int, db: DbSession):
+    return DeviceService(db).list(employee_id)
+
+
+@router.post("/employees/{employee_id}/devices", response_model=DeviceCreated, status_code=201)
+def create_device(employee_id: int, body: DeviceCreate, db: DbSession, user: AdminUser):
+    """Gera a chave de acesso do app. Ela só aparece nesta resposta."""
+    return DeviceService(db).create(employee_id, body.name, user)
+
+
+@router.delete("/devices/{device_id}", response_model=OkResponse)
+def revoke_device(device_id: int, db: DbSession):
+    DeviceService(db).revoke(device_id)
+    return OkResponse()
+
+
+@router.get("/requests", response_model=list[RequestOut])
+def list_requests(db: DbSession, status: str = "pendente"):
+    return RequestService(db).list(status)
+
+
+@router.post("/requests/{request_id}/approve", response_model=OkResponse)
+def approve_request(request_id: int, body: RequestDecision, db: DbSession, user: AdminUser):
+    RequestService(db).approve(request_id, user, body.note)
+    return OkResponse()
+
+
+@router.post("/requests/{request_id}/reject", response_model=OkResponse)
+def reject_request(request_id: int, body: RequestDecision, db: DbSession, user: AdminUser):
+    RequestService(db).reject(request_id, user, body.note)
     return OkResponse()
 
 

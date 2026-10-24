@@ -67,6 +67,11 @@ Se o IP do servidor mudar: `scripts/gerar-certificado.sh --renovar && docker com
 - **Sem conexão:** a batida fica guardada no aparelho e é enviada quando a conexão volta (até 24 h). Ela entra marcada como `off` para o admin conferir, porque o horário veio do aparelho.
 - **Ver meu espelho:** com o PIN, o funcionário vê o próprio mês, os comprovantes e o banco de horas, e dá **ciência** dos meses fechados. A janela fecha sozinha após 1 minuto sem uso.
 
+**App de celular** (pasta `app/` na raiz do repositório)
+- Este backend atende também o app de iPhone, no contrato `/api/pontos/...` (autenticação pelo cabeçalho `X-API-Key`).
+- O admin gera uma **chave de celular** por funcionário (Funcionários → Celular). A chave aparece uma única vez, só o hash fica no banco, e pode ser revogada.
+- A batida feita na hora no app entra direto no ponto, marcada `cel` (em vermelho se o relógio do celular estiver adiantado em relação ao servidor). Batida lançada depois, correção e exclusão feitas no app viram **solicitações** que o admin aprova ou recusa no card do topo do painel.
+
 **Administração**
 - **Funcionários:** nome, PIN, jornada diária e dias de trabalho, admissão e desligamento. Mudar a jornada cria uma nova vigência a partir de uma data, sem alterar o passado. Só cadastros sem nenhum registro podem ser excluídos; os demais são desativados.
 - **Espelho mensal:** todos os dias com batidas, horas trabalhadas, horas noturnas, previsto e saldo; marca faltas, incompletos, feriados e dias fora do contrato. Resumo com saldo do mês e **banco de horas** acumulado.
@@ -110,9 +115,10 @@ backend/app/
 │   ├── report_service.py   # espelho, banco de horas, regras da CLT e CSV
 │   ├── punch_service.py    # batida pelo PIN (inclusive offline), correções com histórico
 │   ├── calendar_service.py # feriados, fechamento do mês e espelho do funcionário
+│   ├── mobile_service.py   # app de celular: chaves, lote, consultas e solicitações
 │   ├── employee_service.py
 │   └── auth_service.py     # administradores e relógios
-├── api/routes/             # health, auth, clock (relógio + espelho do funcionário), admin
+├── api/routes/             # health, auth, clock (relógio + espelho do funcionário), mobile (app), admin
 └── utils/                  # datas/fuso, horário noturno, feriados nacionais
 ```
 
@@ -127,4 +133,4 @@ docker run --rm -u root -v "$PWD/tests:/app/tests:ro" -v "$PWD/requirements-dev.
   ponto-backend sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q tests"
 ```
 
-Nova mudança no banco: crie `app/db/migrations/versions/0004_<descricao>.py` com `revision = "0004"` e `down_revision = "0003"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
+Nova mudança no banco: crie `app/db/migrations/versions/0005_<descricao>.py` com `revision = "0005"` e `down_revision = "0004"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.

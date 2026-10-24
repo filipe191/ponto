@@ -10,7 +10,7 @@ def at(text: str) -> datetime:
 
 
 def punches(*items: tuple[str, str]) -> list[Punch]:
-    return [Punch(id=i, employee_id=1, ts=at(ts), type=kind, manual=False, offline=False) for i, (kind, ts) in enumerate(items, 1)]
+    return [Punch(id=i, employee_id=1, ts=at(ts), type=kind, manual=False, offline=False, source="relogio") for i, (kind, ts) in enumerate(items, 1)]
 
 
 def employee(

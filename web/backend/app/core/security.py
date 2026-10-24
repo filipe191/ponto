@@ -31,6 +31,16 @@ def hash_pin(pin: str) -> str:
     return rehash_legacy_pin(_legacy_pin_hash(pin))
 
 
+def new_device_key() -> str:
+    """Chave de acesso do app de celular (aleatória, 256 bits)."""
+    return "ponto_" + secrets.token_urlsafe(32)
+
+
+def hash_device_key(key: str) -> str:
+    # A chave é aleatória e longa: SHA-256 basta (não precisa de hash lento como as senhas)
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
 def receipt_code(punch_id: int, employee_id: int, ts) -> str:
     """Código de 10 caracteres do comprovante da batida (usa PIN_KEY, que é fixa)."""
     payload = f"comprovante|{punch_id}|{employee_id}|{int(ts.timestamp())}"

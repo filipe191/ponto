@@ -1,27 +1,25 @@
 # Ponto
 
-Controle de ponto em duas frentes, independentes entre si:
+Controle de ponto com **um único backend** e duas formas de bater o ponto:
 
-- **Sistema web** (`web/`): relógio de ponto para a empresa, com tablet como relógio
-  (PIN), painel de administração, espelho mensal, banco de horas, regras da CLT,
-  fechamento do mês e HTTPS na rede local. FastAPI + nginx + Postgres.
-  Instruções completas em [`web/README.md`](web/README.md).
-- **App de celular** (`app/` + `backend/`): controle de ponto pessoal que funciona
-  sem rede. O iPhone grava a batida localmente e sincroniza com o servidor quando
-  houver conexão. É o assunto do restante deste README.
+- **Sistema web** (`web/`): o backend (FastAPI + Postgres) e o site servido por nginx em HTTPS.
+  Tem o relógio da empresa (tablet com PIN) e o painel de administração: espelho mensal,
+  banco de horas, regras da CLT, feriados, fechamento do mês e aprovação das solicitações
+  do app. Instruções completas em [`web/README.md`](web/README.md).
+- **App de celular** (`app/`): Expo / React Native para iPhone. Funciona sem rede: grava a
+  batida no aparelho e sincroniza com o sistema web quando houver conexão. Cada
+  funcionário usa a própria chave, gerada no painel.
 
 ```
 ponto/
-├── web/       Sistema web: relógio + administração (FastAPI, nginx, Postgres)
-├── backend/   Spring Boot + Postgres (API e histórico definitivo do app)
-└── app/       Expo / React Native (iPhone)
+├── web/   Backend + relógio + administração (FastAPI, nginx, Postgres)
+└── app/   App de celular (Expo / React Native, iPhone)
 ```
 
-Os dois sobem com docker compose sem conflito: o web usa as portas 9092/9443 e os
-containers `ponto-backend`/`ponto-frontend`; o backend do app usa 5433/8080 e
-`ponto-db`/`ponto-api`.
+As batidas do app entram no mesmo espelho, banco de horas e regras das batidas do relógio,
+marcadas como `cel`.
 
-## Como as duas partes do app conversam
+## Como o app conversa com o servidor
 
 A batida é gravada no SQLite do celular **primeiro**, sempre. O envio é um passo
 separado que pode falhar quantas vezes for — o botão nunca depende da rede.
@@ -30,10 +28,25 @@ O `id` de cada batida é um UUID gerado **no aparelho**. É isso que torna o
 reenvio seguro: se o POST chegar no servidor mas a resposta se perder, o retry
 devolve aquele id na lista `duplicadas` em vez de criar uma batida repetida. O
 app trata `aceitas` e `duplicadas` igual — as duas significam "está salvo lá".
+Uma batida que o funcionário também fez no relógio da empresa no mesmo minuto
+volta como `duplicada`: o ponto já tem aquele horário.
 
 A sincronização dispara em três momentos: quando o app volta ao primeiro plano
 (o mais confiável no iOS), quando o NetInfo avisa que a rede voltou, e logo
 depois de cada batida.
+
+O servidor fala o mesmo contrato do antigo backend Spring (`/api/pontos/...`,
+autenticação pelo cabeçalho `X-API-Key`), implementado em
+`web/backend/app/api/routes/mobile.py`.
+
+### O que vale na hora e o que precisa de aprovação
+
+- **Batida feita na hora** pelo botão da tela Hoje: entra direto no ponto.
+- **Marcação adicionada depois**, **correção** e **exclusão** (tela Corrigir): viram
+  **solicitações** que o administrador aprova ou recusa no painel. Até a aprovação,
+  o servidor — e portanto o Histórico — continua mostrando a batida original.
+- Mês já fechado pelo administrador não recebe batidas novas do app; peça um
+  lançamento manual ao administrador.
 
 ### Quem guarda o quê
 
@@ -56,25 +69,31 @@ substitui esse cache.
 
 ---
 
-## 1. Subir o backend
+## 1. Subir o sistema
 
-Os segredos ficam num `.env` que **não vai para o git**. Na primeira vez:
+Veja [`web/README.md`](web/README.md). Em resumo:
 
 ```bash
-cd backend
-cp .env.example .env
-openssl rand -hex 32   # cole em PONTO_API_KEY
-openssl rand -hex 16   # cole em POSTGRES_PASSWORD e DB_PASSWORD
-docker compose up --build
+cd web
+cp .env.example .env   # só na primeira vez; preencha PGPASSWORD, SECRET_KEY e PIN_KEY
+scripts/deploy.sh
 ```
 
-Postgres na porta 5433 do host, API na 8080. O Flyway cria o schema no primeiro
-boot. A API **não sobe sem `PONTO_API_KEY`** — não existe chave padrão, de
-propósito: um default publicado é o mesmo que não ter autenticação.
+## 2. Liberar o app para um funcionário
 
-Detalhes de endpoints e decisões de modelagem estão em `backend/README.md`.
+1. No painel (`https://<ip-do-servidor>:9443/admin`), em **Funcionários**, toque em
+   **Celular** no funcionário e gere uma chave. Ela aparece uma única vez.
+2. **No iPhone, confie no certificado do servidor** (o iOS só aceita HTTPS confiável):
+   abra `http://<ip-do-servidor>:9092/ponto-ca.crt` no Safari, instale o perfil em
+   Ajustes e ative em Ajustes → Geral → Sobre → Ajustes de Confiança de Certificados.
+3. No app, em **Ajustes**, informe:
+   - **Endereço do servidor** — `https://<ip-do-servidor>:9443`, sem barra no final
+   - **Chave de acesso** — a chave gerada no passo 1
 
-## 2. Rodar o app
+Toque em *Salvar e testar*. Se o servidor responder, está pronto. Celular perdido ou
+trocado: revogue a chave no mesmo lugar.
+
+## 3. Rodar o app (desenvolvimento)
 
 ```bash
 cd app
@@ -83,12 +102,7 @@ npx expo install --fix     # alinha as versões nativas com o SDK instalado
 npx expo start
 ```
 
-Abra no Expo Go pelo QR code. Na primeira execução, vá em **Ajustes** e informe:
-
-- **Endereço do servidor** — onde a API está rodando, sem barra no final
-- **Chave de acesso** — a mesma do `PONTO_API_KEY`
-
-Toque em *Salvar e testar*. Se o servidor responder, está pronto.
+Abra no Expo Go pelo QR code e configure como no passo 2.
 
 > O app usa `expo-sqlite` e `expo-secure-store`, que funcionam no Expo Go. Para
 > instalar no iPhone de forma permanente (sem depender do Expo Go aberto), gere
@@ -125,21 +139,16 @@ Note que em **Debug o bundling do JS é pulado** (`SKIP_BUNDLING=1`): um build
 Debug que passa não prova que o Release passa. Para testar a etapa de bundle e
 o Hermes, compile em Release.
 
-## 3. Onde hospedar
+## 4. Acesso fora da empresa
 
-O iPhone precisa alcançar a API. Duas opções que não expõem nada para a
-internet aberta:
-
-- **Tailscale** — instale no iPhone e no servidor, use o IP `100.x.x.x` no
-  campo de endereço. Mais simples e o que recomendo.
-- **Cloudflare Tunnel** — se quiser um domínio de verdade.
-
-Enquanto o homelab não estiver de pé, um VPS pequeno ou o Fly.io seguram o
-backend sem esforço; depois é só mover o container e o volume do Postgres.
+O sistema roda na rede local, sem nada exposto para a internet aberta. Para o app
+sincronizar de fora, use o **Tailscale** no iPhone e no servidor e coloque o IP
+`100.x.x.x` do servidor no endereço (o certificado HTTPS já inclui esse IP). Sem
+isso, o app guarda as batidas e sincroniza quando o celular voltar à rede da empresa.
 
 ---
 
-## Como usar no dia a dia
+## Como usar o app no dia a dia
 
 A tela **Hoje** tem um botão só, que alterna entre entrada e saída conforme a
 última marcação. Funciona com dois toques por dia ou com quatro (entrada,
@@ -149,41 +158,30 @@ padrões funcionam sem configurar nada.
 O ponto colorido ao lado de cada marcação mostra o estado da sincronização:
 verde já está no servidor, âmbar ainda na fila, vermelho o servidor recusou.
 
-**Histórico** mostra o mês com o saldo de horas, **calculado pelo servidor** —
-use as setas ‹ › para navegar entre os meses. Dia com número ímpar de marcações
-aparece como *saída não registrada*. Sem rede, a tela abre a última cópia
+**Histórico** mostra o mês com o saldo de horas, **calculado pelo servidor** com as
+mesmas regras do espelho (jornada do funcionário, feriados, hora noturna, tolerância)
+— use as setas ‹ › para navegar entre os meses. Sem rede, a tela abre a última cópia
 baixada daquele mês e avisa que é cópia.
 
-**Corrigir** conserta o que ficou errado: hora trocada, marcação a mais, batida
-esquecida. Escolha o dia nas setas ‹ ›, toque numa marcação para editar hora e
+**Corrigir** pede o conserto do que ficou errado: hora trocada, marcação a mais,
+batida esquecida. Escolha o dia nas setas ‹ ›, toque numa marcação para editar hora e
 tipo (com passos de ±1, ±5 e ±15 minutos, ou digitando HH:MM), ou use
-*Adicionar marcação* para lançar a que faltou.
-
-A tela junta as duas fontes — o dia de hoje vem do aparelho, os dias anteriores
-vêm do servidor — para que você não precise saber onde o registro mora. Se a
-batida ainda não saiu do celular, a correção é local e instantânea; se o
-servidor já tem, ela vira um `PATCH`/`DELETE` na fila, aparece na hora na tela e
-sai na próxima sincronização.
+*Adicionar marcação* para lançar a que faltou. Se a batida ainda não saiu do celular,
+a correção é local e instantânea; se o servidor já tem, ela vira uma **solicitação**
+para o administrador, enviada na próxima sincronização.
 
 ## Ajustes comuns
 
 | O que mudar | Onde |
 |---|---|
-| Jornada diária (padrão 8h) | `backend/src/main/resources/application.yml` → `ponto.jornada-diaria` (só aqui: o saldo do app vem pronto do servidor) |
-| Fuso horário | `application.yml` → `ponto.timezone` |
+| Jornada diária e dias de trabalho | Painel → Funcionários → Editar (vale para o app e o relógio) |
+| Feriados | Painel → Feriados |
+| Fuso horário, tolerância, horário noturno | `web/backend/app/core/config.py` (ou variáveis de ambiente) |
 | Cores e tipografia do app | `app/src/theme.ts` |
 | Passos de minuto da tela Corrigir | `app/src/telas/Corrigir.tsx` → `PASSOS` |
 
-## Se precisar zerar o banco
+## Backup
 
-```bash
-cd backend
-docker compose down -v && docker compose up --build
-```
-
-No celular, desinstalar o app apaga o SQLite local. Batidas ainda pendentes se
-perdem — sincronize antes. O que já foi confirmado não se perde: está no
-servidor, e é de lá que o Histórico lê.
-
-Zerar o banco do servidor, por outro lado, apaga o histórico de verdade — o
-celular só tem o dia corrente.
+O banco tem backup diário automático (veja `web/README.md`). No celular, desinstalar
+o app apaga o SQLite local: batidas ainda pendentes se perdem — sincronize antes. O que
+já foi confirmado está no servidor, e é de lá que o Histórico lê.

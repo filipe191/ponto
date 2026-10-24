@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.errors import BadRequest, Conflict, NotFound
 from app.core.security import hash_pin
-from app.models import Punch, PunchAction, PunchChange, PunchType
+from app.models import Punch, PunchAction, PunchChange, PunchSource, PunchType
 from app.repositories.calendar_repository import ClosureRepository
 from app.repositories.employee_repository import EmployeeRepository
 from app.repositories.punch_repository import PunchRepository
@@ -24,8 +24,10 @@ def _with_tz(ts: datetime) -> datetime:
 
 
 class PunchService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, autocommit: bool = True):
         self.db = db
+        # False: quem chama faz o commit (ex.: aprovar uma solicitação e marcá-la na mesma transação)
+        self.autocommit = autocommit
         self.employees = EmployeeRepository(db)
         self.punches = PunchRepository(db)
         self.closures = ClosureRepository(db)
@@ -84,7 +86,7 @@ class PunchService:
 
     # ---------- Correções do admin (sempre com histórico) ----------
 
-    def add_manual(self, data: ManualPunchCreate, user: str) -> None:
+    def add_manual(self, data: ManualPunchCreate, user: str, client_id: str | None = None) -> Punch:
         if not self.employees.get(data.employee_id):
             raise BadRequest("Funcionário inválido")
         note = (data.note or "").strip()
@@ -92,10 +94,19 @@ class PunchService:
             raise BadRequest(NOTE_REQUIRED)
         self._check_open(data.employee_id, _with_tz(data.ts))
         punch = self.punches.add(
-            Punch(employee_id=data.employee_id, ts=_with_tz(data.ts), type=data.type, manual=True, note=note)
+            Punch(
+                employee_id=data.employee_id,
+                ts=_with_tz(data.ts),
+                type=data.type,
+                manual=True,
+                note=note,
+                source=PunchSource.ADMIN,
+                client_id=client_id,
+            )
         )
         self._log(punch, user, PunchAction.CRIADA, note=note)
-        self.db.commit()
+        self._done()
+        return punch
 
     def update(self, punch_id: int, data: PunchUpdate, user: str) -> None:
         """Corrige horário/tipo; o original do relógio fica guardado e a batida passa a contar como manual (*)."""
@@ -116,7 +127,7 @@ class PunchService:
         self._check_open(punch.employee_id, old_ts, punch.ts)
         punch.manual = True
         self._log(punch, user, PunchAction.ALTERADA, old_ts=old_ts, old_type=old_type, note=punch.note)
-        self.db.commit()
+        self._done()
 
     def delete(self, punch_id: int, user: str, note: str = "") -> None:
         """Exclusão lógica: a batida sai do espelho e das horas, mas continua registrada."""
@@ -126,7 +137,7 @@ class PunchService:
         self._check_open(punch.employee_id, punch.ts)
         punch.deleted_at = datetime.now(timezone.utc)
         self._log(punch, user, PunchAction.EXCLUIDA, old_ts=punch.ts, old_type=punch.type, new=False, note=note)
-        self.db.commit()
+        self._done()
 
     def restore(self, punch_id: int, user: str) -> None:
         punch = self._get(punch_id)
@@ -135,7 +146,7 @@ class PunchService:
         self._check_open(punch.employee_id, punch.ts)
         punch.deleted_at = None
         self._log(punch, user, PunchAction.RESTAURADA)
-        self.db.commit()
+        self._done()
 
     def history(self, punch_id: int) -> list[PunchChangeOut]:
         self._get(punch_id)
@@ -154,6 +165,12 @@ class PunchService:
                 note=(note or "").strip() or None,
             )
         )
+
+    def _done(self) -> None:
+        if self.autocommit:
+            self.db.commit()
+        else:
+            self.db.flush()
 
     def _check_open(self, employee_id: int, *timestamps: datetime) -> None:
         """Mês fechado não aceita lançamentos nem correções (é preciso reabri-lo antes)."""

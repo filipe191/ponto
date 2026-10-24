@@ -242,7 +242,7 @@ class ReportService:
             local = to_local(p.ts)
             next_day = " (+1)" if local.date().isoformat() != day else ""
             kind = "E" if p.type == PunchType.ENTRADA else "S"
-            marks = ("*" if p.manual else "") + (" (offline)" if p.offline else "")
+            marks = ("*" if p.manual else "") + (" (offline)" if p.offline else "") + (" (cel)" if p.source == "app" else "")
             return f"{kind} {local:%H:%M}{next_day}{marks}"
 
         lines = ["Data;Dia;Batidas;Trabalhado;Noturno;Previsto;Saldo;Situação;Alertas"]
@@ -262,7 +262,8 @@ class ReportService:
         lines.append(f"Banco de horas anterior;;;;;;{hours(report.previous_balance_ms, True)};;")
         lines.append(f"Banco de horas ao fim do mês;;;;;;{hours(report.bank_ms, True)};;")
         lines.append(
-            "* lançamento ou correção manual; (+1) batida no dia seguinte; horas noturnas com hora reduzida;"
+            "* lançamento ou correção manual; (+1) batida no dia seguinte; (cel) feita no app de celular;"
+            " horas noturnas com hora reduzida;"
             f" tolerância de {settings.tolerance_minutes} min por dia;;;;;"
         )
         return "﻿" + "\r\n".join(lines)

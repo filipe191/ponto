@@ -72,7 +72,7 @@
       const monthName = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       const rows = r.days.map((d) => {
         const punches = d.punches.filter((p) => !p.deleted_at).map((p) =>
-          `${p.type === 'entrada' ? 'E' : 'S'} ${fmtT(p.ts)}${localDate(p.ts) !== d.date ? ' (+1)' : ''}${p.manual ? '*' : ''}${p.offline ? ' (off)' : ''}`).join('  ');
+          `${p.type === 'entrada' ? 'E' : 'S'} ${fmtT(p.ts)}${localDate(p.ts) !== d.date ? ' (+1)' : ''}${p.manual ? '*' : ''}${p.offline ? ' (off)' : ''}${p.source === 'app' ? ' (cel)' : ''}`).join('  ');
         const dia = new Date(d.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
         const status = [STATUS[d.status], d.holiday, ...d.alerts].filter(Boolean).join(' · ');
         const muted = ['folga', 'feriado', 'fora'].includes(d.status) ? 'muted' : '';
@@ -91,7 +91,7 @@
           <tfoot><tr><td colspan="2">Totais · banco anterior ${fmtSigned(r.previousBalanceMs)} · banco ao fim do mês ${fmtSigned(r.bankMs)}</td>
             <td class="n">${fmtH(r.totalMs)}</td><td class="n">${fmtH(r.nightMs)}</td><td class="n">${fmtH(r.expectedMs)}</td><td class="n">${fmtSigned(r.balanceMs)}</td><td></td></tr></tfoot>
         </table>
-        <p class="notes">E entrada · S saída · * lançada ou corrigida manualmente · (+1) no dia seguinte · (off) feita sem conexão · horas noturnas com hora reduzida de 52min30s · diferenças de até 10 min no dia não geram saldo.</p>
+        <p class="notes">E entrada · S saída · * lançada ou corrigida manualmente · (+1) no dia seguinte · (off) feita sem conexão · (cel) feita no app de celular · horas noturnas com hora reduzida de 52min30s · diferenças de até 10 min no dia não geram saldo.</p>
         <div class="signs"><div>${esc(r.employee.name)}</div><div>Responsável</div></div>
       </section>`;
     }

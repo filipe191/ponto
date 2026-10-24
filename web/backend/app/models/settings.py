@@ -15,6 +15,21 @@ class AppSetting(Base):
     value: Mapped[str] = mapped_column(String)
 
 
+class EmployeeDevice(Base):
+    """Celular liberado para um funcionário usar o app. A chave só é mostrada uma vez; aqui fica o hash."""
+
+    __tablename__ = "employee_devices"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="RESTRICT"))
+    name: Mapped[str] = mapped_column(String)
+    key_hash: Mapped[str] = mapped_column(String, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[str] = mapped_column(String)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Holiday(Base):
     """Feriado cadastrado pelo admin (municipal, estadual, ponto facultativo...).
 

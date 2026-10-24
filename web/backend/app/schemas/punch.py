@@ -54,6 +54,8 @@ class PunchOut(BaseModel):
     original_type: PunchType | None
     deleted_at: datetime | None
     receipt: str
+    source: str  # relogio, app ou admin
+    clock_suspect: bool  # batida do celular com horário à frente do servidor
 
 
 class PunchChangeOut(BaseModel):

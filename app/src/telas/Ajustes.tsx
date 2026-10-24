@@ -57,7 +57,7 @@ export function Ajustes({ estado }: { estado: EstadoPonto }) {
         <TextInput
           value={urlApi}
           onChangeText={setUrlApi}
-          placeholder="http://100.x.x.x:8080"
+          placeholder="https://100.x.x.x:9443"
           placeholderTextColor={cores.fora}
           autoCapitalize="none"
           autoCorrect={false}
@@ -65,8 +65,8 @@ export function Ajustes({ estado }: { estado: EstadoPonto }) {
           style={estilos.campo}
         />
         <Text style={estilos.ajuda}>
-          Endereço da API sem barra no final. Pelo Tailscale, use o IP da máquina onde o
-          backend está rodando.
+          Endereço do sistema de ponto, sem barra no final (o mesmo do painel, em https).
+          Pelo Tailscale, use o IP da máquina onde o sistema está rodando.
         </Text>
 
         <Text style={[estilos.rotulo, { marginTop: espaco.lg }]}>Chave de acesso</Text>
@@ -81,7 +81,7 @@ export function Ajustes({ estado }: { estado: EstadoPonto }) {
           style={estilos.campo}
         />
         <Text style={estilos.ajuda}>
-          A mesma definida em PONTO_API_KEY no servidor. Fica guardada no Keychain.
+          Gerada pelo administrador em Funcionários → Celular. Fica guardada no Keychain.
         </Text>
 
         <Pressable

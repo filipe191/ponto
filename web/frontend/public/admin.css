@@ -154,6 +154,28 @@
 .contract { display: block; color: var(--muted); font-size: 0.8rem; font-weight: 400; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
+/* ---------- App de celular ---------- */
+
+.count:not(:empty) {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.8rem;
+  text-align: center;
+  vertical-align: 4px;
+}
+#reqCard.has-pending { outline: 2px solid var(--danger); outline-offset: -2px; }
+.off-mark.suspect { color: var(--danger); }
+.dev-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.key-box { padding: 10px 12px; border: 1.5px solid var(--rule); border-radius: 10px; font-size: 0.9rem; }
+.key-box p + p { margin-top: 4px; }
+.key-line code { word-break: break-all; font-size: 0.85rem; user-select: all; }
+.key-box .btn { margin-top: 8px; }
+
 /* ---------- Janelas ---------- */
 
 dialog {

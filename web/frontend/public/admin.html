@@ -19,6 +19,21 @@
   </header>
 
   <main class="admin-page">
+    <section class="card" aria-labelledby="reqTitle" id="reqCard">
+      <header class="card-head">
+        <h2 class="card-title" id="reqTitle">Solicitações do app <span class="count" id="reqCount"></span></h2>
+        <label class="check"><input type="checkbox" id="reqShowAll"> Mostrar decididas</label>
+      </header>
+      <p class="hint">Batidas lançadas depois e correções feitas pelos funcionários no app de celular só valem depois de aprovadas aqui. A aprovação segue as mesmas regras das suas correções (histórico, mês fechado).</p>
+      <p class="form-error" id="reqError" role="alert"></p>
+      <div class="table-wrap">
+        <table class="timecard">
+          <thead><tr><th>Funcionário</th><th>Pedido</th><th>Pedido em</th><th></th></tr></thead>
+          <tbody id="requests"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="card" aria-labelledby="empTitleMain">
       <header class="card-head">
         <h1 class="card-title" id="empTitleMain">Funcionários</h1>
@@ -57,7 +72,7 @@
           <tbody id="report"></tbody>
         </table>
       </div>
-      <p class="legend">Clique numa batida para corrigi-la. * lançada ou corrigida manualmente · <sup>+1</sup> batida no dia seguinte (turno noturno) · <span class="off-mark">off</span> feita sem conexão (horário do aparelho, confira) · ⚠ aviso da CLT (passe o mouse ou toque) · horas noturnas com hora reduzida de 52min30s · diferenças de até 10 min no dia não geram saldo · o dia de hoje só entra no saldo quando terminar.</p>
+      <p class="legend">Clique numa batida para corrigi-la. * lançada ou corrigida manualmente · <sup>+1</sup> batida no dia seguinte (turno noturno) · <span class="off-mark">off</span> feita sem conexão no relógio · <span class="off-mark">cel</span> feita no app de celular (em vermelho: horário do celular adiantado) · ⚠ aviso da CLT (passe o mouse ou toque) · horas noturnas com hora reduzida de 52min30s · diferenças de até 10 min no dia não geram saldo · o dia de hoje só entra no saldo quando terminar.</p>
 
       <h3 class="subhead" id="manTitle">Lançamento manual</h3>
       <p class="hint" id="manHint">Para registrar uma batida esquecida. O motivo é obrigatório e fica no histórico.</p>
@@ -161,6 +176,30 @@
       <div class="dialog-actions">
         <button class="btn" type="button" id="fCancel">Cancelar</button>
         <button class="btn btn-primary" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Celulares (app) de um funcionário -->
+  <dialog id="devDialog" aria-labelledby="devTitle">
+    <h2 id="devTitle">Celulares</h2>
+    <p class="hint">O funcionário instala o app Ponto e, em <b>Ajustes</b>, informa o endereço do servidor e a chave gerada aqui. Cada celular tem a própria chave; revogue se o aparelho for perdido ou trocado.</p>
+    <ul class="history" id="devList"></ul>
+    <form class="dialog-form" id="devForm">
+      <label class="field">
+        <span>Nome do celular</span>
+        <input id="devName" placeholder="ex.: iPhone da Ana" required autocomplete="off">
+      </label>
+      <div class="key-box" id="devKey" hidden>
+        <p><b>Chave gerada.</b> Copie agora: ela não será mostrada de novo.</p>
+        <p class="key-line">Endereço do servidor: <code id="devUrl"></code></p>
+        <p class="key-line">Chave de acesso: <code id="devKeyValue"></code></p>
+        <button class="btn btn-sm" type="button" id="devCopy">Copiar chave</button>
+      </div>
+      <p class="form-error" id="devError" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="btn" type="button" id="devClose">Fechar</button>
+        <button class="btn btn-primary" type="submit">Gerar chave</button>
       </div>
     </form>
   </dialog>
@@ -271,6 +310,7 @@
               <td>${fmtH(e.daily_minutes * 60000)} · ${workdaysLabel(e.workdays)}</td>
               <td class="actions">
                 <button class="btn btn-sm" data-act="edit" data-id="${e.id}">Editar</button>
+                <button class="btn btn-sm" data-act="devices" data-id="${e.id}">Celular</button>
                 <button class="btn btn-sm" data-act="toggle" data-id="${e.id}">${e.active ? 'Desativar' : 'Ativar'}</button>
                 <button class="btn btn-sm btn-danger" data-act="del" data-id="${e.id}">Excluir</button>
               </td>
@@ -340,6 +380,7 @@
       $('empError').textContent = '';
       try {
         if (btn.dataset.act === 'edit') return openEmpDialog(emp);
+        if (btn.dataset.act === 'devices') return openDevDialog(emp);
         if (btn.dataset.act === 'toggle') {
           await api('/employees/' + emp.id, { method: 'PATCH', body: JSON.stringify({ active: !emp.active }) });
         } else if (btn.dataset.act === 'del') {
@@ -366,7 +407,10 @@
     function chip(p, day) {
       const next = localDate(p.ts) !== day ? '<sup>+1</sup>' : '';
       const off = p.offline ? '<span class="off-mark" title="Feita sem conexão: horário do aparelho">off</span>' : '';
-      const label = `${kind(p.type)} ${fmtT(p.ts)}${next}${p.manual ? '*' : ''}${off}`;
+      const cel = p.source === 'app'
+        ? `<span class="off-mark${p.clock_suspect ? ' suspect' : ''}" title="Feita no app de celular${p.clock_suspect ? ': horário do celular à frente do servidor, confira' : ''}">cel</span>`
+        : '';
+      const label = `${kind(p.type)} ${fmtT(p.ts)}${next}${p.manual ? '*' : ''}${off}${cel}`;
       if (p.deleted_at) {
         return `<span class="chip">
           <span class="stamp deleted" title="Excluída em ${fmtDT(p.deleted_at)}">${label}</span>
@@ -685,7 +729,123 @@
       } catch (err) { $('kioskMsg').textContent = err.message; }
     });
 
+    // ---------- Solicitações do app ----------
+
+    const REQ_ACTION = { incluir: 'Incluir batida', alterar: 'Corrigir batida', excluir: 'Excluir batida' };
+    const REQ_STATUS = { aprovada: 'aprovada', recusada: 'recusada' };
+
+    function describeRequest(r) {
+      const current = r.current_ts ? `${kindLabel(r.current_type)} ${fmtDT(r.current_ts)}` : '';
+      const wanted = r.ts || r.type ? `${kindLabel(r.type || r.current_type)} ${fmtDT(r.ts || r.current_ts)}` : '';
+      if (r.action === 'incluir') return `${wanted}`;
+      if (r.action === 'excluir') return `<s>${current}</s>`;
+      return `${current} → <b>${wanted}</b>`;
+    }
+
+    async function loadRequests() {
+      const all = $('reqShowAll').checked;
+      let items = [];
+      try { items = await api(`/requests?status=${all ? '' : 'pendente'}`); } catch (err) { $('reqError').textContent = err.message; }
+      const pending = items.filter((r) => r.status === 'pendente').length;
+      $('reqCount').textContent = pending ? pending : '';
+      $('reqCard').classList.toggle('has-pending', pending > 0);
+      $('requests').innerHTML = items.length
+        ? items.map((r) => `
+            <tr>
+              <td class="who">${esc(r.employee_name)}</td>
+              <td class="wrap"><b>${REQ_ACTION[r.action]}</b>: ${describeRequest(r)}
+                ${r.note ? `<small class="contract">${esc(r.note)}</small>` : ''}
+                ${r.status !== 'pendente' ? `<small class="contract">${REQ_STATUS[r.status]} por ${esc(r.decided_by)} em ${fmtDT(r.decided_at)}${r.decision_note ? ` · ${esc(r.decision_note)}` : ''}</small>` : ''}</td>
+              <td>${fmtDT(r.requested_at)}</td>
+              <td class="actions">${r.status === 'pendente' ? `
+                <button class="btn btn-sm btn-primary" data-req="approve" data-id="${r.id}">Aprovar</button>
+                <button class="btn btn-sm btn-danger" data-req="reject" data-id="${r.id}">Recusar</button>` : `<span class="tag ${r.status === 'recusada' ? 'falta' : 'andamento'}">${REQ_STATUS[r.status]}</span>`}</td>
+            </tr>`).join('')
+        : `<tr><td colspan="4" class="empty">${all ? 'Nenhuma solicitação ainda.' : 'Nenhuma solicitação pendente.'}</td></tr>`;
+    }
+
+    $('reqShowAll').addEventListener('change', loadRequests);
+    $('requests').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-req]');
+      if (!btn) return;
+      $('reqError').textContent = '';
+      const approve = btn.dataset.req === 'approve';
+      const note = await ask({
+        title: approve ? 'Aprovar a solicitação?' : 'Recusar a solicitação?',
+        message: approve
+          ? 'A batida será lançada ou corrigida agora, com o pedido registrado no histórico.'
+          : 'Nada muda no ponto. O motivo fica registrado na solicitação.',
+        input: approve ? 'Observação (opcional)' : 'Motivo da recusa (opcional)',
+        ok: approve ? 'Aprovar' : 'Recusar',
+        danger: !approve,
+      });
+      if (note === null) return;
+      try {
+        await api(`/requests/${btn.dataset.id}/${btn.dataset.req}`, { method: 'POST', body: JSON.stringify({ note }) });
+      } catch (err) { $('reqError').textContent = err.message; }
+      loadRequests();
+      loadReport();
+    });
+
+    // ---------- Celulares (chaves do app) ----------
+
+    let devEmp = null;
+
+    async function loadDevices() {
+      let items = [];
+      try { items = await api(`/employees/${devEmp.id}/devices`); } catch (err) { $('devError').textContent = err.message; }
+      $('devList').innerHTML = items.length
+        ? items.map((d) => `<li class="dev-row">
+            <span><b>${esc(d.name)}</b> · criada em ${fmtDT(d.created_at)} por ${esc(d.created_by)}
+              · ${d.revoked_at ? `revogada em ${fmtDT(d.revoked_at)}` : d.last_used_at ? `último uso ${fmtDT(d.last_used_at)}` : 'ainda não usada'}</span>
+            ${d.revoked_at ? '' : `<button class="btn btn-sm btn-danger" type="button" data-dev="${d.id}">Revogar</button>`}
+          </li>`).join('')
+        : '<li class="muted">Nenhum celular liberado.</li>';
+    }
+
+    function openDevDialog(emp) {
+      devEmp = emp;
+      $('devTitle').textContent = `Celulares de ${emp.name}`;
+      $('devName').value = '';
+      $('devKey').hidden = true;
+      $('devError').textContent = '';
+      $('devDialog').showModal();
+      loadDevices();
+    }
+
+    $('devClose').addEventListener('click', () => $('devDialog').close());
+    $('devDialog').addEventListener('close', () => { $('devKeyValue').textContent = ''; });
+    $('devForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('devError').textContent = '';
+      try {
+        const d = await api(`/employees/${devEmp.id}/devices`, { method: 'POST', body: JSON.stringify({ name: $('devName').value }) });
+        $('devUrl').textContent = location.origin;
+        $('devKeyValue').textContent = d.key;
+        $('devKey').hidden = false;
+        $('devName').value = '';
+        loadDevices();
+      } catch (err) { $('devError').textContent = err.message; }
+    });
+    $('devCopy').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText($('devKeyValue').textContent);
+        $('devCopy').textContent = 'Copiada';
+      } catch { $('devCopy').textContent = 'Selecione e copie'; }
+      setTimeout(() => { $('devCopy').textContent = 'Copiar chave'; }, 2000);
+    });
+    $('devList').addEventListener('click', async (e) => {
+      const id = e.target.closest('[data-dev]')?.dataset.dev;
+      if (!id) return;
+      const ok = await ask({ title: 'Revogar este celular?', message: 'O app nesse aparelho para de sincronizar na hora. Batidas já enviadas continuam valendo.', ok: 'Revogar', danger: true });
+      if (ok === null) return;
+      try { await api(`/devices/${id}`, { method: 'DELETE' }); } catch (err) { $('devError').textContent = err.message; }
+      loadDevices();
+    });
+
     // A página só abre com o login do admin (o nginx confere o cookie antes)
+    loadRequests();
+    setInterval(loadRequests, 60000);
     fetch('/api/auth/admin').then((r) => (r.ok ? r.json() : null)).then((me) => {
       currentUser = me?.user || '';
       $('whoami').textContent = currentUser ? `Você entrou como ${currentUser}` : '';
