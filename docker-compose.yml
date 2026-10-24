@@ -1,0 +1,39 @@
+name: ponto
+
+services:
+  backend:
+    build: ./backend
+    container_name: ponto-backend
+    restart: unless-stopped
+    environment:
+      TZ: America/Sao_Paulo
+      PGHOST: postgres_db
+      PGPORT: 5432
+      PGDATABASE: ponto
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ponto123}
+      SECRET_KEY: ${SECRET_KEY:-}
+      PIN_KEY: ${PIN_KEY:?Defina PIN_KEY no .env (openssl rand -hex 32)}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      API_DOCS: ${API_DOCS:-false}
+    networks:
+      - default
+      - postgres
+
+  frontend:
+    build: ./frontend
+    container_name: ponto-frontend
+    restart: unless-stopped
+    ports:
+      - "9092:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+networks:
+  # Rede do Postgres já existente (container postgres_db)
+  postgres:
+    name: postgres_pg_network
+    external: true

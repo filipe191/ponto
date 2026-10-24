@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Entrar · Ponto</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="bar">
+    <span class="brand">Ponto</span>
+  </header>
+
+  <main class="login-page">
+    <section class="machine" aria-labelledby="loginTitle">
+      <div class="readout">
+        <div class="readout-time" aria-hidden="true"><span id="hm">--:--</span></div>
+        <p class="readout-date" id="loginTitle">Entre com a conta de administrador</p>
+      </div>
+
+      <form class="login-form" id="loginForm" novalidate>
+        <label class="field">
+          <span>Usuário</span>
+          <input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+        </label>
+        <label class="field">
+          <span>Senha</span>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="form-error" id="error" role="alert"></p>
+        <button class="key key-go" type="submit" id="submit">Entrar</button>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function tick() {
+      const now = new Date();
+      $('hm').textContent = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    // Só aceita voltar para um caminho do próprio site
+    const next = new URLSearchParams(location.search).get('next');
+    const target = next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/login') ? next : '/';
+
+    $('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = $('username').value.trim();
+      const password = $('password').value;
+      if (!username || !password) {
+        $('error').textContent = 'Preencha usuário e senha.';
+        return;
+      }
+      $('error').textContent = '';
+      $('submit').disabled = true;
+      $('submit').textContent = 'Entrando…';
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        if (res.ok) return location.replace(target);
+        const data = await res.json().catch(() => ({}));
+        $('error').textContent = res.status === 401
+          ? 'Usuário ou senha incorretos.'
+          : data.error || 'Não foi possível entrar. Tente de novo.';
+        $('password').value = '';
+        $('password').focus();
+      } catch {
+        $('error').textContent = 'Sem conexão com o servidor. Tente de novo em instantes.';
+      }
+      $('submit').disabled = false;
+      $('submit').textContent = 'Entrar';
+    });
+  </script>
+</body>
+</html>

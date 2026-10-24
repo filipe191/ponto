@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Trocar senha · Ponto</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="/">Ponto</a>
+    <nav>
+      <a href="/">Relógio</a>
+      <a href="/admin">Administração</a>
+    </nav>
+  </header>
+
+  <main class="login-page">
+    <section class="machine" aria-labelledby="title">
+      <div class="readout">
+        <p class="readout-date" id="title">Trocar senha<span id="who"></span></p>
+      </div>
+
+      <form class="login-form" id="form" novalidate>
+        <input type="text" id="username" autocomplete="username" hidden>
+        <label class="field">
+          <span>Senha atual</span>
+          <input id="current" type="password" autocomplete="current-password" required autofocus>
+        </label>
+        <label class="field">
+          <span>Nova senha</span>
+          <input id="new1" type="password" autocomplete="new-password" minlength="6" required>
+        </label>
+        <label class="field">
+          <span>Repita a nova senha</span>
+          <input id="new2" type="password" autocomplete="new-password" minlength="6" required>
+        </label>
+        <p class="form-hint">Mínimo de 6 caracteres. Outros aparelhos conectados precisarão entrar de novo, e os relógios (exceto este aparelho) precisarão ser ativados de novo.</p>
+        <p class="form-error" id="error" role="alert"></p>
+        <p class="form-ok" id="ok" role="status"></p>
+        <button class="key key-go" type="submit" id="submit">Salvar nova senha</button>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    fetch('/api/auth/me').then((r) => r.ok ? r.json() : null).then((me) => {
+      if (!me) return;
+      $('who').textContent = ` · ${me.user}`;
+      $('username').value = me.user;
+    }).catch(() => {});
+
+    $('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('error').textContent = '';
+      $('ok').textContent = '';
+      const current = $('current').value;
+      const novo = $('new1').value;
+      if (!current || !novo) return ($('error').textContent = 'Preencha a senha atual e a nova.');
+      if (novo.length < 6) return ($('error').textContent = 'A nova senha deve ter pelo menos 6 caracteres.');
+      if (novo !== $('new2').value) return ($('error').textContent = 'As duas novas senhas não conferem.');
+
+      $('submit').disabled = true;
+      $('submit').textContent = 'Salvando…';
+      try {
+        const res = await fetch('/api/auth/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password: current, new_password: novo }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) return location.replace('/login?next=/senha');
+        if (res.ok) {
+          $('form').reset();
+          $('ok').textContent = 'Senha alterada.';
+        } else {
+          $('error').textContent = data.error || 'Não foi possível trocar a senha.';
+        }
+      } catch {
+        $('error').textContent = 'Sem conexão com o servidor. Tente de novo em instantes.';
+      }
+      $('submit').disabled = false;
+      $('submit').textContent = 'Salvar nova senha';
+    });
+  </script>
+</body>
+</html>

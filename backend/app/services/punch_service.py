@@ -1,0 +1,143 @@
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.errors import BadRequest, Conflict, NotFound
+from app.core.security import hash_pin
+from app.models import Punch, PunchAction, PunchChange, PunchType
+from app.repositories.employee_repository import EmployeeRepository
+from app.repositories.punch_repository import PunchRepository
+from app.schemas.punch import ManualPunchCreate, PunchChangeOut, PunchResult, PunchUpdate, TodayPunch
+from app.services.shifts import pair_shifts
+from app.utils.dates import day_bounds, now_local, to_local
+
+# Evita entrada e saída seguidas por toque duplo ou PIN digitado duas vezes
+MIN_PUNCH_INTERVAL = timedelta(minutes=1)
+
+NOTE_REQUIRED = "Informe o motivo do lançamento ou da correção"
+
+
+def _with_tz(ts: datetime) -> datetime:
+    return ts if ts.tzinfo else ts.replace(tzinfo=settings.timezone)
+
+
+class PunchService:
+    def __init__(self, db: Session):
+        self.db = db
+        self.employees = EmployeeRepository(db)
+        self.punches = PunchRepository(db)
+
+    def register(self, pin: str) -> PunchResult:
+        """Bate o ponto pelo PIN: é saída se houver uma entrada aberta há menos de MAX_SHIFT_HOURS."""
+        employee = self.employees.get_by_pin_hash(hash_pin(pin), lock=True)
+        if not employee or not employee.active:
+            raise NotFound("PIN não reconhecido")
+
+        now = datetime.now(timezone.utc)
+        last = self.punches.last_for_employee(employee.id, since=now - settings.max_shift)
+        if last and now - last.ts < MIN_PUNCH_INTERVAL:
+            raise Conflict(
+                f"{employee.name}, seu ponto já foi registrado às {to_local(last.ts):%H:%M}. "
+                "Aguarde um minuto para bater de novo."
+            )
+        kind = PunchType.SAIDA if last and last.type == PunchType.ENTRADA else PunchType.ENTRADA
+
+        self.punches.add(Punch(employee_id=employee.id, ts=now, type=kind))
+        self.db.commit()
+        return PunchResult(name=employee.name, type=kind, ts=now)
+
+    def today(self) -> list[TodayPunch]:
+        """Jornadas de hoje, incluindo a que começou ontem e ainda está aberta ou fechou hoje."""
+        now = datetime.now(timezone.utc)
+        today = now_local().date()
+        start, end = day_bounds(today)
+        punches = self.punches.list_between(start - settings.max_shift, end)
+
+        by_employee: dict[int, list[Punch]] = {}
+        for p in punches:
+            by_employee.setdefault(p.employee_id, []).append(p)
+
+        result = []
+        for items in by_employee.values():
+            for shift in pair_shifts(items, settings.max_shift):
+                touches_today = any(to_local(p.ts).date() == today for p in shift.punches)
+                if touches_today or shift.is_open(now, settings.max_shift):
+                    result.extend(shift.punches)
+        result.sort(key=lambda p: p.ts)
+        return [TodayPunch(employee_id=p.employee_id, name=p.employee.name, ts=p.ts, type=p.type) for p in result]
+
+    # ---------- Correções do admin (sempre com histórico) ----------
+
+    def add_manual(self, data: ManualPunchCreate, user: str) -> None:
+        if not self.employees.get(data.employee_id):
+            raise BadRequest("Funcionário inválido")
+        note = (data.note or "").strip()
+        if not note:
+            raise BadRequest(NOTE_REQUIRED)
+        punch = self.punches.add(
+            Punch(employee_id=data.employee_id, ts=_with_tz(data.ts), type=data.type, manual=True, note=note)
+        )
+        self._log(punch, user, PunchAction.CRIADA, note=note)
+        self.db.commit()
+
+    def update(self, punch_id: int, data: PunchUpdate, user: str) -> None:
+        """Corrige horário/tipo; o original do relógio fica guardado e a batida passa a contar como manual (*)."""
+        punch = self._get(punch_id)
+        if punch.deleted_at:
+            raise BadRequest("Restaure a batida antes de alterá-la")
+        old_ts, old_type = punch.ts, punch.type
+        if not punch.manual and punch.original_ts is None:
+            punch.original_ts, punch.original_type = punch.ts, punch.type
+        if data.ts is not None:
+            punch.ts = _with_tz(data.ts)
+        if data.type is not None:
+            punch.type = data.type
+        if data.note is not None:
+            punch.note = data.note.strip() or None
+        if not punch.note:
+            raise BadRequest(NOTE_REQUIRED)
+        punch.manual = True
+        self._log(punch, user, PunchAction.ALTERADA, old_ts=old_ts, old_type=old_type, note=punch.note)
+        self.db.commit()
+
+    def delete(self, punch_id: int, user: str, note: str = "") -> None:
+        """Exclusão lógica: a batida sai do espelho e das horas, mas continua registrada."""
+        punch = self._get(punch_id)
+        if punch.deleted_at:
+            return
+        punch.deleted_at = datetime.now(timezone.utc)
+        self._log(punch, user, PunchAction.EXCLUIDA, old_ts=punch.ts, old_type=punch.type, new=False, note=note)
+        self.db.commit()
+
+    def restore(self, punch_id: int, user: str) -> None:
+        punch = self._get(punch_id)
+        if not punch.deleted_at:
+            return
+        punch.deleted_at = None
+        self._log(punch, user, PunchAction.RESTAURADA)
+        self.db.commit()
+
+    def history(self, punch_id: int) -> list[PunchChangeOut]:
+        self._get(punch_id)
+        return [PunchChangeOut.model_validate(c) for c in self.punches.changes_for(punch_id)]
+
+    def _log(self, punch, user, action, old_ts=None, old_type=None, new=True, note=None) -> None:
+        self.punches.add_change(
+            PunchChange(
+                punch_id=punch.id,
+                user=user,
+                action=action,
+                old_ts=old_ts,
+                old_type=old_type,
+                new_ts=punch.ts if new else None,
+                new_type=punch.type if new else None,
+                note=(note or "").strip() or None,
+            )
+        )
+
+    def _get(self, punch_id: int) -> Punch:
+        punch = self.punches.get(punch_id)
+        if not punch:
+            raise NotFound("Batida não encontrada")
+        return punch

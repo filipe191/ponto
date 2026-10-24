@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Administração · Ponto</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="/">Ponto</a>
+    <nav>
+      <a href="/">Relógio</a>
+      <a href="/senha">Trocar senha</a>
+      <button type="button" id="logout">Sair</button>
+    </nav>
+  </header>
+
+  <main class="admin-page">
+    <section class="card" aria-labelledby="empTitleMain">
+      <header class="card-head">
+        <h1 class="card-title" id="empTitleMain">Funcionários</h1>
+        <button class="btn btn-primary" type="button" id="newEmp">Novo funcionário</button>
+      </header>
+      <p class="form-error" id="empError" role="alert"></p>
+      <div class="table-wrap">
+        <table class="timecard">
+          <thead><tr><th>Nome</th><th>Jornada prevista</th><th></th></tr></thead>
+          <tbody id="employees"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="repTitle">
+      <header class="card-head">
+        <h2 class="card-title" id="repTitle">Espelho de ponto</h2>
+        <p class="card-sub" id="repSub"></p>
+      </header>
+      <div class="toolbar">
+        <select class="input" id="repEmp" aria-label="Funcionário"></select>
+        <input class="input" type="month" id="repMonth" aria-label="Mês">
+        <label class="check"><input type="checkbox" id="showDeleted"> Mostrar excluídas</label>
+        <button class="btn" type="button" id="csvBtn">Exportar CSV</button>
+      </div>
+      <p class="form-error" id="repError" role="alert"></p>
+
+      <div class="summary" id="summary"></div>
+
+      <div class="table-wrap">
+        <table class="timecard">
+          <thead><tr><th>Dia</th><th>Batidas</th><th class="num">Trabalhado</th><th class="num col-expected">Previsto</th><th class="num">Saldo</th></tr></thead>
+          <tbody id="report"></tbody>
+        </table>
+      </div>
+      <p class="legend">Clique numa batida para corrigi-la. * lançada ou corrigida manualmente · <sup>+1</sup> batida no dia seguinte (turno noturno) · o dia de hoje só entra no saldo quando terminar.</p>
+
+      <h3 class="subhead" id="manTitle">Lançamento manual</h3>
+      <p class="hint" id="manHint">Para registrar uma batida esquecida. O motivo é obrigatório e fica no histórico.</p>
+      <form class="toolbar" id="manual">
+        <input class="input" type="datetime-local" id="manTs" required aria-label="Data e hora">
+        <select class="input" id="manType" aria-label="Tipo">
+          <option value="entrada">Entrada</option>
+          <option value="saida">Saída</option>
+        </select>
+        <input class="input grow" type="text" id="manNote" placeholder="Motivo (obrigatório)" required aria-label="Motivo">
+        <button class="btn btn-primary" type="submit" id="manSubmit">Lançar</button>
+        <button class="btn" type="button" id="manCancel" hidden>Cancelar</button>
+      </form>
+      <p class="form-error" id="manError" role="alert"></p>
+      <div id="history"></div>
+    </section>
+  </main>
+
+  <!-- Cadastro / edição de funcionário -->
+  <dialog id="empDialog" aria-labelledby="empTitle">
+    <h2 id="empTitle">Novo funcionário</h2>
+    <form class="dialog-form" id="empForm">
+      <label class="field">
+        <span>Nome</span>
+        <input id="fName" required autocomplete="off">
+      </label>
+      <label class="field">
+        <span id="fPinLabel">PIN (4 a 8 dígitos)</span>
+        <input id="fPin" type="password" inputmode="numeric" pattern="\d{4,8}" autocomplete="new-password">
+      </label>
+      <label class="field">
+        <span>Jornada diária (horas:minutos)</span>
+        <input id="fHours" inputmode="numeric" pattern="([01]?\d|2[0-4]):[0-5]\d" placeholder="08:00" title="Horas e minutos, ex.: 08:00 ou 06:30" required autocomplete="off">
+      </label>
+      <fieldset class="field" style="border:0;padding:0;margin:0">
+        <legend style="padding:0;margin-bottom:6px;font-size:.9rem;font-weight:600;color:var(--muted)">Dias de trabalho</legend>
+        <div class="days" id="fDays"></div>
+      </fieldset>
+      <p class="form-error" id="fError" role="alert"></p>
+      <div class="dialog-actions">
+        <button class="btn" type="button" id="fCancel">Cancelar</button>
+        <button class="btn btn-primary" type="submit">Salvar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Confirmação (com campo de texto opcional) -->
+  <dialog id="askDialog" aria-labelledby="askTitle">
+    <h2 id="askTitle"></h2>
+    <form class="dialog-form" method="dialog">
+      <p id="askMessage"></p>
+      <label class="field" id="askInputWrap">
+        <span id="askInputLabel"></span>
+        <input id="askInput" autocomplete="off">
+      </label>
+      <div class="dialog-actions">
+        <button class="btn" value="cancel" formnovalidate>Cancelar</button>
+        <button class="btn btn-primary" value="ok" id="askOk">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pad = (n) => String(n).padStart(2, '0');
+    const WEEK = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
+    const STATUS = { falta: 'falta', incompleto: 'incompleto', andamento: 'em andamento' };
+    const ACTION = { criada: 'lançada', alterada: 'corrigida', excluida: 'excluída', restaurada: 'restaurada' };
+
+    let employees = [];
+    let punches = {};       // batidas do espelho aberto, por id
+    let editingId = null;   // batida sendo corrigida no formulário (null = novo lançamento)
+    let editingEmp = null;  // funcionário aberto na janela (null = novo)
+
+    // Sessão do admin expirada ou encerrada: volta para o login
+    const toLogin = () => location.replace('/login?next=/admin');
+
+    async function api(path, opts = {}) {
+      const res = await fetch('/api/admin' + path, {
+        ...opts,
+        headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) { toLogin(); throw new Error(data.error); }
+      if (!res.ok) throw new Error(data.error || 'Erro');
+      return data;
+    }
+
+    // ---------- Formatação ----------
+
+    const fmtH = (ms) => {
+      const min = Math.round(Math.abs(ms) / 60000);
+      return `${Math.floor(min / 60)}h${pad(min % 60)}`;
+    };
+    const fmtSigned = (ms) => {
+      const min = Math.round(ms / 60000);
+      return (min > 0 ? '+' : min < 0 ? '−' : '') + fmtH(ms);
+    };
+    const signCls = (ms) => { const min = Math.round(ms / 60000); return min > 0 ? 'pos' : min < 0 ? 'neg' : ''; };
+    const fmtT = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const fmtDT = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const kind = (t) => (t === 'entrada' ? 'E' : 'S');
+    const kindLabel = (t) => (t === 'entrada' ? 'Entrada' : 'Saída');
+    const localDate = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+    // ISO → valor do <input type="datetime-local"> no horário local
+    const toLocalInput = (iso) => { const d = new Date(iso); return `${localDate(iso)}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+
+    function workdaysLabel(w) {
+      const named = { '': 'sem dias de trabalho', 12345: 'seg a sex', 123456: 'seg a sáb', 1234567: 'todos os dias' };
+      return named[w] ?? [...w].map((d) => WEEK[d - 1]).join(', ');
+    }
+
+    // ---------- Janela de confirmação ----------
+
+    function ask({ title, message, input = '', ok = 'Confirmar', danger = false }) {
+      const dlg = $('askDialog');
+      $('askTitle').textContent = title;
+      $('askMessage').textContent = message;
+      $('askInputWrap').hidden = !input;
+      $('askInputLabel').textContent = input;
+      $('askInput').value = '';
+      $('askOk').textContent = ok;
+      $('askOk').className = 'btn ' + (danger ? 'btn-danger-solid' : 'btn-primary');
+      dlg.returnValue = '';
+      dlg.showModal();
+      return new Promise((resolve) => {
+        dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok' ? $('askInput').value.trim() : null), { once: true });
+      });
+    }
+
+    $('logout').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      location.replace('/'); // num aparelho liberado como relógio, volta para o relógio
+    });
+
+    // ---------- Funcionários ----------
+
+    $('fDays').innerHTML = WEEK.map((d, i) => `<label><input type="checkbox" value="${i + 1}"><span>${d}</span></label>`).join('');
+
+    async function loadEmployees() {
+      employees = await api('/employees');
+      $('employees').innerHTML = employees.length
+        ? employees.map((e) => `
+            <tr>
+              <td class="who">${esc(e.name)}${e.active ? '' : '<span class="tag inativo">inativo</span>'}</td>
+              <td>${fmtH(e.daily_minutes * 60000)} · ${workdaysLabel(e.workdays)}</td>
+              <td class="actions">
+                <button class="btn btn-sm" data-act="edit" data-id="${e.id}">Editar</button>
+                <button class="btn btn-sm" data-act="toggle" data-id="${e.id}">${e.active ? 'Desativar' : 'Ativar'}</button>
+                <button class="btn btn-sm btn-danger" data-act="del" data-id="${e.id}">Excluir</button>
+              </td>
+            </tr>`).join('')
+        : '<tr><td colspan="3" class="empty">Nenhum funcionário cadastrado. Use “Novo funcionário”.</td></tr>';
+
+      const current = $('repEmp').value;
+      $('repEmp').innerHTML = employees.map((e) => `<option value="${e.id}">${esc(e.name)}${e.active ? '' : ' (inativo)'}</option>`).join('');
+      if (employees.some((e) => String(e.id) === current)) $('repEmp').value = current;
+    }
+
+    function openEmpDialog(emp = null) {
+      editingEmp = emp;
+      $('empTitle').textContent = emp ? `Editar ${emp.name}` : 'Novo funcionário';
+      $('fName').value = emp?.name || '';
+      $('fPin').value = '';
+      $('fPin').required = !emp;
+      $('fPinLabel').textContent = emp ? 'Novo PIN (deixe em branco para manter)' : 'PIN (4 a 8 dígitos)';
+      const minutes = emp ? emp.daily_minutes : 480;
+      $('fHours').value = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+      const days = emp ? emp.workdays : '12345';
+      document.querySelectorAll('#fDays input').forEach((cb) => { cb.checked = days.includes(cb.value); });
+      $('fError').textContent = '';
+      $('empDialog').showModal();
+      $('fName').focus();
+    }
+
+    $('newEmp').addEventListener('click', () => openEmpDialog());
+    $('fCancel').addEventListener('click', () => $('empDialog').close());
+
+    $('empForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const [h, m] = ($('fHours').value || '00:00').split(':').map(Number);
+      const body = {
+        name: $('fName').value,
+        daily_minutes: h * 60 + m,
+        workdays: [...document.querySelectorAll('#fDays input:checked')].map((cb) => cb.value).join(''),
+      };
+      const pin = $('fPin').value.trim();
+      if (pin || !editingEmp) body.pin = pin;
+      try {
+        if (editingEmp) await api('/employees/' + editingEmp.id, { method: 'PATCH', body: JSON.stringify(body) });
+        else await api('/employees', { method: 'POST', body: JSON.stringify(body) });
+        $('empDialog').close();
+        await loadEmployees();
+        loadReport();
+      } catch (err) { $('fError').textContent = err.message; }
+    });
+
+    $('employees').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      const emp = employees.find((x) => String(x.id) === btn.dataset.id);
+      $('empError').textContent = '';
+      try {
+        if (btn.dataset.act === 'edit') return openEmpDialog(emp);
+        if (btn.dataset.act === 'toggle') {
+          await api('/employees/' + emp.id, { method: 'PATCH', body: JSON.stringify({ active: !emp.active }) });
+        } else if (btn.dataset.act === 'del') {
+          const ok = await ask({
+            title: `Excluir ${emp.name}?`,
+            message: 'Só cadastros feitos por engano, sem nenhum registro de ponto, podem ser excluídos. Quem já bateu ponto deve ser desativado.',
+            ok: 'Excluir',
+            danger: true,
+          });
+          if (ok === null) return;
+          await api('/employees/' + emp.id, { method: 'DELETE' });
+        }
+        await loadEmployees();
+        loadReport();
+      } catch (err) { $('empError').textContent = err.message; }
+    });
+
+    // ---------- Espelho de ponto ----------
+
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+    $('repMonth').value = currentMonth;
+
+    function chip(p, day) {
+      const next = localDate(p.ts) !== day ? '<sup>+1</sup>' : '';
+      const label = `${kind(p.type)} ${fmtT(p.ts)}${next}${p.manual ? '*' : ''}`;
+      if (p.deleted_at) {
+        return `<span class="chip">
+          <span class="stamp deleted" title="Excluída em ${fmtDT(p.deleted_at)}">${label}</span>
+          <button class="x restore" data-restore="${p.id}" title="Restaurar batida" aria-label="Restaurar batida">↺</button>
+        </span>`;
+      }
+      const info = [];
+      if (p.original_ts) info.push(`Original do relógio: ${kind(p.original_type)} ${fmtT(p.original_ts)}`);
+      if (p.note) info.push(`Motivo: ${p.note}`);
+      info.push('Clique para corrigir');
+      const cls = `${p.type === 'entrada' ? 'in' : 'out'}${String(p.id) === editingId ? ' editing' : ''}`;
+      return `<span class="chip">
+        <button class="stamp ${cls}" data-edit="${p.id}" title="${esc(info.join(' · '))}">${label}</button>
+        <button class="x" data-del="${p.id}" title="Excluir batida" aria-label="Excluir batida">✕</button>
+      </span>`;
+    }
+
+    async function loadReport() {
+      const emp = $('repEmp').value;
+      const month = $('repMonth').value;
+      $('repError').textContent = '';
+      if (!emp || !month) {
+        $('summary').innerHTML = '';
+        $('repSub').textContent = '';
+        $('report').innerHTML = '<tr><td colspan="5" class="empty">Cadastre um funcionário para ver o espelho.</td></tr>';
+        return;
+      }
+      let r;
+      try { r = await api(`/report?employee=${emp}&month=${month}`); } catch (err) { $('repError').textContent = err.message; return; }
+
+      const showDeleted = $('showDeleted').checked;
+      const e = employees.find((x) => String(x.id) === emp);
+      $('repSub').textContent = e ? `Jornada: ${fmtH(e.daily_minutes * 60000)} · ${workdaysLabel(e.workdays)}` : '';
+      punches = {};
+      const count = (s) => r.days.filter((d) => d.status === s).length;
+      const untilNote = month === currentMonth ? '<small>até ontem</small>' : '';
+      $('summary').innerHTML = `
+        <div><span>Trabalhado</span><strong>${fmtH(r.totalMs)}</strong></div>
+        <div><span>Previsto</span><strong>${fmtH(r.expectedMs)}</strong>${untilNote}</div>
+        <div><span>Saldo do mês</span><strong class="${signCls(r.balanceMs)}">${fmtSigned(r.balanceMs)}</strong>${untilNote}</div>
+        <div><span>Banco de horas</span><strong class="${signCls(r.bankMs)}">${fmtSigned(r.bankMs)}</strong><small>anterior: ${fmtSigned(r.previousBalanceMs)}</small></div>
+        <div><span>Faltas</span><strong>${count('falta')}</strong></div>
+        <div><span>Incompletos</span><strong>${count('incompleto')}</strong></div>`;
+
+      $('report').innerHTML = r.days.length
+        ? r.days.map((d) => {
+            const dia = new Date(d.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+            d.punches.forEach((p) => { punches[p.id] = p; });
+            const chips = d.punches.filter((p) => showDeleted || !p.deleted_at).map((p) => chip(p, d.date)).join('');
+            const tag = STATUS[d.status] ? `<span class="tag ${d.status}">${STATUS[d.status]}</span>` : '';
+            const hasHours = d.workedMs || d.punches.some((p) => !p.deleted_at);
+            const showBalance = d.closed && (d.expectedMs || d.workedMs);
+            return `<tr class="${d.status === 'folga' ? 'folga' : ''}">
+              <td class="day">${dia}${tag}</td>
+              <td class="wrap"><div class="chips">${chips || '<span class="muted">—</span>'}</div></td>
+              <td class="num">${hasHours ? fmtH(d.workedMs) : ''}</td>
+              <td class="num muted col-expected">${d.expectedMs ? fmtH(d.expectedMs) : ''}</td>
+              <td class="num ${signCls(d.balanceMs)}">${showBalance ? fmtSigned(d.balanceMs) : ''}</td>
+            </tr>`;
+          }).join('')
+        : '<tr><td colspan="5" class="empty">Este mês ainda não começou.</td></tr>';
+    }
+
+    $('repEmp').addEventListener('change', () => { cancelEdit(); loadReport(); });
+    $('repMonth').addEventListener('change', () => { cancelEdit(); loadReport(); });
+    $('showDeleted').addEventListener('change', loadReport);
+
+    $('report').addEventListener('click', async (e) => {
+      const t = e.target.closest('[data-edit], [data-del], [data-restore]');
+      if (!t) return;
+      if (t.dataset.edit) return startEdit(t.dataset.edit);
+      $('manError').textContent = '';
+      try {
+        if (t.dataset.del) {
+          const id = t.dataset.del;
+          const note = await ask({
+            title: 'Excluir esta batida?',
+            message: 'Ela deixa de contar nas horas, mas continua registrada e pode ser restaurada em “Mostrar excluídas”.',
+            input: 'Motivo (opcional)',
+            ok: 'Excluir',
+            danger: true,
+          });
+          if (note === null) return;
+          await api(`/punches/${id}?note=${encodeURIComponent(note)}`, { method: 'DELETE' });
+          if (id === editingId) cancelEdit();
+        } else {
+          await api(`/punches/${t.dataset.restore}/restore`, { method: 'POST' });
+        }
+      } catch (err) { $('manError').textContent = err.message; }
+      loadReport();
+    });
+
+    // ---------- Corrigir batida ----------
+
+    async function showHistory(id) {
+      const p = punches[id];
+      let changes = [];
+      try { changes = await api(`/punches/${id}/history`); } catch { /* mostra só o que já se sabe */ }
+      if (id !== editingId) return;
+      const describe = (c) => ({
+        criada: `${kindLabel(c.new_type)} ${fmtDT(c.new_ts)}`,
+        alterada: `${kindLabel(c.old_type)} ${fmtDT(c.old_ts)} → ${kindLabel(c.new_type)} ${fmtDT(c.new_ts)}`,
+        excluida: `${kindLabel(c.old_type)} ${fmtDT(c.old_ts)}`,
+        restaurada: '',
+      }[c.action]);
+      const items = [];
+      if (p.original_ts) items.push(`<li><b>Registrada pelo relógio:</b> ${kindLabel(p.original_type)} ${fmtDT(p.original_ts)}</li>`);
+      for (const c of changes) {
+        items.push(`<li>${fmtDT(c.at)} · ${esc(c.user)} · <b>${ACTION[c.action]}</b> ${describe(c)}${c.note ? ` · motivo: ${esc(c.note)}` : ''}</li>`);
+      }
+      $('history').innerHTML = items.length
+        ? `<h4 class="history-title">Histórico desta batida</h4><ul class="history">${items.join('')}</ul>`
+        : '<p class="hint">Batida registrada pelo relógio, sem correções.</p>';
+    }
+
+    function startEdit(id) {
+      const p = punches[id];
+      if (!p) return;
+      editingId = id;
+      $('manTitle').textContent = 'Corrigir batida';
+      $('manHint').textContent = 'O horário original fica guardado no histórico e a batida passa a ser marcada com *.';
+      $('manTs').value = toLocalInput(p.ts);
+      $('manType').value = p.type;
+      $('manNote').value = '';
+      $('manSubmit').textContent = 'Salvar correção';
+      $('manCancel').hidden = false;
+      $('manError').textContent = '';
+      document.querySelectorAll('[data-edit]').forEach((b) => b.classList.toggle('editing', b.dataset.edit === id));
+      $('manTs').focus();
+      $('manTitle').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showHistory(id);
+    }
+
+    function cancelEdit() {
+      editingId = null;
+      $('manTitle').textContent = 'Lançamento manual';
+      $('manHint').textContent = 'Para registrar uma batida esquecida. O motivo é obrigatório e fica no histórico.';
+      $('manNote').value = '';
+      $('manSubmit').textContent = 'Lançar';
+      $('manCancel').hidden = true;
+      $('manError').textContent = '';
+      $('history').innerHTML = '';
+      document.querySelectorAll('[data-edit].editing').forEach((b) => b.classList.remove('editing'));
+    }
+
+    $('manCancel').addEventListener('click', cancelEdit);
+
+    $('manual').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('manError').textContent = '';
+      const fields = {
+        ts: new Date($('manTs').value).toISOString(),
+        type: $('manType').value,
+        note: $('manNote').value,
+      };
+      try {
+        if (editingId) {
+          await api('/punches/' + editingId, { method: 'PATCH', body: JSON.stringify(fields) });
+          cancelEdit();
+        } else {
+          await api('/punches', { method: 'POST', body: JSON.stringify({ employee_id: $('repEmp').value, ...fields }) });
+          $('manNote').value = '';
+        }
+        loadReport();
+      } catch (err) { $('manError').textContent = err.message; }
+    });
+
+    $('csvBtn').addEventListener('click', async () => {
+      const emp = $('repEmp').value;
+      const month = $('repMonth').value;
+      if (!emp || !month) return;
+      const res = await fetch(`/api/admin/report?employee=${emp}&month=${month}&format=csv`).catch(() => null);
+      if (res?.status === 401) return toLogin();
+      if (!res?.ok) return ($('repError').textContent = 'Não foi possível exportar o CSV.');
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (res.headers.get('Content-Disposition') || '').match(/filename="(.+)"/)?.[1] || 'ponto.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // A página só abre com o login do admin (o nginx confere o cookie antes)
+    loadEmployees().then(loadReport).catch((err) => { $('empError').textContent = err.message; });
+  </script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+"""Configuração da aplicação, lida das variáveis de ambiente."""
+
+import secrets
+from datetime import timedelta
+from functools import cached_property
+from zoneinfo import ZoneInfo
+
+from pydantic import PrivateAttr, model_validator
+from pydantic_settings import BaseSettings
+from sqlalchemy import URL
+
+
+class Settings(BaseSettings):
+    # Postgres (mesmos nomes das variáveis padrão do libpq)
+    pghost: str = "localhost"
+    pgport: int = 5432
+    pgdatabase: str = "ponto"
+    pguser: str = "ponto"
+    pgpassword: str = ""
+
+    # Login inicial (tela de ponto e painel de administração). Só é usado para
+    # criar a conta na primeira subida; depois a senha fica no banco e é trocada em /senha.
+    admin_user: str = "admin"
+    admin_password: str = "ponto123"
+
+    # Sessão em cookie assinado. Sem SECRET_KEY, gera uma chave a cada subida
+    # (as sessões abertas caem quando o container reinicia).
+    secret_key: str = ""
+    session_days: int = 30
+    # Aparelho liberado como relógio (só bate ponto). Trocar a senha do admin desliga todos.
+    kiosk_days: int = 365
+    # Login do admin feito no próprio aparelho do relógio expira rápido, para não ficar aberto
+    admin_on_kiosk_minutes: int = 30
+    cookie_secure: bool = False  # True quando estiver atrás de HTTPS
+
+    # Chave do hash dos PINs (obrigatória). Nunca troque depois de definida: os PINs param de funcionar.
+    pin_key: str = ""
+
+    # Fuso usado para definir o "dia" de cada batida
+    tz: str = "America/Sao_Paulo"
+
+    # Duração máxima de uma jornada: uma saída só fecha a entrada se vier até X horas depois.
+    # Permite turnos que passam da meia-noite (a jornada conta no dia da entrada).
+    max_shift_hours: int = 16
+
+    # Documentação interativa em /api/docs (deixe desligada em produção)
+    api_docs: bool = False
+
+    _secret_from_env: bool = PrivateAttr(False)
+
+    @model_validator(mode="after")
+    def _secret_or_random(self) -> "Settings":
+        self._secret_from_env = bool(self.secret_key)
+        self.secret_key = self.secret_key or secrets.token_hex(32)
+        return self
+
+    @property
+    def secret_key_from_env(self) -> bool:
+        return self._secret_from_env
+
+    @cached_property
+    def database_url(self) -> URL:
+        return URL.create(
+            "postgresql+psycopg",
+            username=self.pguser,
+            password=self.pgpassword,
+            host=self.pghost,
+            port=self.pgport,
+            database=self.pgdatabase,
+        )
+
+    @cached_property
+    def timezone(self) -> ZoneInfo:
+        return ZoneInfo(self.tz)
+
+    @cached_property
+    def max_shift(self) -> timedelta:
+        return timedelta(hours=self.max_shift_hours)
+
+
+settings = Settings()

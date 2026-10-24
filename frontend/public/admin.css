@@ -1,0 +1,155 @@
+/* Painel de administração — complementa style.css (mesmos tokens, cartão e carimbos). */
+
+.admin-page {
+  display: grid;
+  gap: clamp(20px, 3vw, 32px);
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 40px) clamp(16px, 4vw, 40px);
+}
+
+[hidden] { display: none !important; }
+.muted { color: var(--muted); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.pos { color: var(--ink-in); }
+.neg { color: var(--danger); }
+
+/* ---------- Controles ---------- */
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 4px; }
+
+.input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--key-edge);
+  border-radius: 10px;
+  background: var(--key);
+  color: var(--text);
+  font: inherit;
+}
+
+.btn {
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--key-edge);
+  border-radius: 10px;
+  background: var(--key);
+  box-shadow: 0 2px 0 var(--key-edge);
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:active { transform: translateY(2px); box-shadow: none; }
+.btn-primary { background: var(--machine); border-color: var(--machine); color: var(--machine-text); box-shadow: 0 2px 0 #10161a; }
+.btn-danger { color: var(--danger); }
+.btn-danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; box-shadow: none; }
+.btn-sm { height: 32px; padding: 0 10px; font-size: 0.85rem; }
+
+.check { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.92rem; cursor: pointer; }
+.check input { accent-color: var(--machine); width: 16px; height: 16px; }
+
+.form-error:empty { min-height: 0; }
+
+/* ---------- Tabelas ---------- */
+
+.timecard th.num { text-align: right; }
+.timecard td.actions { text-align: right; }
+.actions .btn + .btn { margin-left: 6px; }
+.timecard td.wrap { white-space: normal; }
+.timecard tr.folga td { background: var(--weekend); color: var(--muted); }
+
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.tag.falta, .tag.incompleto { color: var(--danger); }
+.tag.andamento { color: var(--rule); }
+.tag.inativo { color: var(--muted); }
+
+/* ---------- Resumo do mês ---------- */
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.summary div { padding: 10px 12px; border: 1px solid var(--rule-soft); border-radius: 6px; }
+.summary span { display: block; color: var(--muted); font-size: 0.8rem; }
+.summary strong { font-size: 1.35rem; font-stretch: 87.5%; font-variant-numeric: tabular-nums; }
+.summary small { display: block; color: var(--muted); font-size: 0.78rem; }
+
+/* ---------- Batidas no espelho ---------- */
+
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.chip { display: inline-flex; align-items: center; gap: 2px; }
+.chip button.stamp { background: none; cursor: pointer; font-family: inherit; }
+.chip button.stamp:hover { opacity: 1; text-decoration: underline; }
+.chip .stamp.editing { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chip .stamp.deleted { color: var(--muted); text-decoration: line-through; }
+.chip .x { padding: 2px 4px; border: 0; background: none; color: var(--muted); font-size: 0.85rem; cursor: pointer; }
+.chip .x:hover { color: var(--danger); }
+.chip .x.restore:hover { color: var(--ink-in); }
+.stamp sup { margin-left: 1px; font-size: 0.65em; }
+
+.legend { margin-top: 10px; color: var(--muted); font-size: 0.82rem; }
+
+.subhead { margin-top: 28px; color: var(--rule); font-size: 1.15rem; font-weight: 800; font-stretch: 112%; }
+.hint { margin-top: 4px; color: var(--muted); font-size: 0.9rem; }
+.toolbar .grow { flex: 1 1 220px; }
+
+.history { margin: 10px 0 0; padding: 0; list-style: none; font-size: 0.88rem; }
+.history li { padding: 6px 0; border-bottom: 1px dashed var(--rule-soft); }
+.history-title { margin-top: 18px; color: var(--rule); font-size: 0.95rem; }
+
+@media (max-width: 640px) {
+  .timecard th, .timecard td { padding-left: 6px; padding-right: 6px; }
+  .timecard td.day { white-space: normal; }
+  .timecard td.day .tag { display: table; margin: 2px 0 0; }
+  .timecard td.actions { white-space: normal; }
+  .actions .btn { margin: 2px 0 2px 4px; }
+  .col-expected { display: none; } /* o previsto do mês já aparece no resumo */
+  .card-head { align-items: center; }
+}
+
+/* ---------- Janelas ---------- */
+
+dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 22px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+dialog::backdrop { background: rgba(20, 27, 32, 0.55); }
+dialog h2 { margin-bottom: 8px; font-size: 1.25rem; font-weight: 800; font-stretch: 112%; }
+.dialog-form { display: grid; gap: 14px; margin-top: 10px; }
+.dialog-form .field input { height: 44px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+.days { display: flex; flex-wrap: wrap; gap: 6px; }
+.days label { position: relative; }
+.days input { position: absolute; opacity: 0; }
+.days span {
+  display: inline-block;
+  min-width: 46px;
+  padding: 6px 8px;
+  border: 1px solid var(--key-edge);
+  border-radius: 8px;
+  background: var(--key);
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.days input:checked + span { background: var(--machine); border-color: var(--machine); color: var(--machine-text); }
+.days input:focus-visible + span { outline: 2.5px solid var(--focus); outline-offset: 2px; }

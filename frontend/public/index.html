@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ponto</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="/">Ponto</a>
+    <nav>
+      <a href="/admin">Administração</a>
+      <a href="/senha" data-admin hidden>Trocar senha</a>
+      <button type="button" id="kiosk" data-admin hidden>Usar como relógio</button>
+      <button type="button" id="logout" data-admin hidden>Sair</button>
+    </nav>
+  </header>
+
+  <main class="clock-page">
+    <section class="machine" aria-label="Registrar ponto">
+      <div class="readout">
+        <div class="readout-time" aria-live="off"><span id="hm">--:--</span><span id="sec" class="readout-sec">--</span></div>
+        <p class="readout-date" id="date"></p>
+      </div>
+
+      <div class="pin" id="pin" aria-label="PIN digitado"></div>
+
+      <div class="keypad" id="keypad">
+        <button class="key" data-k="1">1</button>
+        <button class="key" data-k="2">2</button>
+        <button class="key" data-k="3">3</button>
+        <button class="key" data-k="4">4</button>
+        <button class="key" data-k="5">5</button>
+        <button class="key" data-k="6">6</button>
+        <button class="key" data-k="7">7</button>
+        <button class="key" data-k="8">8</button>
+        <button class="key" data-k="9">9</button>
+        <button class="key key-small" data-k="back" aria-label="Apagar último dígito">Apagar</button>
+        <button class="key" data-k="0">0</button>
+        <button class="key key-go" data-k="ok">Bater ponto</button>
+      </div>
+
+      <p class="slip" id="slip" role="status">Digite seu PIN e toque em Bater ponto.</p>
+    </section>
+
+    <section class="card" aria-labelledby="cardTitle">
+      <header class="card-head">
+        <h1 class="card-title" id="cardTitle">Cartão de hoje</h1>
+        <p class="card-sub" id="cardDate"></p>
+      </header>
+      <div class="table-wrap">
+        <table class="timecard">
+          <thead id="todayHead"></thead>
+          <tbody id="todayBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const hhmm = (d) => new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const tilt = (ts) => `${((new Date(ts).getMinutes() * 7) % 5) - 2.5}deg`;
+    const fmtDur = (ms) => {
+      const min = Math.floor(ms / 60000);
+      return `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}`;
+    };
+
+    // Sessão expirada ou encerrada: volta para o login
+    const toLogin = () => location.replace('/login?next=/');
+
+    // ---------- Acesso: relógio liberado e/ou admin logado ----------
+
+    let me = { admin: false, kiosk: false };
+
+    async function loadMe() {
+      const res = await fetch('/api/auth/me').catch(() => null);
+      if (res?.status === 401) return toLogin();
+      if (!res?.ok) return;
+      me = await res.json();
+      document.querySelectorAll('[data-admin]').forEach((el) => { el.hidden = !me.admin; });
+      $('kiosk').textContent = me.kiosk ? 'Desligar relógio' : 'Usar como relógio';
+    }
+    loadMe();
+
+    $('kiosk').addEventListener('click', async () => {
+      const ask = me.kiosk
+        ? 'Desligar o modo relógio neste aparelho?\n\nPara voltar a bater ponto aqui será preciso entrar de novo.'
+        : 'Usar este aparelho como relógio de ponto?\n\nOs funcionários poderão bater o ponto aqui, e a sua conta de administrador será desconectada deste aparelho.';
+      if (!confirm(ask)) return;
+      const res = await fetch('/api/auth/kiosk', { method: me.kiosk ? 'DELETE' : 'POST' }).catch(() => null);
+      if (res?.status === 401) return toLogin();
+      loadMe();
+    });
+
+    // Sai da conta do admin; num aparelho liberado como relógio, o relógio continua
+    $('logout').addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      location.replace('/');
+    });
+
+    let pin = '';
+    let freshTs = null;
+    let slipTimer;
+    let rows = [];
+
+    // ---------- Visor ----------
+
+    function tick() {
+      const now = new Date();
+      const p = (n) => String(n).padStart(2, '0');
+      $('hm').textContent = `${p(now.getHours())}:${p(now.getMinutes())}`;
+      $('sec').textContent = p(now.getSeconds());
+      const longDate = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+      $('date').textContent = longDate;
+      $('cardDate').textContent = now.toLocaleDateString('pt-BR');
+      if (now.getSeconds() === 0) renderToday();
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    // ---------- PIN ----------
+
+    function renderPin() {
+      const slots = Math.max(4, pin.length);
+      $('pin').innerHTML = Array.from({ length: slots }, (_, i) => `<i class="${i < pin.length ? 'on' : ''}"></i>`).join('');
+      $('pin').setAttribute('aria-label', pin.length ? `${pin.length} dígitos digitados` : 'Nenhum dígito digitado');
+    }
+    renderPin();
+
+    function slip(html, cls = '') {
+      const el = $('slip');
+      el.innerHTML = html;
+      el.className = 'slip ' + cls;
+      clearTimeout(slipTimer);
+      slipTimer = setTimeout(() => {
+        el.textContent = 'Digite seu PIN e toque em Bater ponto.';
+        el.className = 'slip';
+      }, 6000);
+    }
+
+    async function submit() {
+      if (!pin) return; // Enter repetido logo após bater o ponto
+      if (pin.length < 4) return slip('O PIN tem de 4 a 8 dígitos.', 'error');
+      const body = JSON.stringify({ pin });
+      pin = '';
+      renderPin();
+      try {
+        const res = await fetch('/api/punch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        if (res.status === 401) return toLogin();
+        const data = await res.json();
+        if (!res.ok) {
+          const msg = res.status === 404 ? 'PIN não reconhecido. Confira os números e tente de novo.' : data.error;
+          return slip(esc(msg), 'error');
+        }
+        const cls = data.type === 'entrada' ? 'in' : 'out';
+        const label = data.type === 'entrada' ? 'Entrada' : 'Saída';
+        freshTs = data.ts;
+        slip(`<span class="stamp ${cls}">${hhmm(data.ts)}</span><span><b>${label}</b> registrada, ${esc(data.name)}.</span>`, cls);
+        loadToday();
+      } catch {
+        slip('Sem conexão com o servidor. Tente de novo em instantes.', 'error');
+      }
+    }
+
+    function press(k) {
+      if (k === 'ok') return submit();
+      if (k === 'back') pin = pin.slice(0, -1);
+      else if (k === 'clear') pin = '';
+      else if (pin.length < 8) pin += k;
+      renderPin();
+    }
+
+    $('keypad').addEventListener('click', (e) => {
+      const k = e.target.closest('[data-k]')?.dataset.k;
+      if (k) press(k);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      const map = { Enter: 'ok', Backspace: 'back', Escape: 'clear' };
+      const k = /^\d$/.test(e.key) ? e.key : map[e.key];
+      if (!k) return;
+      e.preventDefault();
+      press(k);
+      const btn = document.querySelector(`[data-k="${k === 'clear' ? 'back' : k}"]`);
+      if (btn) {
+        btn.classList.add('pressed');
+        setTimeout(() => btn.classList.remove('pressed'), 90);
+      }
+    });
+
+    // ---------- Cartão de hoje ----------
+
+    function workedSoFar(punches) {
+      let ms = 0;
+      let open = null;
+      for (const p of punches) {
+        if (p.type === 'entrada') open = new Date(p.ts);
+        else if (open) { ms += new Date(p.ts) - open; open = null; }
+      }
+      return { ms: ms + (open ? Date.now() - open : 0), working: Boolean(open) };
+    }
+
+    function renderToday() {
+      // Agrupa por funcionário (id), não por nome: dois funcionários podem ter o mesmo nome
+      const byEmployee = new Map();
+      for (const r of rows) {
+        if (!byEmployee.has(r.employee_id)) byEmployee.set(r.employee_id, []);
+        byEmployee.get(r.employee_id).push(r);
+      }
+      const longest = Math.max(4, ...[...byEmployee.values()].map((l) => l.length));
+      const cols = longest + (longest % 2);
+
+      $('todayHead').innerHTML = `<tr><th>Nome</th>${Array.from({ length: cols }, (_, i) => `<th>${i % 2 ? 'Saída' : 'Entrada'}</th>`).join('')}<th class="hours">Horas</th></tr>`;
+
+      if (!byEmployee.size) {
+        $('todayBody').innerHTML = `<tr><td class="empty" colspan="${cols + 2}">Nenhuma batida hoje. Digite seu PIN ao lado para registrar a entrada.</td></tr>`;
+        return;
+      }
+
+      $('todayBody').innerHTML = [...byEmployee.values()].map((punches) => {
+        const { name } = punches[0];
+        const cells = Array.from({ length: cols }, (_, i) => {
+          const p = punches[i];
+          if (!p) return '<td></td>';
+          const fresh = freshTs && new Date(p.ts).getTime() === new Date(freshTs).getTime() ? ' fresh' : '';
+          // Turno noturno: a entrada pode ter sido ontem
+          const prev = new Date(p.ts).toDateString() !== new Date().toDateString() ? '<small class="prev">ontem</small>' : '';
+          return `<td><span class="stamp ${p.type === 'entrada' ? 'in' : 'out'}${fresh}" style="--tilt:${tilt(p.ts)}">${prev}${hhmm(p.ts)}</span></td>`;
+        }).join('');
+        const { ms, working } = workedSoFar(punches);
+        return `<tr><td class="who">${esc(name)}</td>${cells}<td class="hours">${fmtDur(ms)}${working ? ' <span class="live">em curso</span>' : ''}</td></tr>`;
+      }).join('');
+      freshTs = null;
+    }
+
+    async function loadToday() {
+      try {
+        const res = await fetch('/api/today');
+        if (res.status === 401) return toLogin();
+        rows = await res.json();
+        renderToday();
+      } catch { /* tenta de novo no próximo ciclo */ }
+    }
+    loadToday();
+    setInterval(loadToday, 30000);
+  </script>
+</body>
+</html>
