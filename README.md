@@ -1,71 +1,48 @@
 # Ponto
 
-Aplicação web de registro de ponto.
+Aplicação web de registro de ponto, para uso na rede local.
 
-- **backend/**: API em Python (FastAPI + psycopg) — container `ponto-backend`
-- **frontend/**: HTML/CSS/JS servido por nginx, que faz proxy de `/api` para o backend — container `ponto-frontend`
+- **backend/**: API em Python (FastAPI + SQLAlchemy + psycopg) — container `ponto-backend`
+- **frontend/**: HTML/CSS/JS servido por nginx, com HTTPS, que faz proxy de `/api` para o backend — container `ponto-frontend`
 - **Banco**: database `ponto` no Postgres existente (`postgres_db`, rede `postgres_pg_network`), usuário dedicado `ponto`. O esquema é mantido por migrações (Alembic), aplicadas automaticamente na subida do backend.
 
-## Estrutura do backend
-
-```
-backend/app/
-├── main.py                 # cria o FastAPI, handlers de erro e rotas
-├── core/
-│   ├── config.py           # Settings (variáveis de ambiente)
-│   ├── errors.py           # ApiError e respostas {"error": "..."}
-│   ├── ratelimit.py        # limite de tentativas (login e PIN) por IP
-│   └── security.py         # hash de PIN/senha e tokens (admin e relógio)
-├── db/
-│   ├── base.py             # Base declarativa do SQLAlchemy
-│   ├── session.py          # engine, sessão (get_db) e inicialização
-│   ├── migrate.py          # aplica as migrações na subida
-│   └── migrations/versions # migrações do Alembic (0001, 0002, ...)
-├── models/                 # tabelas (SQLAlchemy ORM)
-│   ├── employee.py         # funcionário + jornada prevista
-│   └── punch.py            # batida + histórico de correções (punch_changes)
-├── schemas/                # entrada/saída da API (Pydantic)
-├── repositories/           # consultas ao banco
-├── services/               # regras de negócio
-│   ├── shifts.py           # pares entrada→saída (inclusive turno noturno)
-│   ├── employee_service.py
-│   ├── punch_service.py    # batida pelo PIN, correções com histórico
-│   └── report_service.py   # espelho mensal, banco de horas e CSV
-├── api/
-│   ├── deps.py             # sessão do banco, acesso (admin / relógio)
-│   ├── router.py           # junta tudo sob /api
-│   └── routes/
-│       ├── health.py       # /api/health
-│       ├── auth.py         # /api/auth/* (login, modo relógio, senha)
-│       ├── clock.py        # /api/punch, /api/today (relógio)
-│       └── admin.py        # /api/admin/* (só admin)
-└── utils/
-    └── dates.py            # limites de dia/mês no fuso configurado
-```
-
-## Como rodar
+## Colocar no ar
 
 ```bash
 cd ~/ponto
 cp .env.example .env   # só na primeira vez; preencha PGPASSWORD, SECRET_KEY e PIN_KEY
-docker compose up -d --build
+scripts/deploy.sh
 ```
 
-- Relógio de ponto: http://localhost:9092
-- Administração: http://localhost:9092/admin
-- Trocar senha: http://localhost:9092/senha
+O `deploy.sh` confere o `.env`, gera o certificado HTTPS se faltar, roda os testes, faz backup do banco e só então sobe os containers.
 
-O login do administrador é criado no banco (tabela `admin_account`) na primeira subida, a partir de `ADMIN_USER`/`ADMIN_PASSWORD`. Depois disso a senha é trocada pela página `/senha`; mudar o `.env` não altera mais o login. Após 5 senhas erradas em 5 minutos o IP fica bloqueado até a janela passar.
+- Relógio de ponto: `https://<ip-do-servidor>:9443` (ex.: https://192.168.0.34:9443)
+- Administração: `https://<ip-do-servidor>:9443/admin`
+- O endereço antigo `http://<ip>:9092` apenas redireciona para o HTTPS.
 
-### Aparelho do relógio
+### HTTPS na rede local (certificado próprio)
 
-O tablet/computador onde os funcionários batem o ponto **não fica logado como admin**:
+`scripts/gerar-certificado.sh` cria uma **CA local** e um certificado do servidor para o IP da rede, o IP do Tailscale e o nome da máquina. Para os navegadores confiarem nele, **instale a CA uma vez em cada aparelho** (tablet do relógio e computadores do admin):
 
-1. No aparelho, entre com a conta de administrador.
-2. Na tela do relógio, clique em **Usar como relógio**. O aparelho passa a só bater ponto (cookie `ponto_kiosk`, válido por 1 ano) e a conta do admin é desconectada dele.
-3. Para administrar a partir desse aparelho, clique em **Administração** e entre com a senha. Nesse aparelho o login do admin dura só 30 minutos; use **Sair** ao terminar e o relógio continua funcionando.
+1. No aparelho, abra `http://<ip-do-servidor>:9092/ponto-ca.crt` e baixe o arquivo.
+2. Instale como autoridade certificadora:
+   - **Android:** Configurações → Segurança → Criptografia e credenciais → Instalar certificado → Certificado CA.
+   - **iPhone/iPad:** abra o arquivo, instale o perfil em Ajustes e depois ative em Ajustes → Geral → Sobre → Ajustes de Confiança de Certificados.
+   - **Windows:** abra o arquivo → Instalar certificado → "Autoridades de Certificação Raiz Confiáveis".
+   - **Linux/Chrome:** Configurações → Privacidade e segurança → Gerenciar certificados → Autoridades → Importar.
+3. Sem instalar a CA também funciona, mas o navegador mostra um aviso que precisa ser aceito.
 
-Trocar a senha do admin desliga todos os relógios (exceto o aparelho onde a troca foi feita); é assim que se revoga um aparelho perdido. Dez PINs errados em 5 minutos pausam o relógio até a janela passar.
+Se o IP do servidor mudar: `scripts/gerar-certificado.sh --renovar && docker compose restart frontend`. O certificado do servidor vale 825 dias (o `deploy.sh` avisa quando faltar menos de 30); a CA vale 10 anos. Guarde `certs/ca.key` com cuidado: quem tiver essa chave consegue se passar pelo servidor nos aparelhos que confiam nela.
+
+### Logins
+
+- **Administradores:** o primeiro é criado na primeira subida a partir de `ADMIN_USER`/`ADMIN_PASSWORD`. Os demais são cadastrados em Administração → "Administradores e relógios". Cada pessoa deve ter o próprio login: o histórico de correções registra quem fez cada alteração. Cada um troca a própria senha em `/senha`. Após 5 senhas erradas em 5 minutos o IP fica bloqueado até a janela passar.
+- **Aparelho do relógio:** não fica logado como admin.
+  1. No aparelho, entre como administrador.
+  2. Na tela do relógio, toque em **Usar como relógio**. O aparelho passa a só bater ponto (vale 1 ano) e o admin é desconectado dele.
+  3. Para administrar a partir dele, toque em **Administração** e entre: nesse aparelho o login do admin dura 30 minutos. Use **Sair** ao terminar.
+  4. Perdeu um tablet? Administração → **Desligar todos os relógios** e ative de novo os que continuam em uso.
+- Dez PINs errados em 5 minutos pausam o relógio até a janela passar.
 
 ### Variáveis do `.env`
 
@@ -73,27 +50,75 @@ Trocar a senha do admin desliga todos os relógios (exceto o aparelho onde a tro
 |------------------|-----------|
 | `PGUSER`         | Usuário do Postgres (`ponto`) |
 | `PGPASSWORD`     | Senha desse usuário |
-| `ADMIN_USER`     | Usuário do login (só na primeira subida) |
-| `ADMIN_PASSWORD` | Senha inicial do login (só na primeira subida) |
+| `ADMIN_USER`     | Usuário do primeiro administrador (só na primeira subida) |
+| `ADMIN_PASSWORD` | Senha inicial dele (só na primeira subida) |
 | `SECRET_KEY`     | Assina os cookies. Sem ela, todos os logins e relógios caem a cada reinício |
-| `PIN_KEY`        | **Obrigatória.** Chave do hash dos PINs. **Nunca troque**: todos os PINs deixam de funcionar. Guarde uma cópia junto com o backup do banco |
-| `COOKIE_SECURE`  | `true` quando o site estiver atrás de HTTPS |
+| `PIN_KEY`        | **Obrigatória.** Chave do hash dos PINs e dos códigos de comprovante. **Nunca troque**: todos os PINs deixam de funcionar. Guarde uma cópia num gerenciador de senhas, separada do backup |
+| `COOKIE_SECURE`  | `true` (o site só funciona por HTTPS) |
+| `HTTPS_PORT`     | Porta do HTTPS no servidor (padrão `9443`) |
 | `API_DOCS`       | `true` liga a documentação da API em `/api/docs` (desligada por padrão) |
 
 ## Funcionalidades
 
-- **Relógio**: digita o PIN (teclado na tela ou físico). É **saída** se o funcionário tiver uma entrada aberta há menos de 16 h, senão é **entrada** — turnos que passam da meia-noite funcionam e contam no dia da entrada. Uma batida com menos de 1 minuto da anterior é recusada (evita toque duplo).
-- **Cartão de hoje**: lista ao lado do relógio, atualizada a cada 30 s (inclui quem entrou ontem à noite e ainda está trabalhando).
-- **Funcionários**: nome, PIN, jornada diária e dias de trabalho; ativar/desativar. Só é possível excluir cadastros sem nenhum registro de ponto — quem já bateu ponto é desativado.
-- **Espelho de ponto** mensal: todos os dias do mês com batidas, horas trabalhadas, previsto e saldo; marca faltas, dias incompletos e o dia em andamento. Resumo com saldo do mês e **banco de horas** acumulado desde o início do histórico do funcionário.
-- **Correções com histórico**: lançamentos e correções exigem motivo e ficam marcados com `*`. O horário original do relógio é preservado, nada é apagado de verdade (batidas excluídas podem ser vistas e restauradas) e cada ação fica registrada com usuário, data, antes e depois.
-- **Exportação CSV** do espelho (separador `;`, abre direto no Excel), com previsto, saldo e banco de horas.
+**Relógio**
+- O funcionário digita o PIN. É **saída** se houver uma entrada aberta há menos de 16 h, senão é **entrada**; turnos que passam da meia-noite contam no dia da entrada. Batida a menos de 1 minuto da anterior é recusada (toque duplo).
+- Mostra o **comprovante** de cada batida (número e código de 10 caracteres, que só o sistema consegue gerar).
+- O visor usa a **hora do servidor**, a mesma que vai na batida, mesmo se o relógio do tablet estiver errado.
+- **Sem conexão:** a batida fica guardada no aparelho e é enviada quando a conexão volta (até 24 h). Ela entra marcada como `off` para o admin conferir, porque o horário veio do aparelho.
+- **Ver meu espelho:** com o PIN, o funcionário vê o próprio mês, os comprovantes e o banco de horas, e dá **ciência** dos meses fechados. A janela fecha sozinha após 1 minuto sem uso.
 
-Observações: alterar a jornada de um funcionário recalcula também os meses anteriores; feriados não são descontados automaticamente (lance a folga como ajuste ou considere no banco).
+**Administração**
+- **Funcionários:** nome, PIN, jornada diária e dias de trabalho, admissão e desligamento. Mudar a jornada cria uma nova vigência a partir de uma data, sem alterar o passado. Só cadastros sem nenhum registro podem ser excluídos; os demais são desativados.
+- **Espelho mensal:** todos os dias com batidas, horas trabalhadas, horas noturnas, previsto e saldo; marca faltas, incompletos, feriados e dias fora do contrato. Resumo com saldo do mês e **banco de horas** acumulado.
+- **Regras da CLT no cálculo:**
+  - Hora noturna reduzida (art. 73): das 22h às 5h, 52min30s valem 1 hora. As horas trabalhadas já consideram isso e a coluna "Noturno" é a base do adicional.
+  - Tolerância (art. 58 §1º): diferenças de até 10 minutos no dia não geram saldo.
+  - Avisos para conferência: intervalo menor que 1h em jornada acima de 6h (ou 15 min acima de 4h), menos de 11h entre jornadas, mais de 2h extras no dia e trabalho em folga/feriado.
+- **Feriados:** os nacionais são calculados automaticamente (inclusive a Sexta-feira Santa). Municipais, estaduais e pontos facultativos (Carnaval, Corpus Christi) são cadastrados pelo admin.
+- **Correções com histórico:** lançamentos e correções exigem motivo e ficam marcados com `*`. O horário original do relógio é preservado, nada é apagado de verdade (excluídas podem ser vistas e restauradas) e cada ação registra quem fez, quando, antes e depois.
+- **Fechamento do mês:** depois de conferido, o mês é fechado (por funcionário ou para todos). As batidas ficam travadas e o funcionário pode dar ciência no relógio. Reabrir apaga a ciência.
+- **Exportação:** CSV do espelho de um funcionário, CSV com o resumo de todos (para a contabilidade) e página de impressão com o espelho de todos, com linha de assinatura (imprima ou salve como PDF).
+
+Limites conhecidos: os arquivos AFD/AEJ da Portaria 671 não são gerados (o sistema é para controle interno, não um REP-P registrado no INPI); a prorrogação do horário noturno após as 5h não é calculada; uma batida enviada depois, sem conexão, não muda o tipo (entrada/saída) das batidas já registradas depois dela, e o dia aparece como incompleto para o admin corrigir.
+
+## Backup
+
+`scripts/backup.sh` roda todo dia às 03:15 (cron do usuário `filipe`) e guarda em `backups/`: os últimos 14 diários e um por mês por 5 anos. Log em `backups/backup.log`. O `deploy.sh` também faz um backup antes de cada atualização.
+
+Restaurar (substitui o banco atual — pare o backend antes):
+
+```bash
+docker compose stop backend
+docker exec -i postgres_db pg_restore -U ponto -d ponto --clean --if-exists --no-owner < backups/ponto-AAAAMMDD-HHMMSS.dump
+docker compose start backend
+```
+
+O backup não contém a `PIN_KEY`: sem ela, os PINs e os códigos de comprovante do banco restaurado não funcionam.
+
+## Estrutura do backend
+
+```
+backend/app/
+├── main.py                 # cria o FastAPI, handlers de erro e rotas
+├── core/                   # configuração, erros, limite de tentativas, hash e tokens
+├── db/                     # engine/sessão, migrações (migrations/versions/0001, 0002, 0003...)
+├── models/                 # funcionário + jornadas, batida + histórico, admin, feriado, fechamento
+├── schemas/                # entrada/saída da API (Pydantic)
+├── repositories/           # consultas ao banco
+├── services/
+│   ├── shifts.py           # pares entrada→saída (inclusive turno noturno)
+│   ├── report_service.py   # espelho, banco de horas, regras da CLT e CSV
+│   ├── punch_service.py    # batida pelo PIN (inclusive offline), correções com histórico
+│   ├── calendar_service.py # feriados, fechamento do mês e espelho do funcionário
+│   ├── employee_service.py
+│   └── auth_service.py     # administradores e relógios
+├── api/routes/             # health, auth, clock (relógio + espelho do funcionário), admin
+└── utils/                  # datas/fuso, horário noturno, feriados nacionais
+```
 
 ## Desenvolvimento
 
-Testes (regras de jornada, espelho, tokens e limites), rodando dentro da imagem do backend:
+Testes (regras de jornada, CLT, feriados, espelho, tokens e limites):
 
 ```bash
 cd ~/ponto/backend
@@ -102,4 +127,4 @@ docker run --rm -u root -v "$PWD/tests:/app/tests:ro" -v "$PWD/requirements-dev.
   ponto-backend sh -c "pip install -q -r requirements-dev.txt && python -m pytest -q tests"
 ```
 
-Nova mudança no banco: crie `app/db/migrations/versions/0003_<descricao>.py` com `revision = "0003"` e `down_revision = "0002"` (veja a 0002 como modelo). Ela é aplicada na próxima subida.
+Nova mudança no banco: crie `app/db/migrations/versions/0004_<descricao>.py` com `revision = "0004"` e `down_revision = "0003"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Coloca a versão atual no ar com segurança: confere a configuração, roda os testes,
+# faz backup do banco (as migrações rodam na subida) e só então sobe os containers.
+#
+# Uso:  scripts/deploy.sh
+set -euo pipefail
+
+RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$RAIZ"
+passo() { echo; echo "==> $*"; }
+
+passo "Conferindo o .env"
+for var in PGPASSWORD SECRET_KEY PIN_KEY; do
+    valor="$(grep -E "^$var=" .env | tail -1 | cut -d= -f2- || true)"
+    if [[ -z "$valor" || "$valor" == "troque-aqui" ]]; then
+        echo "Defina $var no .env (gere com: openssl rand -hex 32)" >&2
+        exit 1
+    fi
+done
+
+passo "Certificado HTTPS"
+[[ -f certs/server.crt ]] || scripts/gerar-certificado.sh
+openssl x509 -checkend $((30 * 86400)) -noout -in certs/server.crt >/dev/null \
+    || echo "AVISO: o certificado vence em menos de 30 dias. Rode: scripts/gerar-certificado.sh --renovar"
+
+passo "Testes automatizados"
+docker build -q -t ponto-backend-testes ./backend >/dev/null
+docker run --rm -u root -e PYTHONDONTWRITEBYTECODE=1 \
+    -v "$RAIZ/backend/tests:/app/tests:ro" -v "$RAIZ/backend/requirements-dev.txt:/app/requirements-dev.txt:ro" \
+    ponto-backend-testes sh -c "pip install -q --root-user-action=ignore -r requirements-dev.txt && python -m pytest -q -p no:cacheprovider tests"
+
+passo "Backup do banco antes de atualizar"
+scripts/backup.sh
+
+passo "Subindo os containers"
+docker compose up -d --build
+
+passo "Aguardando o backend ficar saudável"
+for _ in $(seq 1 60); do
+    estado="$(docker inspect -f '{{.State.Health.Status}}' ponto-backend 2>/dev/null || true)"
+    [[ "$estado" == "healthy" ]] && break
+    sleep 2
+done
+if [[ "$estado" != "healthy" ]]; then
+    echo "O backend não ficou saudável. Últimas linhas do log:" >&2
+    docker logs --tail 40 ponto-backend >&2
+    exit 1
+fi
+docker image rm ponto-backend-testes >/dev/null 2>&1 || true
+
+porta="$(grep -E '^HTTPS_PORT=' .env | cut -d= -f2- || true)"
+echo
+echo "Pronto: https://$(ip -4 route get 1.1.1.1 | sed -n 's/.* src \([0-9.]*\).*/\1/p'):${porta:-9443}"

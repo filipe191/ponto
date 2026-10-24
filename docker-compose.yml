@@ -16,7 +16,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ponto123}
       SECRET_KEY: ${SECRET_KEY:-}
       PIN_KEY: ${PIN_KEY:?Defina PIN_KEY no .env (openssl rand -hex 32)}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # O site só funciona por HTTPS (o nginx redireciona), então o cookie é sempre "secure"
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       API_DOCS: ${API_DOCS:-false}
     networks:
       - default
@@ -26,8 +27,14 @@ services:
     build: ./frontend
     container_name: ponto-frontend
     restart: unless-stopped
+    environment:
+      HTTPS_PORT: ${HTTPS_PORT:-9443}
     ports:
-      - "9092:80"
+      - "9092:80"   # só redireciona para o HTTPS e entrega o certificado da CA
+      - "${HTTPS_PORT:-9443}:443"
+    volumes:
+      # Gerados por scripts/gerar-certificado.sh
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       backend:
         condition: service_healthy

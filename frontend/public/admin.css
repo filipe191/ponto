@@ -115,9 +115,44 @@
   .timecard td.day .tag { display: table; margin: 2px 0 0; }
   .timecard td.actions { white-space: normal; }
   .actions .btn { margin: 2px 0 2px 4px; }
-  .col-expected { display: none; } /* o previsto do mês já aparece no resumo */
+  .col-expected, .col-night { display: none; } /* aparecem no resumo do mês */
   .card-head { align-items: center; }
 }
+
+/* ---------- Espelho: fechamento, avisos, feriados ---------- */
+
+.closure:empty { display: none; }
+.closure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  border: 1.5px dashed var(--key-edge);
+  border-radius: 10px;
+  font-size: 0.92rem;
+}
+.closure p { flex: 1 1 320px; }
+.closure.is-closed { border-style: solid; border-color: var(--rule); }
+.btn-link { display: inline-flex; align-items: center; color: var(--text); text-decoration: none; }
+.warn { margin-left: 4px; color: var(--danger); cursor: help; }
+.alerts { display: block; margin-top: 4px; color: var(--danger); font-size: 0.8rem; }
+.holiday { display: block; color: var(--muted); font-size: 0.78rem; }
+.tag.feriado, .tag.fora { color: var(--muted); }
+.off-mark {
+  margin-left: 3px;
+  padding: 0 3px;
+  border: 1px dashed currentColor;
+  border-radius: 3px;
+  font-size: 0.62em;
+  font-weight: 700;
+  text-transform: uppercase;
+  vertical-align: 2px;
+}
+.legend .off-mark { color: var(--muted); }
+.contract { display: block; color: var(--muted); font-size: 0.8rem; font-weight: 400; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 /* ---------- Janelas ---------- */
 

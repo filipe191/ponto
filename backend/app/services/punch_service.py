@@ -6,11 +6,12 @@ from app.core.config import settings
 from app.core.errors import BadRequest, Conflict, NotFound
 from app.core.security import hash_pin
 from app.models import Punch, PunchAction, PunchChange, PunchType
+from app.repositories.calendar_repository import ClosureRepository
 from app.repositories.employee_repository import EmployeeRepository
 from app.repositories.punch_repository import PunchRepository
 from app.schemas.punch import ManualPunchCreate, PunchChangeOut, PunchResult, PunchUpdate, TodayPunch
 from app.services.shifts import pair_shifts
-from app.utils.dates import day_bounds, now_local, to_local
+from app.utils.dates import day_bounds, month_of, now_local, to_local
 
 # Evita entrada e saída seguidas por toque duplo ou PIN digitado duas vezes
 MIN_PUNCH_INTERVAL = timedelta(minutes=1)
@@ -27,25 +28,39 @@ class PunchService:
         self.db = db
         self.employees = EmployeeRepository(db)
         self.punches = PunchRepository(db)
+        self.closures = ClosureRepository(db)
 
-    def register(self, pin: str) -> PunchResult:
-        """Bate o ponto pelo PIN: é saída se houver uma entrada aberta há menos de MAX_SHIFT_HOURS."""
+    def register(self, pin: str, offline_ts: datetime | None = None) -> PunchResult:
+        """Bate o ponto pelo PIN: é saída se houver uma entrada aberta há menos de MAX_SHIFT_HOURS.
+
+        `offline_ts`: batida feita com o relógio sem conexão e enviada depois (horário do aparelho).
+        """
         employee = self.employees.get_by_pin_hash(hash_pin(pin), lock=True)
         if not employee or not employee.active:
             raise NotFound("PIN não reconhecido")
 
         now = datetime.now(timezone.utc)
-        last = self.punches.last_for_employee(employee.id, since=now - settings.max_shift)
-        if last and now - last.ts < MIN_PUNCH_INTERVAL:
+        ts = now
+        if offline_ts is not None:
+            ts = _with_tz(offline_ts)
+            if ts < now - timedelta(hours=settings.offline_max_hours) or ts > now + MIN_PUNCH_INTERVAL:
+                raise BadRequest("Batida feita sem conexão fora do prazo aceito; peça um lançamento manual")
+            ts = min(ts, now)
+
+        near = self.punches.near(employee.id, ts, MIN_PUNCH_INTERVAL)
+        if near:
             raise Conflict(
-                f"{employee.name}, seu ponto já foi registrado às {to_local(last.ts):%H:%M}. "
+                f"{employee.name}, seu ponto já foi registrado às {to_local(near.ts):%H:%M}. "
                 "Aguarde um minuto para bater de novo."
             )
+        last = self.punches.last_before(employee.id, since=ts - settings.max_shift, before=ts)
         kind = PunchType.SAIDA if last and last.type == PunchType.ENTRADA else PunchType.ENTRADA
 
-        self.punches.add(Punch(employee_id=employee.id, ts=now, type=kind))
+        punch = self.punches.add(Punch(employee_id=employee.id, ts=ts, type=kind, offline=offline_ts is not None))
         self.db.commit()
-        return PunchResult(name=employee.name, type=kind, ts=now)
+        return PunchResult(
+            id=punch.id, receipt=punch.receipt, name=employee.name, type=kind, ts=ts, offline=punch.offline
+        )
 
     def today(self) -> list[TodayPunch]:
         """Jornadas de hoje, incluindo a que começou ontem e ainda está aberta ou fechou hoje."""
@@ -75,6 +90,7 @@ class PunchService:
         note = (data.note or "").strip()
         if not note:
             raise BadRequest(NOTE_REQUIRED)
+        self._check_open(data.employee_id, _with_tz(data.ts))
         punch = self.punches.add(
             Punch(employee_id=data.employee_id, ts=_with_tz(data.ts), type=data.type, manual=True, note=note)
         )
@@ -97,6 +113,7 @@ class PunchService:
             punch.note = data.note.strip() or None
         if not punch.note:
             raise BadRequest(NOTE_REQUIRED)
+        self._check_open(punch.employee_id, old_ts, punch.ts)
         punch.manual = True
         self._log(punch, user, PunchAction.ALTERADA, old_ts=old_ts, old_type=old_type, note=punch.note)
         self.db.commit()
@@ -106,6 +123,7 @@ class PunchService:
         punch = self._get(punch_id)
         if punch.deleted_at:
             return
+        self._check_open(punch.employee_id, punch.ts)
         punch.deleted_at = datetime.now(timezone.utc)
         self._log(punch, user, PunchAction.EXCLUIDA, old_ts=punch.ts, old_type=punch.type, new=False, note=note)
         self.db.commit()
@@ -114,6 +132,7 @@ class PunchService:
         punch = self._get(punch_id)
         if not punch.deleted_at:
             return
+        self._check_open(punch.employee_id, punch.ts)
         punch.deleted_at = None
         self._log(punch, user, PunchAction.RESTAURADA)
         self.db.commit()
@@ -135,6 +154,13 @@ class PunchService:
                 note=(note or "").strip() or None,
             )
         )
+
+    def _check_open(self, employee_id: int, *timestamps: datetime) -> None:
+        """Mês fechado não aceita lançamentos nem correções (é preciso reabri-lo antes)."""
+        for ts in timestamps:
+            day = to_local(ts).date()
+            if self.closures.get(employee_id, month_of(day)):
+                raise BadRequest(f"O mês {day:%m/%Y} já foi fechado para este funcionário. Reabra o mês para alterar.")
 
     def _get(self, punch_id: int) -> Punch:
         punch = self.punches.get(punch_id)

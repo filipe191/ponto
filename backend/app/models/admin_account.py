@@ -7,12 +7,12 @@ from app.db.base import Base
 
 
 class AdminAccount(Base):
-    """Login do sistema (uma única linha, criada a partir do .env na primeira subida)."""
+    """Login de um administrador. O primeiro é criado a partir do .env na primeira subida."""
 
     __tablename__ = "admin_account"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String)
+    username: Mapped[str] = mapped_column(String, unique=True)
     password_hash: Mapped[str] = mapped_column(String)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

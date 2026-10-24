@@ -8,12 +8,17 @@ from app.schemas.common import Pin
 
 class PunchRequest(BaseModel):
     pin: Pin = Field(default="", validate_default=True)
+    # Batida guardada no relógio enquanto estava sem conexão: horário (do aparelho) em que foi feita
+    offline_ts: datetime | None = None
 
 
 class PunchResult(BaseModel):
+    id: int
+    receipt: str  # código do comprovante
     name: str
     type: PunchType
     ts: datetime
+    offline: bool = False
 
 
 class TodayPunch(BaseModel):
@@ -43,10 +48,12 @@ class PunchOut(BaseModel):
     ts: datetime
     type: PunchType
     manual: bool
+    offline: bool
     note: str | None
     original_ts: datetime | None
     original_type: PunchType | None
     deleted_at: datetime | None
+    receipt: str
 
 
 class PunchChangeOut(BaseModel):
@@ -60,3 +67,10 @@ class PunchChangeOut(BaseModel):
     new_ts: datetime | None
     new_type: PunchType | None
     note: str | None
+
+
+class MyReportRequest(BaseModel):
+    """Consulta do próprio espelho no relógio, com o PIN."""
+
+    pin: Pin = Field(default="", validate_default=True)
+    month: str = ""

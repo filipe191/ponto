@@ -33,4 +33,4 @@ def init_db() -> None:
     from app.services.auth_service import AuthService
 
     with SessionLocal() as db:
-        AuthService(db).ensure_account()
+        AuthService(db).ensure_setup()

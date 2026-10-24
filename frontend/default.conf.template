@@ -1,10 +1,37 @@
+# Gerado na subida do container a partir deste modelo (só ${HTTPS_PORT} é substituído).
+
+server_tokens off;
+
+# HTTP: só redireciona para o HTTPS e entrega o certificado da CA para instalar nos aparelhos
 server {
     listen 80;
     server_name _;
 
+    location = /ponto-ca.crt {
+        alias /etc/nginx/certs/ca.crt;
+        default_type application/x-x509-ca-cert;
+    }
+
+    location / {
+        return 301 https://$host:${HTTPS_PORT}$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name _;
+
+    ssl_certificate /etc/nginx/certs/server.crt;
+    ssl_certificate_key /etc/nginx/certs/server.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:1m;
+
     root /usr/share/nginx/html;
     index index.html;
     absolute_redirect off;
+
+    include /etc/nginx/snippets/security-headers.conf;
 
     # Pergunta ao backend se o aparelho pode usar o relógio (relógio liberado ou admin logado)
     location = /_auth {
@@ -15,7 +42,7 @@ server {
         proxy_set_header Cookie $http_cookie;
     }
 
-    # Pergunta ao backend se o admin está logado
+    # Pergunta ao backend se um administrador está logado
     location = /_auth_admin {
         internal;
         proxy_pass http://backend:3000/api/auth/admin;
@@ -28,11 +55,16 @@ server {
         return 302 /login?next=$request_uri;
     }
 
-    # Páginas públicas: tela de login e o estilo que ela usa
+    # Públicos: tela de login, o estilo e as fontes que ela usa
     location = /login {
         try_files /login.html =404;
     }
     location = /style.css {
+        try_files $uri =404;
+    }
+    location /fonts/ {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable";
         try_files $uri =404;
     }
 
@@ -43,24 +75,37 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         # Substitui (não acrescenta): o cliente não consegue forjar o IP usado no limite de tentativas
         proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
     }
 
-    # Administração: só com o login do admin
+    # Administração: só com o login de um administrador
     location = /admin {
         auth_request /_auth_admin;
         error_page 401 = @login;
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "no-store";
         try_files /admin.html =404;
     }
     location = /senha {
         auth_request /_auth_admin;
         error_page 401 = @login;
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "no-store";
         try_files /senha.html =404;
+    }
+    location = /imprimir {
+        auth_request /_auth_admin;
+        error_page 401 = @login;
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "no-store";
+        try_files /imprimir.html =404;
     }
 
     # Tela do relógio e arquivos: relógio liberado ou admin logado
     location / {
         auth_request /_auth;
         error_page 401 = @login;
+        include /etc/nginx/snippets/security-headers.conf;
         add_header Cache-Control "no-store";
         try_files $uri $uri/ =404;
     }

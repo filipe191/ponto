@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
-from app.api.deps import CurrentAccess, DbSession, client_ip, require_admin, require_clock
+from app.api.deps import AdminUser, CurrentAccess, DbSession, client_ip, require_admin, require_clock
 from app.core.config import settings
 from app.core.errors import TooManyRequests, Unauthorized
 from app.core.ratelimit import AttemptLimiter
@@ -58,7 +58,7 @@ def login(body: LoginRequest, request: Request, response: Response, db: DbSessio
     if login_attempts.blocked(ip):
         raise TooManyRequests("Muitas tentativas erradas. Aguarde alguns minutos e tente de novo.")
     auth = AuthService(db)
-    account = auth.check_credentials(body.username.strip(), body.password)
+    account = auth.authenticate(body.username.strip(), body.password)
     if not account:
         login_attempts.fail(ip)
         raise Unauthorized()
@@ -89,8 +89,7 @@ def admin_me(access: CurrentAccess):
 @router.post("/kiosk", response_model=OkResponse, dependencies=[Depends(require_admin)])
 def enable_kiosk(response: Response, db: DbSession):
     """Libera este aparelho como relógio e desconecta o admin dele."""
-    auth = AuthService(db)
-    _set_cookie(response, KIOSK_COOKIE, auth.new_kiosk(auth.account()), settings.kiosk_days * 86400)
+    _set_cookie(response, KIOSK_COOKIE, AuthService(db).new_kiosk(), settings.kiosk_days * 86400)
     response.delete_cookie(SESSION_COOKIE, path="/")
     return OkResponse()
 
@@ -101,12 +100,10 @@ def disable_kiosk(response: Response):
     return OkResponse()
 
 
-@router.post("/password", response_model=OkResponse, dependencies=[Depends(require_admin)])
-def change_password(body: PasswordChange, response: Response, db: DbSession, access: CurrentAccess):
-    """Troca a senha; as outras sessões e relógios caem, este aparelho recebe cookies novos."""
+@router.post("/password", response_model=OkResponse)
+def change_password(body: PasswordChange, response: Response, db: DbSession, access: CurrentAccess, user: AdminUser):
+    """Troca a senha do admin logado; as outras sessões dele caem e esta recebe um cookie novo."""
     auth = AuthService(db)
-    account = auth.change_password(body.current_password, body.new_password)
+    account = auth.change_password(user, body.current_password, body.new_password)
     _start_admin_session(response, auth, account, on_kiosk=access.kiosk)
-    if access.kiosk:
-        _set_cookie(response, KIOSK_COOKIE, auth.new_kiosk(account), settings.kiosk_days * 86400)
     return OkResponse()

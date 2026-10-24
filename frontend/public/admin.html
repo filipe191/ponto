@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>Administração · Ponto</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/admin.css">
 </head>
@@ -45,19 +42,22 @@
         <select class="input" id="repEmp" aria-label="Funcionário"></select>
         <input class="input" type="month" id="repMonth" aria-label="Mês">
         <label class="check"><input type="checkbox" id="showDeleted"> Mostrar excluídas</label>
-        <button class="btn" type="button" id="csvBtn">Exportar CSV</button>
+        <button class="btn" type="button" id="csvBtn">CSV deste funcionário</button>
+        <button class="btn" type="button" id="summaryCsvBtn">Resumo de todos (CSV)</button>
+        <a class="btn btn-link" id="printLink" href="/imprimir" target="_blank" rel="noopener">Imprimir todos</a>
       </div>
       <p class="form-error" id="repError" role="alert"></p>
 
+      <div class="closure" id="closure"></div>
       <div class="summary" id="summary"></div>
 
       <div class="table-wrap">
         <table class="timecard">
-          <thead><tr><th>Dia</th><th>Batidas</th><th class="num">Trabalhado</th><th class="num col-expected">Previsto</th><th class="num">Saldo</th></tr></thead>
+          <thead><tr><th>Dia</th><th>Batidas</th><th class="num">Trabalhado</th><th class="num col-night">Noturno</th><th class="num col-expected">Previsto</th><th class="num">Saldo</th></tr></thead>
           <tbody id="report"></tbody>
         </table>
       </div>
-      <p class="legend">Clique numa batida para corrigi-la. * lançada ou corrigida manualmente · <sup>+1</sup> batida no dia seguinte (turno noturno) · o dia de hoje só entra no saldo quando terminar.</p>
+      <p class="legend">Clique numa batida para corrigi-la. * lançada ou corrigida manualmente · <sup>+1</sup> batida no dia seguinte (turno noturno) · <span class="off-mark">off</span> feita sem conexão (horário do aparelho, confira) · ⚠ aviso da CLT (passe o mouse ou toque) · horas noturnas com hora reduzida de 52min30s · diferenças de até 10 min no dia não geram saldo · o dia de hoje só entra no saldo quando terminar.</p>
 
       <h3 class="subhead" id="manTitle">Lançamento manual</h3>
       <p class="hint" id="manHint">Para registrar uma batida esquecida. O motivo é obrigatório e fica no histórico.</p>
@@ -73,6 +73,52 @@
       </form>
       <p class="form-error" id="manError" role="alert"></p>
       <div id="history"></div>
+    </section>
+
+    <section class="card" aria-labelledby="holTitle">
+      <header class="card-head">
+        <h2 class="card-title" id="holTitle">Feriados</h2>
+        <input class="input" type="number" id="holYear" min="2000" max="2100" aria-label="Ano" style="width:110px">
+      </header>
+      <p class="hint">Os nacionais já vêm cadastrados. Adicione os municipais, estaduais e os pontos facultativos que a empresa adotar (ex.: Carnaval, Corpus Christi). Em feriado não há jornada prevista; quem trabalhar ganha saldo.</p>
+      <form class="toolbar" id="holForm">
+        <input class="input" type="date" id="holDate" required aria-label="Data">
+        <input class="input grow" type="text" id="holName" placeholder="Nome do feriado" required aria-label="Nome">
+        <button class="btn btn-primary" type="submit">Adicionar</button>
+      </form>
+      <p class="form-error" id="holError" role="alert"></p>
+      <div class="table-wrap">
+        <table class="timecard">
+          <thead><tr><th>Data</th><th>Feriado</th><th></th></tr></thead>
+          <tbody id="holidays"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="accTitle">
+      <header class="card-head">
+        <h2 class="card-title" id="accTitle">Administradores e relógios</h2>
+        <p class="card-sub" id="whoami"></p>
+      </header>
+      <p class="hint">Cada pessoa que administra o ponto deve ter o próprio login: o histórico de correções registra quem fez cada alteração.</p>
+      <form class="toolbar" id="admForm">
+        <input class="input" type="text" id="admUser" placeholder="Usuário" required autocomplete="off" aria-label="Usuário">
+        <input class="input" type="password" id="admPass" placeholder="Senha inicial (mín. 6)" required minlength="6" autocomplete="new-password" aria-label="Senha inicial">
+        <button class="btn btn-primary" type="submit">Adicionar administrador</button>
+      </form>
+      <p class="form-error" id="admError" role="alert"></p>
+      <div class="table-wrap">
+        <table class="timecard">
+          <thead><tr><th>Usuário</th><th>Senha alterada em</th><th></th></tr></thead>
+          <tbody id="admins"></tbody>
+        </table>
+      </div>
+      <h3 class="subhead">Relógios</h3>
+      <p class="hint">Perdeu um tablet ou quer revogar todos os aparelhos liberados como relógio? Desligue todos; depois ative de novo os que continuam em uso.</p>
+      <div class="toolbar">
+        <button class="btn btn-danger" type="button" id="resetKiosks">Desligar todos os relógios</button>
+        <span class="hint" id="kioskMsg" role="status"></span>
+      </div>
     </section>
   </main>
 
@@ -96,6 +142,21 @@
         <legend style="padding:0;margin-bottom:6px;font-size:.9rem;font-weight:600;color:var(--muted)">Dias de trabalho</legend>
         <div class="days" id="fDays"></div>
       </fieldset>
+      <label class="field" id="fFromWrap">
+        <span>Mudança de jornada vale a partir de</span>
+        <input id="fFrom" type="date">
+      </label>
+      <ul class="history" id="fSchedules"></ul>
+      <div class="two">
+        <label class="field">
+          <span>Admissão</span>
+          <input id="fHired" type="date">
+        </label>
+        <label class="field">
+          <span>Desligamento</span>
+          <input id="fTerminated" type="date">
+        </label>
+      </div>
       <p class="form-error" id="fError" role="alert"></p>
       <div class="dialog-actions">
         <button class="btn" type="button" id="fCancel">Cancelar</button>
@@ -125,7 +186,9 @@
     const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const pad = (n) => String(n).padStart(2, '0');
     const WEEK = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
-    const STATUS = { falta: 'falta', incompleto: 'incompleto', andamento: 'em andamento' };
+    const STATUS = { falta: 'falta', incompleto: 'incompleto', andamento: 'em andamento', feriado: 'feriado', fora: 'fora do contrato' };
+    const fmtD = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR');
+    const todayISO = () => localDate(new Date().toISOString());
     const ACTION = { criada: 'lançada', alterada: 'corrigida', excluida: 'excluída', restaurada: 'restaurada' };
 
     let employees = [];
@@ -203,7 +266,8 @@
       $('employees').innerHTML = employees.length
         ? employees.map((e) => `
             <tr>
-              <td class="who">${esc(e.name)}${e.active ? '' : '<span class="tag inativo">inativo</span>'}</td>
+              <td class="who">${esc(e.name)}${e.active ? '' : '<span class="tag inativo">inativo</span>'}
+                <small class="contract">${e.terminated_on ? `desligado em ${fmtD(e.terminated_on)}` : `desde ${fmtD(e.hired_on)}`}</small></td>
               <td>${fmtH(e.daily_minutes * 60000)} · ${workdaysLabel(e.workdays)}</td>
               <td class="actions">
                 <button class="btn btn-sm" data-act="edit" data-id="${e.id}">Editar</button>
@@ -229,6 +293,14 @@
       $('fHours').value = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
       const days = emp ? emp.workdays : '12345';
       document.querySelectorAll('#fDays input').forEach((cb) => { cb.checked = days.includes(cb.value); });
+      // Jornada com vigência: a mudança vale a partir de uma data e não altera o passado
+      $('fFromWrap').hidden = !emp;
+      $('fFrom').value = todayISO();
+      $('fSchedules').innerHTML = emp && emp.schedules.length > 1
+        ? emp.schedules.map((s) => `<li>desde ${fmtD(s.valid_from)}: ${fmtH(s.daily_minutes * 60000)} · ${workdaysLabel(s.workdays)}</li>`).join('')
+        : '';
+      $('fHired').value = emp?.hired_on || todayISO();
+      $('fTerminated').value = emp?.terminated_on || '';
       $('fError').textContent = '';
       $('empDialog').showModal();
       $('fName').focus();
@@ -244,7 +316,12 @@
         name: $('fName').value,
         daily_minutes: h * 60 + m,
         workdays: [...document.querySelectorAll('#fDays input:checked')].map((cb) => cb.value).join(''),
+        hired_on: $('fHired').value || null,
       };
+      if (editingEmp) {
+        body.terminated_on = $('fTerminated').value || null;
+        body.schedule_from = $('fFrom').value || null;
+      }
       const pin = $('fPin').value.trim();
       if (pin || !editingEmp) body.pin = pin;
       try {
@@ -288,14 +365,15 @@
 
     function chip(p, day) {
       const next = localDate(p.ts) !== day ? '<sup>+1</sup>' : '';
-      const label = `${kind(p.type)} ${fmtT(p.ts)}${next}${p.manual ? '*' : ''}`;
+      const off = p.offline ? '<span class="off-mark" title="Feita sem conexão: horário do aparelho">off</span>' : '';
+      const label = `${kind(p.type)} ${fmtT(p.ts)}${next}${p.manual ? '*' : ''}${off}`;
       if (p.deleted_at) {
         return `<span class="chip">
           <span class="stamp deleted" title="Excluída em ${fmtDT(p.deleted_at)}">${label}</span>
           <button class="x restore" data-restore="${p.id}" title="Restaurar batida" aria-label="Restaurar batida">↺</button>
         </span>`;
       }
-      const info = [];
+      const info = [`Comprovante nº ${p.id} · ${p.receipt}`];
       if (p.original_ts) info.push(`Original do relógio: ${kind(p.original_type)} ${fmtT(p.original_ts)}`);
       if (p.note) info.push(`Motivo: ${p.note}`);
       info.push('Clique para corrigir');
@@ -310,10 +388,12 @@
       const emp = $('repEmp').value;
       const month = $('repMonth').value;
       $('repError').textContent = '';
+      $('printLink').href = `/imprimir?mes=${month}`;
       if (!emp || !month) {
         $('summary').innerHTML = '';
+        $('closure').innerHTML = '';
         $('repSub').textContent = '';
-        $('report').innerHTML = '<tr><td colspan="5" class="empty">Cadastre um funcionário para ver o espelho.</td></tr>';
+        $('report').innerHTML = '<tr><td colspan="6" class="empty">Cadastre um funcionário para ver o espelho.</td></tr>';
         return;
       }
       let r;
@@ -321,17 +401,34 @@
 
       const showDeleted = $('showDeleted').checked;
       const e = employees.find((x) => String(x.id) === emp);
-      $('repSub').textContent = e ? `Jornada: ${fmtH(e.daily_minutes * 60000)} · ${workdaysLabel(e.workdays)}` : '';
+      $('repSub').textContent = e ? `Jornada atual: ${fmtH(e.daily_minutes * 60000)} · ${workdaysLabel(e.workdays)}` : '';
       punches = {};
       const count = (s) => r.days.filter((d) => d.status === s).length;
+      const alerts = r.days.reduce((n, d) => n + d.alerts.length, 0);
       const untilNote = month === currentMonth ? '<small>até ontem</small>' : '';
       $('summary').innerHTML = `
         <div><span>Trabalhado</span><strong>${fmtH(r.totalMs)}</strong></div>
+        <div><span>Noturno</span><strong>${fmtH(r.nightMs)}</strong><small>base do adicional</small></div>
         <div><span>Previsto</span><strong>${fmtH(r.expectedMs)}</strong>${untilNote}</div>
         <div><span>Saldo do mês</span><strong class="${signCls(r.balanceMs)}">${fmtSigned(r.balanceMs)}</strong>${untilNote}</div>
         <div><span>Banco de horas</span><strong class="${signCls(r.bankMs)}">${fmtSigned(r.bankMs)}</strong><small>anterior: ${fmtSigned(r.previousBalanceMs)}</small></div>
         <div><span>Faltas</span><strong>${count('falta')}</strong></div>
-        <div><span>Incompletos</span><strong>${count('incompleto')}</strong></div>`;
+        <div><span>Incompletos</span><strong>${count('incompleto')}</strong></div>
+        <div><span>Avisos da CLT</span><strong class="${alerts ? 'neg' : ''}">${alerts}</strong></div>`;
+
+      // Fechamento do mês: trava as batidas e libera a ciência do funcionário no relógio
+      const c = r.closure;
+      const monthEnded = month < currentMonth;
+      $('closure').innerHTML = c
+        ? `<p><b>Mês fechado</b> por ${esc(c.closed_by)} em ${fmtDT(c.closed_at)} ·
+             ${c.acknowledged_at ? `ciência do funcionário em ${fmtDT(c.acknowledged_at)}` : 'aguardando a ciência do funcionário no relógio'}</p>
+           <button class="btn btn-sm" type="button" data-closure="reopen">Reabrir mês</button>`
+        : monthEnded
+          ? `<p>Mês em aberto: confira, corrija e feche. Depois de fechado, as batidas ficam travadas e o funcionário pode dar ciência no relógio.</p>
+             <button class="btn btn-sm btn-primary" type="button" data-closure="one">Fechar mês deste funcionário</button>
+             <button class="btn btn-sm" type="button" data-closure="all">Fechar mês de todos</button>`
+          : '';
+      $('closure').className = 'closure' + (c ? ' is-closed' : '');
 
       $('report').innerHTML = r.days.length
         ? r.days.map((d) => {
@@ -339,18 +436,50 @@
             d.punches.forEach((p) => { punches[p.id] = p; });
             const chips = d.punches.filter((p) => showDeleted || !p.deleted_at).map((p) => chip(p, d.date)).join('');
             const tag = STATUS[d.status] ? `<span class="tag ${d.status}">${STATUS[d.status]}</span>` : '';
+            const holiday = d.holiday ? `<small class="holiday">${esc(d.holiday)}</small>` : '';
+            const warn = d.alerts.length ? `<span class="warn" tabindex="0" title="${esc(d.alerts.join('\n'))}" aria-label="${esc(d.alerts.join('; '))}">⚠</span>` : '';
             const hasHours = d.workedMs || d.punches.some((p) => !p.deleted_at);
             const showBalance = d.closed && (d.expectedMs || d.workedMs);
-            return `<tr class="${d.status === 'folga' ? 'folga' : ''}">
-              <td class="day">${dia}${tag}</td>
-              <td class="wrap"><div class="chips">${chips || '<span class="muted">—</span>'}</div></td>
+            const rowCls = ['folga', 'feriado', 'fora'].includes(d.status) ? 'folga' : '';
+            return `<tr class="${rowCls}">
+              <td class="day">${dia}${tag}${holiday}</td>
+              <td class="wrap"><div class="chips">${chips || '<span class="muted">—</span>'}${warn}</div>
+                ${d.alerts.length ? `<small class="alerts">${d.alerts.map(esc).join(' · ')}</small>` : ''}</td>
               <td class="num">${hasHours ? fmtH(d.workedMs) : ''}</td>
+              <td class="num muted col-night">${d.nightMs ? fmtH(d.nightMs) : ''}</td>
               <td class="num muted col-expected">${d.expectedMs ? fmtH(d.expectedMs) : ''}</td>
               <td class="num ${signCls(d.balanceMs)}">${showBalance ? fmtSigned(d.balanceMs) : ''}</td>
             </tr>`;
           }).join('')
-        : '<tr><td colspan="5" class="empty">Este mês ainda não começou.</td></tr>';
+        : '<tr><td colspan="6" class="empty">Este mês ainda não começou.</td></tr>';
     }
+
+    $('closure').addEventListener('click', async (e) => {
+      const act = e.target.closest('[data-closure]')?.dataset.closure;
+      if (!act) return;
+      const emp = $('repEmp').value;
+      const month = $('repMonth').value;
+      $('repError').textContent = '';
+      try {
+        if (act === 'reopen') {
+          const ok = await ask({ title: 'Reabrir o mês?', message: 'As batidas voltam a poder ser corrigidas e a ciência do funcionário, se houver, é apagada.', ok: 'Reabrir' });
+          if (ok === null) return;
+          await api(`/closures/${emp}/${month}`, { method: 'DELETE' });
+        } else {
+          const all = act === 'all';
+          const ok = await ask({
+            title: all ? 'Fechar o mês de todos?' : 'Fechar o mês deste funcionário?',
+            message: 'Depois de fechado, nenhuma batida do mês pode ser lançada, corrigida ou excluída sem reabrir o mês.',
+            ok: 'Fechar mês',
+          });
+          if (ok === null) return;
+          await api('/closures', { method: 'POST', body: JSON.stringify({ month, employee_id: all ? null : Number(emp) }) });
+        }
+      } catch (err) { $('repError').textContent = err.message; }
+      loadReport();
+    });
+
+    $('summaryCsvBtn').addEventListener('click', () => downloadCsv(`/api/admin/summary?month=${$('repMonth').value}&format=csv`));
 
     $('repEmp').addEventListener('change', () => { cancelEdit(); loadReport(); });
     $('repMonth').addEventListener('change', () => { cancelEdit(); loadReport(); });
@@ -456,23 +585,114 @@
       } catch (err) { $('manError').textContent = err.message; }
     });
 
-    $('csvBtn').addEventListener('click', async () => {
-      const emp = $('repEmp').value;
-      const month = $('repMonth').value;
-      if (!emp || !month) return;
-      const res = await fetch(`/api/admin/report?employee=${emp}&month=${month}&format=csv`).catch(() => null);
+    async function downloadCsv(url) {
+      const res = await fetch(url).catch(() => null);
       if (res?.status === 401) return toLogin();
       if (!res?.ok) return ($('repError').textContent = 'Não foi possível exportar o CSV.');
-      const url = URL.createObjectURL(await res.blob());
+      const blobUrl = URL.createObjectURL(await res.blob());
       const a = document.createElement('a');
-      a.href = url;
+      a.href = blobUrl;
       a.download = (res.headers.get('Content-Disposition') || '').match(/filename="(.+)"/)?.[1] || 'ponto.csv';
       a.click();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(blobUrl);
+    }
+
+    $('csvBtn').addEventListener('click', () => {
+      const emp = $('repEmp').value;
+      const month = $('repMonth').value;
+      if (emp && month) downloadCsv(`/api/admin/report?employee=${emp}&month=${month}&format=csv`);
+    });
+
+    // ---------- Feriados ----------
+
+    $('holYear').value = now.getFullYear();
+
+    async function loadHolidays() {
+      let items = [];
+      try { items = await api(`/holidays?year=${$('holYear').value}`); } catch (err) { $('holError').textContent = err.message; }
+      $('holidays').innerHTML = items.map((h) => `
+        <tr>
+          <td>${new Date(h.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
+          <td>${esc(h.name)}${h.national ? ' <span class="muted">· nacional</span>' : ''}</td>
+          <td class="actions">${h.national ? '' : `<button class="btn btn-sm btn-danger" data-hol="${h.date}">Remover</button>`}</td>
+        </tr>`).join('');
+    }
+
+    $('holYear').addEventListener('change', loadHolidays);
+    $('holForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('holError').textContent = '';
+      try {
+        await api('/holidays', { method: 'POST', body: JSON.stringify({ date: $('holDate').value, name: $('holName').value }) });
+        $('holYear').value = $('holDate').value.slice(0, 4);
+        $('holName').value = '';
+        loadHolidays();
+        loadReport();
+      } catch (err) { $('holError').textContent = err.message; }
+    });
+    $('holidays').addEventListener('click', async (e) => {
+      const day = e.target.closest('[data-hol]')?.dataset.hol;
+      if (!day) return;
+      try { await api(`/holidays/${day}`, { method: 'DELETE' }); } catch (err) { $('holError').textContent = err.message; }
+      loadHolidays();
+      loadReport();
+    });
+
+    // ---------- Administradores e relógios ----------
+
+    let currentUser = '';
+
+    async function loadAdmins() {
+      let admins = [];
+      try { admins = await api('/admins'); } catch (err) { $('admError').textContent = err.message; }
+      $('admins').innerHTML = admins.map((a) => `
+        <tr>
+          <td class="who">${esc(a.username)}${a.username === currentUser ? ' <span class="muted">(você)</span>' : ''}</td>
+          <td>${fmtDT(a.updated_at)}</td>
+          <td class="actions">${a.username === currentUser ? '' : `<button class="btn btn-sm btn-danger" data-adm="${a.id}" data-name="${esc(a.username)}">Excluir</button>`}</td>
+        </tr>`).join('');
+    }
+
+    $('admForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      $('admError').textContent = '';
+      try {
+        await api('/admins', { method: 'POST', body: JSON.stringify({ username: $('admUser').value, password: $('admPass').value }) });
+        $('admUser').value = '';
+        $('admPass').value = '';
+        loadAdmins();
+      } catch (err) { $('admError').textContent = err.message; }
+    });
+    $('admins').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-adm]');
+      if (!btn) return;
+      const ok = await ask({ title: `Excluir o administrador ${btn.dataset.name}?`, message: 'Ele perde o acesso na hora. O histórico de correções feitas por ele é mantido.', ok: 'Excluir', danger: true });
+      if (ok === null) return;
+      try { await api(`/admins/${btn.dataset.adm}`, { method: 'DELETE' }); } catch (err) { $('admError').textContent = err.message; }
+      loadAdmins();
+    });
+    $('resetKiosks').addEventListener('click', async () => {
+      const ok = await ask({
+        title: 'Desligar todos os relógios?',
+        message: 'Todos os aparelhos liberados como relógio vão pedir login. Em cada um que continuar em uso, entre como administrador e toque em “Usar como relógio”.',
+        ok: 'Desligar todos',
+        danger: true,
+      });
+      if (ok === null) return;
+      try {
+        await api('/kiosks/reset', { method: 'POST' });
+        $('kioskMsg').textContent = 'Relógios desligados.';
+      } catch (err) { $('kioskMsg').textContent = err.message; }
     });
 
     // A página só abre com o login do admin (o nginx confere o cookie antes)
+    fetch('/api/auth/admin').then((r) => (r.ok ? r.json() : null)).then((me) => {
+      currentUser = me?.user || '';
+      $('whoami').textContent = currentUser ? `Você entrou como ${currentUser}` : '';
+      loadAdmins();
+    }).catch(() => {});
     loadEmployees().then(loadReport).catch((err) => { $('empError').textContent = err.message; });
+    loadHolidays();
   </script>
 </body>
 </html>

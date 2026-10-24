@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.common import Pin
 
@@ -28,6 +28,7 @@ class EmployeeCreate(BaseModel):
     pin: Pin = Field(default="", validate_default=True)
     daily_minutes: DailyMinutes = 480
     workdays: Workdays = "12345"
+    hired_on: date | None = None  # padrão: hoje
 
     @field_validator("name")
     @classmethod
@@ -44,11 +45,21 @@ class EmployeeUpdate(BaseModel):
     active: bool | None = None
     daily_minutes: DailyMinutes | None = None
     workdays: Workdays | None = None
+    # A nova jornada vale a partir desta data (padrão: hoje); o passado não muda
+    schedule_from: date | None = None
+    hired_on: date | None = None
+    terminated_on: date | None = None  # enviar null explicitamente apaga o desligamento
 
     @field_validator("name", "pin", mode="before")
     @classmethod
     def _blank_is_none(cls, value):
         return value.strip() or None if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def _dates_in_order(self):
+        if self.hired_on and self.terminated_on and self.terminated_on < self.hired_on:
+            raise ValueError("O desligamento não pode ser antes da admissão")
+        return self
 
 
 class EmployeeRef(BaseModel):
@@ -58,11 +69,22 @@ class EmployeeRef(BaseModel):
     name: str
 
 
+class ScheduleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    valid_from: date
+    daily_minutes: int
+    workdays: str
+
+
 class EmployeeOut(EmployeeRef):
     active: bool
     created_at: datetime
-    daily_minutes: int
+    hired_on: date
+    terminated_on: date | None
+    daily_minutes: int  # jornada em vigor hoje
     workdays: str
+    schedules: list[ScheduleOut]
 
 
 class EmployeeCreated(BaseModel):

@@ -37,6 +37,8 @@ class Punch(Base):
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     type: Mapped[str] = mapped_column(String)
     manual: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("FALSE"))
+    # Batida guardada no relógio sem conexão: o horário veio do aparelho e merece conferência
+    offline: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("FALSE"))
     note: Mapped[str | None] = mapped_column(String)
     # Horário/tipo registrados pelo relógio, guardados na primeira correção feita pelo admin
     original_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -45,6 +47,13 @@ class Punch(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     employee: Mapped["Employee"] = relationship(back_populates="punches")
+
+    @property
+    def receipt(self) -> str:
+        """Código do comprovante: só o sistema consegue gerar, então confirma que a batida é autêntica."""
+        from app.core.security import receipt_code
+
+        return receipt_code(self.id, self.employee_id, self.original_ts or self.ts)
 
 
 class PunchChange(Base):

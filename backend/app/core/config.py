@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     # (as sessões abertas caem quando o container reinicia).
     secret_key: str = ""
     session_days: int = 30
-    # Aparelho liberado como relógio (só bate ponto). Trocar a senha do admin desliga todos.
+    # Aparelho liberado como relógio (só bate ponto). O admin pode desligar todos de uma vez.
     kiosk_days: int = 365
     # Login do admin feito no próprio aparelho do relógio expira rápido, para não ficar aberto
     admin_on_kiosk_minutes: int = 30
@@ -42,6 +42,18 @@ class Settings(BaseSettings):
     # Duração máxima de uma jornada: uma saída só fecha a entrada se vier até X horas depois.
     # Permite turnos que passam da meia-noite (a jornada conta no dia da entrada).
     max_shift_hours: int = 16
+
+    # Tolerância diária (CLT art. 58 §1º): diferenças de até X minutos no dia não geram saldo
+    tolerance_minutes: int = 10
+
+    # Trabalho noturno urbano (CLT art. 73): das 22h às 5h, hora noturna de 52min30s.
+    # Rural: lavoura 21h–5h e pecuária 20h–4h, com hora de 60 min (Lei 5.889/73).
+    night_start_hour: int = 22
+    night_end_hour: int = 5
+    night_hour_minutes: float = 52.5
+
+    # Batidas guardadas no relógio sem conexão são aceitas até X horas depois
+    offline_max_hours: int = 24
 
     # Documentação interativa em /api/docs (deixe desligada em produção)
     api_docs: bool = False

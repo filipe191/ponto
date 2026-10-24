@@ -1,5 +1,25 @@
 /* Ponto — a máquina (aço, visor, teclas) e o cartão (papel, linhas azuis, carimbos de tinta). */
 
+/* Archivo (variável: largura 62–125%, peso 400–800), servida localmente: o relógio funciona sem internet */
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 800;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url(/fonts/archivo-latin.woff2) format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Archivo";
+  font-style: normal;
+  font-weight: 400 800;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url(/fonts/archivo-latin-ext.woff2) format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 :root {
   --steel: #c9d1d6;
   --panel: #e3e8eb;
@@ -116,6 +136,8 @@ button { font: inherit; color: inherit; }
   opacity: 0.9;
   transform: rotate(var(--tilt, -1.5deg));
 }
+.stamps { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.stamp .kind { margin-right: 4px; font-size: 0.72em; opacity: 0.75; }
 .stamp .prev { margin-right: 3px; font-size: 0.68em; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .stamp.in { color: var(--ink-in); }
 .stamp.out { color: var(--ink-out); }
@@ -291,8 +313,42 @@ button { font: inherit; color: inherit; }
 .slip.out { border-color: var(--ink-out); }
 .slip.error { border-style: solid; border-color: var(--danger); color: var(--danger); }
 
+.slip.offline { border-style: solid; border-color: var(--rule); background: var(--paper); color: var(--text); }
+.receipt { color: var(--muted); font-size: 0.82rem; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.key-wide { grid-column: 1 / -1; height: 46px; }
+.readout-queue { margin-top: 8px; color: #f6c453; font-size: 0.88rem; font-weight: 600; }
+
 .who { font-weight: 600; }
 .live { color: var(--muted); font-weight: 500; }
+
+/* ---------- Meu espelho (janela no relógio) ---------- */
+
+dialog.mirror {
+  width: min(760px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  padding: clamp(16px, 3vw, 26px);
+  border: 0;
+  border-radius: 18px;
+  background: var(--paper);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+dialog.mirror::backdrop { background: rgba(20, 27, 32, 0.6); }
+.mirror-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.mirror-head h2 { color: var(--rule); font-size: 1.5rem; font-weight: 800; font-stretch: 112%; }
+.mirror-nav { display: flex; gap: 8px; }
+.mirror-nav .key { height: 48px; min-width: 48px; padding: 0 16px; font-size: 1.1rem; }
+.mirror-nav .key:disabled { opacity: 0.4; }
+.mirror-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin: 14px 0; }
+.mirror-summary div { padding: 8px 12px; border: 1px solid var(--rule-soft); border-radius: 6px; }
+.mirror-summary span { display: block; color: var(--muted); font-size: 0.8rem; }
+.mirror-summary strong { font-size: 1.3rem; font-stretch: 87.5%; font-variant-numeric: tabular-nums; }
+.ack { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding: 10px 14px; border: 1.5px solid var(--rule); border-radius: 10px; }
+.ack .key { height: 48px; padding: 0 18px; }
+.timecard td.wrap { white-space: normal; }
+.receipt-line { display: inline-flex; align-items: center; gap: 6px; margin: 2px 14px 2px 0; }
+.receipt-line small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tag { padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; color: var(--danger); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
 
 /* ---------- Login ---------- */
 

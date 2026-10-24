@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session, joinedload
@@ -15,11 +15,21 @@ class PunchRepository:
     def get(self, punch_id: int) -> Punch | None:
         return self.db.get(Punch, punch_id)
 
-    def last_for_employee(self, employee_id: int, since: datetime) -> Punch | None:
+    def last_before(self, employee_id: int, since: datetime, before: datetime) -> Punch | None:
+        """Última batida do funcionário em [since, before)."""
         return self.db.scalar(
             select(Punch)
-            .where(Punch.employee_id == employee_id, Punch.ts >= since, _not_deleted)
+            .where(Punch.employee_id == employee_id, Punch.ts >= since, Punch.ts < before, _not_deleted)
             .order_by(Punch.ts.desc())
+            .limit(1)
+        )
+
+    def near(self, employee_id: int, ts: datetime, delta: timedelta) -> Punch | None:
+        """Alguma batida do funcionário a menos de `delta` de `ts` (antes ou depois)."""
+        return self.db.scalar(
+            select(Punch)
+            .where(Punch.employee_id == employee_id, Punch.ts > ts - delta, Punch.ts < ts + delta, _not_deleted)
+            .order_by(Punch.ts)
             .limit(1)
         )
 
