@@ -418,6 +418,47 @@ class AuthService:
         self.db.commit()
         return company
 
+    # ---------- Superadministradores ----------
+
+    def list_superadmins(self) -> list[AdminAccount]:
+        return self.repo.superadmins()
+
+    def create_superadmin(self, username: str, password: str, user: str) -> AdminAccount:
+        """Outro superadmin, para o sistema não depender de uma conta só. Senha provisória, como os demais."""
+        username = username.strip()
+        if not username or "|" in username:
+            raise BadRequest("Usuário inválido")
+        problem = password_problem(password, username)
+        if problem:
+            raise BadRequest(problem)
+        try:
+            account = self.repo.add(
+                AdminAccount(
+                    username=username,
+                    password_hash=hash_password(password),
+                    must_change_password=True,
+                    superadmin=True,
+                )
+            )
+            self.audit(None).record(user, "superadmin.criado", f"Criou o superadministrador {username}")
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise Conflict("Já existe um administrador com esse usuário")
+        return account
+
+    def delete_superadmin(self, admin_id: int, current_user: str) -> None:
+        account = self.repo.get(admin_id)
+        if not account or not account.superadmin:
+            raise NotFound("Superadministrador não encontrado")
+        if account.username == current_user:
+            raise BadRequest("Você não pode excluir a própria conta")
+        if len(self.repo.superadmins()) <= 1:
+            raise BadRequest("É preciso manter pelo menos um superadministrador")
+        self.audit(None).record(current_user, "superadmin.excluido", f"Excluiu o superadministrador {account.username}")
+        self.repo.delete(account)
+        self.db.commit()
+
     def _company(self, company_id: int) -> Company:
         company = self.repo.company(company_id)
         if not company:

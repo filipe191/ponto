@@ -898,7 +898,39 @@ $('settingsForm').addEventListener('submit', async (e) => {
   } catch (err) { $('settingsError').textContent = err.message; }
 });
 
-// ---------- Auditoria do sistema ----------
+// ---------- Superadministradores e auditoria do sistema ----------
+
+async function loadSuperadmins() {
+  let items = [];
+  try { items = await request('/api/companies/superadmins'); } catch (err) { $('saError').textContent = err.message; }
+  $('superadmins').innerHTML = items.map((a) => `
+    <tr>
+      <td class="who">${esc(a.username)}${a.username === currentUser ? ' <span class="muted">(você)</span>' : ''}</td>
+      <td>${fmtDT(a.updated_at)}</td>
+      <td class="actions">${a.username === currentUser ? '' : `<button class="btn btn-sm btn-danger" data-sa="${a.id}" data-name="${esc(a.username)}">Excluir</button>`}</td>
+    </tr>`).join('');
+}
+
+$('saForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('saError').textContent = '';
+  try {
+    await request('/api/companies/superadmins', { method: 'POST', body: JSON.stringify({ username: $('saUser').value, password: $('saPass').value }) });
+    $('saUser').value = '';
+    $('saPass').value = '';
+    loadSuperadmins();
+    loadSystemAudit();
+  } catch (err) { $('saError').textContent = err.message; }
+});
+$('superadmins').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-sa]');
+  if (!btn) return;
+  const ok = await ask({ title: `Excluir o superadministrador ${btn.dataset.name}?`, message: 'Ele perde o acesso na hora. O histórico do que ele fez é mantido.', ok: 'Excluir', danger: true });
+  if (ok === null) return;
+  try { await request(`/api/companies/superadmins/${btn.dataset.sa}`, { method: 'DELETE' }); } catch (err) { $('saError').textContent = err.message; }
+  loadSuperadmins();
+  loadSystemAudit();
+});
 
 let sysAuditLast = null;
 
@@ -950,6 +982,7 @@ fetch('/api/auth/admin').then((r) => (r.ok ? r.json() : null)).then((me) => {
   $('companyArea').hidden = !openCompanyId;
   if (me.superadmin) {
     loadCompanies(openCompanyId);
+    loadSuperadmins();
     loadSystemAudit();
     if (!openCompanyId) $('coHint').insertAdjacentHTML('beforeend', ' <b>Nenhuma empresa aberta:</b> cadastre uma ou abra uma da lista.');
   }

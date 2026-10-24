@@ -45,6 +45,21 @@
         </table>
       </div>
 
+      <h3 class="subhead">Superadministradores</h3>
+      <p class="hint">Quem cadastra e administra as empresas. Tenha pelo menos dois, para o sistema não depender de uma conta só. A senha inicial é provisória: no primeiro acesso, o novo superadministrador troca a senha e ativa a verificação em duas etapas.</p>
+      <form class="toolbar" id="saForm">
+        <input class="input" type="text" id="saUser" placeholder="Usuário" required autocomplete="off" aria-label="Usuário do superadministrador">
+        <input class="input" type="password" id="saPass" placeholder="Senha inicial (mín. 12)" required minlength="12" autocomplete="new-password" aria-label="Senha inicial do superadministrador">
+        <button class="btn btn-primary" type="submit">Adicionar superadministrador</button>
+      </form>
+      <p class="form-error" id="saError" role="alert"></p>
+      <div class="table-wrap">
+        <table class="timecard">
+          <thead><tr><th>Usuário</th><th>Senha alterada em</th><th></th></tr></thead>
+          <tbody id="superadmins"></tbody>
+        </table>
+      </div>
+
       <h3 class="subhead">Auditoria do sistema</h3>
       <p class="hint">O que os superadministradores fizeram fora das empresas: logins, senha e duas etapas, cadastro e desativação de empresas e de superadministradores. O que eles fazem dentro de uma empresa fica na auditoria dela.</p>
       <p class="form-error" id="sysAudError" role="alert"></p>

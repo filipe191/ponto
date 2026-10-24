@@ -25,6 +25,10 @@ class AdminRepository:
             )
         )
 
+    def superadmins(self) -> list[AdminAccount]:
+        query = select(AdminAccount).where(AdminAccount.superadmin).order_by(AdminAccount.username)
+        return list(self.db.scalars(query))
+
     def count(self, company_id: int | None = None) -> int:
         """Admins da empresa (ou de todo o sistema, sem empresa)."""
         query = select(func.count()).select_from(AdminAccount)
