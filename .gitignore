@@ -70,3 +70,5 @@ target/
 
 # ---------- Ferramentas locais ----------
 .github/modernize/
+# Grafo gerado pelo graphify (regenerável a partir do código)
+graphify-out/
