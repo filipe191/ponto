@@ -6,6 +6,7 @@
 
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 from sqlalchemy import exists, select
@@ -50,7 +51,8 @@ from app.schemas.report import DayStatus
 from app.services.audit import AuditLog
 from app.services.punch_service import MIN_PUNCH_INTERVAL, PunchService
 from app.services.report_service import ReportService, check_month
-from app.utils.dates import day_bounds, month_bounds, month_of, parse_month, to_local
+from app.services.rules import load_rules
+from app.utils.dates import day_bounds, month_bounds, month_of, parse_month, to_local, with_tz
 
 REQUEST_NOTE = "Pedido pelo funcionário no app"
 
@@ -64,11 +66,11 @@ def _fmt(minutes: int, signed: bool = False) -> str:
     return f"{sign}{abs(minutes) // 60}h{abs(minutes) % 60:02d}"
 
 
-def to_batida(punch: Punch) -> BatidaServidor:
+def to_batida(punch: Punch, tz: ZoneInfo | None = None) -> BatidaServidor:
     return BatidaServidor(
         id=punch.public_id,
         tipo=punch.type.upper(),
-        ocorrido_em=to_local(punch.ts),
+        ocorrido_em=to_local(punch.ts, tz),
         origem=punch.device or punch.source,
         observacao=punch.note,
         manual=punch.manual,
@@ -199,6 +201,8 @@ class MobileService:
         self.requests = RequestRepository(db)
         self.closures = ClosureRepository(db)
         self.punches = PunchRepository(db)
+        self.rules = load_rules(db, employee.company_id)
+        self.tz = self.rules.tz
 
     # ---------- Envio do lote ----------
 
@@ -226,7 +230,7 @@ class MobileService:
     def _receive(self, b: BatidaRequest) -> str:
         if self._client_id_known(b.id):
             return "duplicada"
-        ts = b.ocorrido_em if b.ocorrido_em.tzinfo else b.ocorrido_em.replace(tzinfo=settings.timezone)
+        ts = with_tz(b.ocorrido_em, self.tz)
         kind = PunchType.ENTRADA if b.tipo == "ENTRADA" else PunchType.SAIDA
 
         if b.manual:
@@ -244,7 +248,7 @@ class MobileService:
             )
             return "aceita"
 
-        if self.closures.get(self.employee.id, month_of(to_local(ts).date())):
+        if self.closures.get(self.employee.id, month_of(to_local(ts, self.tz).date())):
             raise BadRequest("Mês já fechado pelo administrador; peça um lançamento manual")
         # Mesma batida feita também no relógio da empresa (ou toque duplo): o ponto já tem esse horário
         if self.punches.near(self.employee.id, ts, MIN_PUNCH_INTERVAL):
@@ -272,23 +276,24 @@ class MobileService:
 
     def last(self) -> BatidaServidor | None:
         punch = last_punch(self.db, self.employee.id)
-        return to_batida(punch) if punch else None
+        return to_batida(punch, self.tz) if punch else None
 
     def between(self, first: date, last: date) -> list[BatidaServidor]:
         if last < first or (last - first).days > 400:
             raise BadRequest("Período inválido")
-        start, _ = day_bounds(first)
-        _, end = day_bounds(last)
-        return [to_batida(p) for p in punches_between(self.db, self.employee.id, start, end)]
+        start, _ = day_bounds(first, self.tz)
+        _, end = day_bounds(last, self.tz)
+        return [to_batida(p, self.tz) for p in punches_between(self.db, self.employee.id, start, end)]
 
     def summary(self, month: str) -> ResumoMes:
         """Resumo do mês calculado pelas mesmas regras do espelho (CLT, feriados, jornada)."""
         report = ReportService(self.db, self.employee.company_id).build(self.employee, check_month(month), None)
-        start, end = month_bounds(*parse_month(month))
-        by_id = {p.id: p for p in punches_between(self.db, self.employee.id, start - settings.max_shift, end + settings.max_shift)}
+        start, end = month_bounds(*parse_month(month), self.tz)
+        margin = self.rules.longest_shift
+        by_id = {p.id: p for p in punches_between(self.db, self.employee.id, start - margin, end + margin)}
         dias = []
         for d in report.days:
-            batidas = [to_batida(by_id[p.id]) for p in d.punches if not p.deleted_at and p.id in by_id]
+            batidas = [to_batida(by_id[p.id], self.tz) for p in d.punches if not p.deleted_at and p.id in by_id]
             if not batidas:
                 continue
             worked = _minutes(d.worked_ms)
@@ -320,12 +325,10 @@ class MobileService:
         punch = self._punch(public_id)
         if data.ocorrido_em is None and data.tipo is None:
             raise BadRequest("Nada para corrigir")
-        ts = data.ocorrido_em
-        if ts is not None and not ts.tzinfo:
-            ts = ts.replace(tzinfo=settings.timezone)
+        ts = with_tz(data.ocorrido_em, self.tz) if data.ocorrido_em is not None else None
         kind = (PunchType.ENTRADA if data.tipo == "ENTRADA" else PunchType.SAIDA) if data.tipo else None
         self._upsert_request(punch, RequestAction.ALTERAR, ts, kind, data.observacao)
-        return to_batida(punch)  # nada muda até o admin aprovar
+        return to_batida(punch, self.tz)  # nada muda até o admin aprovar
 
     def request_delete(self, public_id: str) -> None:
         self._upsert_request(self._punch(public_id), RequestAction.EXCLUIR, None, None, None)
@@ -381,7 +384,7 @@ class RequestService:
 
     def approve(self, request_id: int, user: str, note: str = "") -> None:
         request = self._pending(request_id)
-        when = f"{to_local(request.requested_at):%d/%m/%Y %H:%M}"
+        when = f"{to_local(request.requested_at, load_rules(self.db, self.company_id).tz):%d/%m/%Y %H:%M}"
         reason = f"{request.note or REQUEST_NOTE} (pedido no app em {when})"
         punches = PunchService(self.db, self.company_id, autocommit=False)
         if request.action == RequestAction.INCLUIR:

@@ -3,7 +3,6 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.errors import BadRequest
 from app.models import Employee, MonthClosure, Punch, PunchType
 from app.repositories.calendar_repository import ClosureRepository, HolidayRepository
@@ -13,6 +12,7 @@ from app.schemas.employee import EmployeeRef
 from app.schemas.punch import PunchOut
 from app.schemas.report import ClosureOut, DayReport, DayStatus, MonthReport, ReopeningOut, SummaryRow
 from app.services.audit import AuditLog
+from app.services.rules import RuleBook, load_rules
 from app.services.shifts import Shift, pair_shifts
 from app.utils.dates import month_bounds, night_time, parse_month, to_local
 
@@ -39,12 +39,17 @@ def check_month(month: str) -> str:
     return month
 
 
-def counted_time(shift: Shift) -> tuple[timedelta, timedelta]:
-    """(horas trabalhadas, horas noturnas), as duas com a hora noturna reduzida (CLT art. 73 §1º)."""
+def counted_time(shift: Shift, rules: RuleBook | None = None) -> tuple[timedelta, timedelta]:
+    """(horas trabalhadas, horas noturnas), as duas com a hora noturna reduzida (CLT art. 73 §1º).
+
+    Vale o horário noturno da regra em vigor no dia da jornada.
+    """
     if not shift.complete:
         return ZERO, ZERO
-    night_real = night_time(shift.start, shift.punches[1].ts)
-    night = night_real * (60 / settings.night_hour_minutes)
+    rules = rules or RuleBook()
+    rule = rules.on(shift.day)
+    night_real = night_time(shift.start, shift.punches[1].ts, rule.night_start_hour, rule.night_end_hour, rules.tz)
+    night = night_real * (60 / rule.night_hour_minutes)
     return shift.worked - night_real + night, night
 
 
@@ -86,10 +91,14 @@ def build_days(
     last: date,
     now: datetime,
     holidays: dict[date, str],
+    rules: RuleBook | None = None,
 ) -> list[DayReport]:
-    """Um DayReport por dia de `first` a `last` (inclusive). `shifts` em ordem, de todo o histórico."""
-    today = to_local(now).date()
-    tolerance = timedelta(minutes=settings.tolerance_minutes)
+    """Um DayReport por dia de `first` a `last` (inclusive). `shifts` em ordem, de todo o histórico.
+
+    Cada dia usa a regra da empresa em vigor nele (`rules`; sem ela, os valores do .env).
+    """
+    rules = rules or RuleBook()
+    today = to_local(now, rules.tz).date()
 
     by_day: dict[date, list[Shift]] = {}
     previous_of: dict[date, Shift | None] = {}  # jornada anterior à primeira do dia (para o descanso de 11h)
@@ -100,7 +109,7 @@ def build_days(
             by_day.setdefault(s.day, []).append(s)
     deleted_by_day: dict[date, list[Punch]] = {}
     for p in deleted:
-        deleted_by_day.setdefault(to_local(p.ts).date(), []).append(p)
+        deleted_by_day.setdefault(to_local(p.ts, rules.tz).date(), []).append(p)
 
     days = []
     day = first
@@ -108,10 +117,10 @@ def build_days(
         day_shifts = by_day.get(day, [])
         counted = night = ZERO
         for s in day_shifts:
-            c, n = counted_time(s)
+            c, n = counted_time(s, rules)
             counted, night = counted + c, night + n
         expected = expected_for(employee, day, holidays)
-        still_open = any(s.is_open(now, settings.max_shift) for s in day_shifts)
+        still_open = any(s.is_open(now, rules.max_shift_at(s.start)) for s in day_shifts)
         closed = day < today and not still_open
 
         if not closed:
@@ -132,7 +141,7 @@ def build_days(
         balance = ZERO
         if closed:
             balance = counted - expected
-            if status == DayStatus.OK and expected and abs(balance) <= tolerance:
+            if status == DayStatus.OK and expected and abs(balance) <= rules.on(day).tolerance:
                 balance = ZERO  # tolerância do art. 58 §1º
 
         punches = [p for s in day_shifts for p in s.punches] + deleted_by_day.get(day, [])
@@ -162,6 +171,7 @@ class ReportService:
         self.punches = PunchRepository(db)
         self.holidays = HolidayRepository(db, company_id)
         self.closures = ClosureRepository(db)
+        self.rules = load_rules(db, company_id)
 
     def monthly(self, employee_id: int, month: str) -> MonthReport:
         employee = self.employees.get(employee_id)
@@ -184,19 +194,20 @@ class ReportService:
 
     def build(self, employee: Employee, month: str, closure: MonthClosure | None) -> MonthReport:
         now = datetime.now(timezone.utc)
-        start, end = month_bounds(*parse_month(month))
+        rules = self.rules
+        start, end = month_bounds(*parse_month(month), rules.tz)
         first_day = start.date()
-        last_day = min((end - timedelta(days=1)).date(), to_local(now).date())
+        last_day = min((end - timedelta(days=1)).date(), to_local(now, rules.tz).date())
 
         # Histórico inteiro: o banco de horas soma todos os meses anteriores
-        punches = self.punches.list_for_employee(employee.id, end + settings.max_shift, include_deleted=True)
-        shifts = pair_shifts([p for p in punches if not p.deleted_at], settings.max_shift)
+        punches = self.punches.list_for_employee(employee.id, end + rules.longest_shift, include_deleted=True)
+        shifts = pair_shifts([p for p in punches if not p.deleted_at], rules.max_shift_at, rules.tz)
         deleted = [p for p in punches if p.deleted_at]
 
         history_start = min([employee.hired_on] + [s.day for s in shifts[:1]])
         holidays = self.holidays.all_between(min(history_start, first_day), max(last_day, first_day))
-        days = build_days(shifts, deleted, employee, first_day, last_day, now, holidays)
-        before = build_days(shifts, [], employee, history_start, first_day - timedelta(days=1), now, holidays)
+        days = build_days(shifts, deleted, employee, first_day, last_day, now, holidays, rules)
+        before = build_days(shifts, [], employee, history_start, first_day - timedelta(days=1), now, holidays, rules)
 
         closed = [d for d in days if d.closed]
         previous = sum(d.balance_ms for d in before)
@@ -217,7 +228,7 @@ class ReportService:
     def summary(self, month: str) -> list[SummaryRow]:
         """Resumo do mês de todos os funcionários com contrato em algum dia do mês."""
         check_month(month)
-        start, end = month_bounds(*parse_month(month))
+        start, end = month_bounds(*parse_month(month), self.rules.tz)
         first_day, last_day = start.date(), (end - timedelta(days=1)).date()
         closures = self.closures.list_for_month(month, self.company_id)
         rows = []
@@ -250,12 +261,12 @@ class ReportService:
         sign = ("-" if ms < 0 else "+") if signed and minutes else ""
         return f"{sign}{minutes // 60}:{minutes % 60:02d}"
 
-    @classmethod
-    def to_csv(cls, report: MonthReport) -> str:
-        hours = cls._hours
+    def to_csv(self, report: MonthReport) -> str:
+        hours = self._hours
+        tz = self.rules.tz
 
         def stamp(p: PunchOut, day: str) -> str:
-            local = to_local(p.ts)
+            local = to_local(p.ts, tz)
             next_day = " (+1)" if local.date().isoformat() != day else ""
             kind = "E" if p.type == PunchType.ENTRADA else "S"
             marks = ("*" if p.manual else "") + (" (offline)" if p.offline else "") + (" (cel)" if p.source == "app" else "")
@@ -280,16 +291,22 @@ class ReportService:
         lines.append(
             "* lançamento ou correção manual; (+1) batida no dia seguinte; (cel) feita no app de celular;"
             " horas noturnas com hora reduzida;"
-            f" tolerância de {settings.tolerance_minutes} min por dia;;;;;"
+            f" tolerância de {self._tolerance_label(report)} por dia;;;;;"
         )
         return "﻿" + "\r\n".join(lines)
 
-    @classmethod
-    def summary_csv(cls, month: str, rows: list[SummaryRow]) -> str:
-        hours = cls._hours
+    def _tolerance_label(self, report: MonthReport) -> str:
+        """Tolerância do mês (mais de uma quando a regra mudou no meio dele)."""
+        values = sorted({self.rules.on(date.fromisoformat(d.date)).tolerance_minutes for d in report.days})
+        values = values or [self.rules.current.tolerance_minutes]
+        return " ou ".join(f"{v} min" for v in values)
+
+    def summary_csv(self, month: str, rows: list[SummaryRow]) -> str:
+        hours = self._hours
+        tz = self.rules.tz
 
         def when(ts: datetime | None) -> str:
-            return f"{to_local(ts):%d/%m/%Y %H:%M}" if ts else ""
+            return f"{to_local(ts, tz):%d/%m/%Y %H:%M}" if ts else ""
 
         lines = [
             f"Resumo {month};;;;;;;;;;",

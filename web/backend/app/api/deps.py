@@ -112,11 +112,19 @@ def require_superadmin(access: CurrentAccess, user: Annotated[str, Depends(requi
     return user
 
 
+def require_super_company(
+    tenant: Annotated[Tenant, Depends(require_company)], _user: Annotated[str, Depends(require_superadmin)]
+) -> Tenant:
+    """Superadmin com uma empresa aberta (ex.: mudar as regras de jornada dela)."""
+    return tenant
+
+
 AdminUser = Annotated[str, Depends(require_admin)]
 AdminAccess = Annotated[Access, Depends(require_admin_session)]
 CompanyAdmin = Annotated[Tenant, Depends(require_company)]
 SuperAdmin = Annotated[str, Depends(require_superadmin)]
 ClockCompany = Annotated[int, Depends(clock_company)]
+SuperCompany = Annotated[Tenant, Depends(require_super_company)]
 
 
 def client_ip(request: Request) -> str:

@@ -108,7 +108,7 @@
           <tbody id="report"></tbody>
         </table>
       </div>
-      <p class="legend">Clique numa batida para corrigi-la. * lançada ou corrigida manualmente · <sup>+1</sup> batida no dia seguinte (turno noturno) · <span class="off-mark">off</span> feita sem conexão no relógio · <span class="off-mark">cel</span> feita no app de celular (em vermelho: horário do celular adiantado) · ⚠ aviso da CLT (passe o mouse ou toque) · horas noturnas com hora reduzida de 52min30s · diferenças de até 10 min no dia não geram saldo · o dia de hoje só entra no saldo quando terminar.</p>
+      <p class="legend">Clique numa batida para corrigi-la. * lançada ou corrigida manualmente · <sup>+1</sup> batida no dia seguinte (turno noturno) · <span class="off-mark">off</span> feita sem conexão no relógio · <span class="off-mark">cel</span> feita no app de celular (em vermelho: horário do celular adiantado) · ⚠ aviso da CLT (passe o mouse ou toque) · horas noturnas, hora noturna reduzida e tolerância diária conforme as regras de jornada da empresa (cartão abaixo) · o dia de hoje só entra no saldo quando terminar.</p>
 
       <h3 class="subhead" id="manTitle">Lançamento manual</h3>
       <p class="hint" id="manHint">Para registrar uma batida esquecida. O motivo é obrigatório e fica no histórico.</p>
@@ -144,6 +144,52 @@
           <tbody id="holidays"></tbody>
         </table>
       </div>
+    </section>
+
+    <section class="card" aria-labelledby="rulesTitle">
+      <header class="card-head">
+        <h2 class="card-title" id="rulesTitle">Regras de jornada</h2>
+        <p class="card-sub" id="rulesNow"></p>
+      </header>
+      <p class="hint">Usadas no cálculo das horas, do horário noturno e do saldo. Cada mudança vale a partir de uma data: os dias anteriores, os meses fechados e o banco de horas acumulado continuam como estavam. Só o superadministrador altera as regras.</p>
+      <div class="table-wrap">
+        <table class="timecard">
+          <thead><tr><th>Desde</th><th>Tolerância</th><th>Horário noturno</th><th>Jornada máxima</th><th>Definida por</th></tr></thead>
+          <tbody id="rulePeriods"></tbody>
+        </table>
+      </div>
+      <form id="ruleForm" hidden>
+        <h3 class="subhead">Novas regras</h3>
+        <div class="toolbar">
+          <label class="field-inline">A partir de <input class="input" type="date" id="rFrom" required></label>
+          <label class="field-inline">Tolerância (min) <input class="input input-num" type="number" id="rTol" min="0" max="60" required></label>
+          <label class="field-inline">Noturno das <input class="input input-num" type="number" id="rNightStart" min="0" max="23" required>h</label>
+          <label class="field-inline">às <input class="input input-num" type="number" id="rNightEnd" min="0" max="23" required>h</label>
+          <label class="field-inline">Hora noturna (min) <input class="input input-num" type="number" id="rNightMin" min="30" max="60" step="0.5" required></label>
+          <label class="field-inline">Jornada máxima (h) <input class="input input-num" type="number" id="rMaxShift" min="4" max="24" required></label>
+        </div>
+        <div class="toolbar">
+          <button class="btn" type="button" data-preset="urbano">Urbano (22h–5h, 52,5 min)</button>
+          <button class="btn" type="button" data-preset="lavoura">Rural – lavoura (21h–5h, 60 min)</button>
+          <button class="btn" type="button" data-preset="pecuaria">Rural – pecuária (20h–4h, 60 min)</button>
+          <button class="btn btn-primary" type="submit">Salvar novas regras</button>
+        </div>
+        <p class="form-error" id="ruleError" role="alert"></p>
+      </form>
+      <h3 class="subhead">Ajustes da empresa</h3>
+      <form class="toolbar" id="settingsForm">
+        <label class="field-inline">Fuso horário <input class="input" type="text" id="sTz" list="tzList" required autocomplete="off"></label>
+        <datalist id="tzList">
+          <option value="America/Sao_Paulo"><option value="America/Manaus"><option value="America/Cuiaba">
+          <option value="America/Porto_Velho"><option value="America/Boa_Vista"><option value="America/Rio_Branco">
+          <option value="America/Belem"><option value="America/Fortaleza"><option value="America/Recife">
+          <option value="America/Bahia"><option value="America/Noronha">
+        </datalist>
+        <label class="field-inline">Batidas sem conexão aceitas até <input class="input input-num" type="number" id="sOffline" min="0" max="72" required> h depois</label>
+        <button class="btn btn-primary" type="submit" id="settingsSubmit">Salvar ajustes</button>
+      </form>
+      <p class="hint">O fuso define em que dia cada batida conta e só pode ser mudado antes da primeira batida da empresa.</p>
+      <p class="form-error" id="settingsError" role="alert"></p>
     </section>
 
     <section class="card" aria-labelledby="accTitle">
@@ -189,6 +235,7 @@
           <option value="admin.">Administradores e logins</option>
           <option value="relogio.">Relógios</option>
           <option value="empresa.">Empresa</option>
+          <option value="regras.">Regras de jornada</option>
         </select>
       </div>
       <p class="form-error" id="audError" role="alert"></p>

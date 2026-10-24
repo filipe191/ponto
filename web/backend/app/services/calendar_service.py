@@ -11,6 +11,7 @@ from app.schemas.admin import HolidayCreate, HolidayOut
 from app.schemas.report import MonthReport
 from app.services.audit import EMPLOYEE_USER, AuditLog
 from app.services.report_service import ReportService, check_month
+from app.services.rules import load_rules
 from app.utils.dates import month_bounds, now_local, parse_month, to_local
 from app.utils.holidays import national_holidays
 
@@ -64,12 +65,13 @@ class ClosureService:
         self.repo = ClosureRepository(db)
         self.employees = EmployeeRepository(db, company_id)
         self.audit = AuditLog(db, company_id)
+        self.tz = load_rules(db, company_id).tz
 
     def close(self, month: str, employee_id: int | None, user: str) -> int:
         check_month(month)
-        start, end = month_bounds(*parse_month(month))
+        start, end = month_bounds(*parse_month(month), self.tz)
         first_day, last_day = start.date(), (end - timedelta(days=1)).date()
-        if last_day >= now_local().date():
+        if last_day >= now_local(self.tz).date():
             raise BadRequest("Só é possível fechar um mês que já terminou")
         if employee_id is not None:
             employee = self.employees.get(employee_id)
@@ -103,7 +105,7 @@ class ClosureService:
         if not note:
             raise BadRequest("Informe o motivo da reabertura")
         ack = (
-            f"ciência do funcionário em {to_local(closure.acknowledged_at):%d/%m/%Y %H:%M}"
+            f"ciência do funcionário em {to_local(closure.acknowledged_at, self.tz):%d/%m/%Y %H:%M}"
             if closure.acknowledged_at
             else "sem ciência do funcionário"
         )

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
-from app.api.deps import CompanyAdmin, DbSession, require_admin
+from app.api.deps import CompanyAdmin, CurrentAccess, DbSession, SuperCompany, require_admin
 from app.schemas.admin import (
     AdminCreate,
     AdminOut,
@@ -20,6 +20,9 @@ from app.schemas.admin import (
     HolidayOut,
     RequestDecision,
     RequestOut,
+    RulePeriodIn,
+    RulesOut,
+    RulesSettingsIn,
 )
 from app.schemas.common import OkResponse
 from app.schemas.employee import EmployeeCreate, EmployeeCreated, EmployeeOut, EmployeeUpdate
@@ -32,6 +35,7 @@ from app.services.employee_service import EmployeeService
 from app.services.mobile_service import DeviceService, RequestService
 from app.services.punch_service import PunchService
 from app.services.report_service import ReportService
+from app.services.rules import RulePeriod, RulesService
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -173,6 +177,34 @@ def add_holiday(body: HolidayCreate, db: DbSession, t: CompanyAdmin):
 @router.delete("/holidays/{day}", response_model=OkResponse)
 def delete_holiday(day: date, db: DbSession, t: CompanyAdmin):
     HolidayService(db, t.company_id).delete(day, t.user)
+    return OkResponse()
+
+
+# ---------- Regras de jornada (o superadmin altera; os admins da empresa consultam) ----------
+
+
+@router.get("/rules", response_model=RulesOut)
+def rules(db: DbSession, t: CompanyAdmin, access: CurrentAccess):
+    service = RulesService(db, t.company_id)
+    company = service.company()
+    return RulesOut(
+        timezone=company.timezone,
+        offline_max_hours=company.offline_max_hours,
+        periods=service.periods(),
+        can_edit=access.account.superadmin,
+    )
+
+
+@router.post("/rules", response_model=OkResponse, status_code=201)
+def add_rules(body: RulePeriodIn, db: DbSession, t: SuperCompany):
+    """Novas regras a partir de uma data; o passado e o banco de horas acumulado não mudam."""
+    RulesService(db, t.company_id).add_period(RulePeriod(**body.model_dump()), t.user)
+    return OkResponse()
+
+
+@router.patch("/rules/settings", response_model=OkResponse)
+def update_rules_settings(body: RulesSettingsIn, db: DbSession, t: SuperCompany):
+    RulesService(db, t.company_id).update_settings(t.user, body.timezone, body.offline_max_hours)
     return OkResponse()
 
 

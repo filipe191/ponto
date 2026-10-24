@@ -830,6 +830,72 @@ $('companies').addEventListener('click', async (e) => {
   if (openCompanyId) loadAudit();
 });
 
+// ---------- Regras de jornada ----------
+
+const RULE_PRESETS = {
+  urbano: { night_start_hour: 22, night_end_hour: 5, night_hour_minutes: 52.5 },
+  lavoura: { night_start_hour: 21, night_end_hour: 5, night_hour_minutes: 60 },
+  pecuaria: { night_start_hour: 20, night_end_hour: 4, night_hour_minutes: 60 },
+};
+const RULE_INPUTS = { tolerance_minutes: 'rTol', night_start_hour: 'rNightStart', night_end_hour: 'rNightEnd', night_hour_minutes: 'rNightMin', max_shift_hours: 'rMaxShift' };
+const nightMin = (m) => String(m).replace('.', ',');
+const ruleText = (r) => `tolerância de ${r.tolerance_minutes} min · noturno das ${r.night_start_hour}h às ${r.night_end_hour}h (hora de ${nightMin(r.night_hour_minutes)} min) · jornada máxima de ${r.max_shift_hours} h`;
+
+async function loadRules() {
+  let r;
+  try { r = await api('/rules'); } catch (err) { $('ruleError').textContent = err.message; return; }
+  const today = todayISO();
+  const current = [...r.periods].reverse().find((p) => p.valid_from <= today) || r.periods[0];
+  $('rulesNow').textContent = current ? `Hoje: ${ruleText(current)}` : '';
+  $('rulePeriods').innerHTML = r.periods.slice().reverse().map((p) => `
+    <tr>
+      <td>${p.valid_from === '2000-01-01' ? 'sempre' : fmtD(p.valid_from)}${p.valid_from > today ? ' <span class="muted">(futura)</span>' : ''}</td>
+      <td>${p.tolerance_minutes} min</td>
+      <td>${p.night_start_hour}h às ${p.night_end_hour}h · hora de ${nightMin(p.night_hour_minutes)} min</td>
+      <td>${p.max_shift_hours} h</td>
+      <td>${esc(p.created_by)}<small class="contract">${fmtDT(p.created_at)}</small></td>
+    </tr>`).join('');
+  // O formulário começa com as regras de hoje, para mudar só o que for preciso
+  $('ruleForm').hidden = !r.can_edit;
+  if (current) for (const [field, id] of Object.entries(RULE_INPUTS)) $(id).value = current[field];
+  if (!$('rFrom').value) $('rFrom').value = today;
+  $('sTz').value = r.timezone;
+  $('sOffline').value = r.offline_max_hours;
+  for (const id of ['sTz', 'sOffline']) $(id).disabled = !r.can_edit;
+  $('settingsSubmit').hidden = !r.can_edit;
+}
+
+document.querySelectorAll('[data-preset]').forEach((btn) => btn.addEventListener('click', () => {
+  for (const [field, value] of Object.entries(RULE_PRESETS[btn.dataset.preset])) $(RULE_INPUTS[field]).value = value;
+}));
+$('ruleForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('ruleError').textContent = '';
+  const body = { valid_from: $('rFrom').value };
+  for (const [field, id] of Object.entries(RULE_INPUTS)) body[field] = Number($(id).value);
+  const ok = await ask({
+    title: `Novas regras a partir de ${fmtD(body.valid_from)}?`,
+    message: `${ruleText(body)}. Os dias anteriores e o banco de horas acumulado até lá não mudam. Não é possível começar num mês já fechado.`,
+    ok: 'Salvar regras',
+  });
+  if (ok === null) return;
+  try {
+    await api('/rules', { method: 'POST', body: JSON.stringify(body) });
+    loadRules();
+    loadReport();
+    loadAudit();
+  } catch (err) { $('ruleError').textContent = err.message; }
+});
+$('settingsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('settingsError').textContent = '';
+  try {
+    await api('/rules/settings', { method: 'PATCH', body: JSON.stringify({ timezone: $('sTz').value.trim(), offline_max_hours: Number($('sOffline').value) }) });
+    loadRules();
+    loadAudit();
+  } catch (err) { $('settingsError').textContent = err.message; }
+});
+
 // ---------- Início ----------
 
 let openCompanyId = null;
@@ -840,6 +906,7 @@ function loadCompanyArea() {
   loadAdmins();
   loadEmployees().then(() => { loadReport(); loadAudit(); }).catch((err) => { $('empError').textContent = err.message; });
   loadHolidays();
+  loadRules();
   loadAlerts();
   setInterval(loadAlerts, 60000);
 }

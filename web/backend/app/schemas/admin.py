@@ -137,3 +137,31 @@ class CompanyUpdate(BaseModel):
 
 class CompanySwitch(BaseModel):
     company_id: int
+
+
+class RulePeriodIn(BaseModel):
+    valid_from: date
+    tolerance_minutes: int
+    night_start_hour: int
+    night_end_hour: int
+    night_hour_minutes: float
+    max_shift_hours: int
+
+
+class RulePeriodOut(RulePeriodIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    created_at: datetime
+    created_by: str
+
+
+class RulesOut(BaseModel):
+    timezone: str
+    offline_max_hours: int
+    periods: list[RulePeriodOut]  # da mais antiga para a mais nova
+    can_edit: bool  # só o superadmin altera
+
+
+class RulesSettingsIn(BaseModel):
+    timezone: str | None = None
+    offline_max_hours: int | None = None

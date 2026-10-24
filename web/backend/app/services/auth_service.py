@@ -20,6 +20,7 @@ from app.core.security import (
 from app.models import AdminAccount, AdminSession, Company
 from app.repositories.admin_repository import AdminRepository
 from app.services.audit import AuditLog
+from app.services.rules import default_rule
 
 KIOSK_SUBJECT = "relogio"  # sujeito do token do relógio: "relogio:<empresa>"
 # Relógios liberados antes das várias empresas: o token diz só "relogio" e vale para a empresa nº 1,
@@ -364,8 +365,15 @@ class AuthService:
         if not name:
             raise BadRequest("Informe o nome da empresa")
         company = self.repo.add_company(
-            Company(name=name, privacy_contact=contact.strip(), kiosk_secret=secrets.token_hex(32))
+            Company(
+                name=name,
+                privacy_contact=contact.strip(),
+                kiosk_secret=secrets.token_hex(32),
+                timezone=settings.tz,
+                offline_max_hours=settings.offline_max_hours,
+            )
         )
+        self.db.add(default_rule(company.id, user))
         self.audit(company.id).record(user, "empresa.criada", f"Cadastrou a empresa {name}")
         self.create_admin(company.id, admin_username, admin_password, user)  # faz o commit (ou desfaz tudo)
         return company

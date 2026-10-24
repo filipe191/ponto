@@ -22,6 +22,7 @@ from app.repositories.employee_repository import EmployeeRepository
 from app.repositories.punch_repository import PunchRepository
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate
 from app.services.audit import AuditLog
+from app.services.rules import load_rules
 from app.utils.dates import now_local
 
 PIN_IN_USE = "Este PIN já está em uso"
@@ -42,12 +43,13 @@ class EmployeeService:
         self.repo = EmployeeRepository(db, company_id)
         self.punches = PunchRepository(db)
         self.audit = AuditLog(db, company_id)
+        self.company_id = company_id
 
     def list(self) -> list[Employee]:
         return self.repo.list()
 
     def create(self, data: EmployeeCreate, user: str) -> Employee:
-        hired_on = data.hired_on or now_local().date()
+        hired_on = data.hired_on or self._today()
         employee = Employee(name=data.name, pin_hash=hash_pin(data.pin), hired_on=hired_on)
         employee.schedules.append(
             EmployeeSchedule(valid_from=hired_on, daily_minutes=data.daily_minutes, workdays=data.workdays)
@@ -113,7 +115,7 @@ class EmployeeService:
 
     def _set_schedule(self, employee: Employee, data: EmployeeUpdate, user: str) -> None:
         """Nova jornada a partir de `schedule_from`; a anterior continua valendo antes dessa data."""
-        start = data.schedule_from or now_local().date()
+        start = data.schedule_from or self._today()
         current = employee.schedule_on(start)
         minutes = data.daily_minutes if data.daily_minutes is not None else (current.daily_minutes if current else 480)
         workdays = data.workdays if data.workdays is not None else (current.workdays if current else "12345")
@@ -283,6 +285,9 @@ class EmployeeService:
             details={"terminated_on": employee.terminated_on, "at": now},
         )
         self.db.commit()
+
+    def _today(self):
+        return now_local(load_rules(self.db, self.company_id).tz).date()
 
     def _get(self, employee_id: int) -> Employee:
         employee = self.repo.get(employee_id)

@@ -110,8 +110,9 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
 - **Funcionários:** nome, PIN, jornada diária e dias de trabalho, admissão e desligamento. Mudar a jornada cria uma nova vigência a partir de uma data, sem alterar o passado. Só cadastros sem nenhum registro podem ser excluídos; os demais são desativados.
 - **Espelho mensal:** todos os dias com batidas, horas trabalhadas, horas noturnas, previsto e saldo; marca faltas, incompletos, feriados e dias fora do contrato. Resumo com saldo do mês e **banco de horas** acumulado.
 - **Regras da CLT no cálculo:**
-  - Hora noturna reduzida (art. 73): das 22h às 5h, 52min30s valem 1 hora. As horas trabalhadas já consideram isso e a coluna "Noturno" é a base do adicional.
-  - Tolerância (art. 58 §1º): diferenças de até 10 minutos no dia não geram saldo.
+  - Hora noturna reduzida (art. 73): por padrão das 22h às 5h, 52min30s valem 1 hora. As horas trabalhadas já consideram isso e a coluna "Noturno" é a base do adicional.
+  - Tolerância (art. 58 §1º): por padrão, diferenças de até 10 minutos no dia não geram saldo.
+- **Regras de jornada por empresa** (Administração → Regras de jornada): tolerância, horário noturno, hora noturna (urbano 52,5 min; rural 60 min, com atalhos para lavoura 21h–5h e pecuária 20h–4h) e jornada máxima. Cada mudança vale a partir de uma data e não pode começar num mês já fechado: os dias anteriores e o banco de horas acumulado não mudam. Fuso horário e prazo das batidas sem conexão também são da empresa; o fuso só muda antes da primeira batida. Só o superadmin altera; os admins da empresa consultam. Os valores do `.env` são o padrão das empresas novas.
   - Avisos para conferência: intervalo menor que 1h em jornada acima de 6h (ou 15 min acima de 4h), menos de 11h entre jornadas, mais de 2h extras no dia e trabalho em folga/feriado.
 - **Feriados:** os nacionais são calculados automaticamente (inclusive a Sexta-feira Santa). Municipais, estaduais e pontos facultativos (Carnaval, Corpus Christi) são cadastrados pelo admin.
 - **Correções com histórico:** lançamentos e correções exigem motivo e ficam marcados com `*`. O horário original do relógio é preservado, nada é apagado de verdade (excluídas podem ser vistas e restauradas) e cada ação registra quem fez, quando, antes e depois.

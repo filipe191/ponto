@@ -40,7 +40,7 @@ function sheet(r) {
       <tfoot><tr><td colspan="2">Totais · banco anterior ${fmtSigned(r.previousBalanceMs)} · banco ao fim do mês ${fmtSigned(r.bankMs)}</td>
         <td class="n">${fmtH(r.totalMs)}</td><td class="n">${fmtH(r.nightMs)}</td><td class="n">${fmtH(r.expectedMs)}</td><td class="n">${fmtSigned(r.balanceMs)}</td><td></td></tr></tfoot>
     </table>
-    <p class="notes">E entrada · S saída · * lançada ou corrigida manualmente · (+1) no dia seguinte · (off) feita sem conexão · (cel) feita no app de celular · horas noturnas com hora reduzida de 52min30s · diferenças de até 10 min no dia não geram saldo.</p>
+    <p class="notes">E entrada · S saída · * lançada ou corrigida manualmente · (+1) no dia seguinte · (off) feita sem conexão · (cel) feita no app de celular · horas noturnas com hora noturna reduzida e tolerância diária conforme as regras de jornada da empresa.</p>
     <div class="signs"><div>${esc(r.employee.name)}</div><div>Responsável</div></div>
   </section>`;
 }
