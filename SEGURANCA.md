@@ -22,23 +22,23 @@ O sistema guarda dados pessoais de funcionários (nome, horários de trabalho, f
 
 ## Resumo
 
-| # | Item | Prioridade | Esforço | Onde |
-|---|------|-----------|---------|------|
-| 1 | CA local sem restrição de nomes | Alta | Pequeno | `web/scripts/gerar-certificado.sh` |
-| 2 | Postgres aberto na rede do Tailscale | Alta | Pequeno | Servidor (Postgres compartilhado) |
-| 3 | Sem firewall no servidor | Alta | Pequeno | Servidor |
-| 4 | Backups sem criptografia e no mesmo disco | Alta | Médio | `web/scripts/backup.sh` |
-| 5 | Cookie de admin enviado a outros serviços do mesmo IP / CSRF | Média | Pequeno | Backend + nginx |
-| 6 | Sair não invalida a sessão | Média | Médio | Backend |
-| 7 | Login de admin fraco | Média | Médio | Backend + painel |
-| 8 | Auditoria incompleta | Média | Médio | Backend |
-| 9 | PIN de 4 dígitos | Média | Pequeno | Backend + relógio |
-| 10 | Cartão de hoje expõe todos os colegas | Média | Pequeno | Relógio |
-| 11 | Fórmulas no CSV | Baixa | Pequeno | Backend |
-| 12 | Scripts dentro das páginas (CSP fraco) | Baixa | Médio | Frontend |
-| 13 | Dependências sem checagem de vulnerabilidades | Baixa | Pequeno | `web/scripts/deploy.sh` |
-| 14 | Chaves de celular não expiram | Baixa | Pequeno | Backend |
-| 15 | Processo de LGPD | Baixa | Médio | Documentação |
+| # | Item | Prioridade | Esforço | Onde | Status |
+|---|------|-----------|---------|------|--------|
+| 1 | CA local sem restrição de nomes | Alta | Pequeno | `web/scripts/gerar-certificado.sh` | ✅ Concluído |
+| 2 | Postgres aberto na rede do Tailscale | Alta | Pequeno | Servidor (Postgres compartilhado) | Risco aceito |
+| 3 | Sem firewall no servidor | Alta | Pequeno | Servidor | ✅ Concluído |
+| 4 | Backups sem criptografia e no mesmo disco | Alta | Médio | `web/scripts/backup.sh` | Pendente |
+| 5 | Cookie de admin enviado a outros serviços do mesmo IP / CSRF | Média | Pequeno | Backend + nginx | Pendente |
+| 6 | Sair não invalida a sessão | Média | Médio | Backend | Pendente |
+| 7 | Login de admin fraco | Média | Médio | Backend + painel | Pendente |
+| 8 | Auditoria incompleta | Média | Médio | Backend | Pendente |
+| 9 | PIN de 4 dígitos | Média | Pequeno | Backend + relógio | Pendente |
+| 10 | Cartão de hoje expõe todos os colegas | Média | Pequeno | Relógio | Pendente |
+| 11 | Fórmulas no CSV | Baixa | Pequeno | Backend | Pendente |
+| 12 | Scripts dentro das páginas (CSP fraco) | Baixa | Médio | Frontend | Pendente |
+| 13 | Dependências sem checagem de vulnerabilidades | Baixa | Pequeno | `web/scripts/deploy.sh` | Pendente |
+| 14 | Chaves de celular não expiram | Baixa | Pequeno | Backend | Pendente |
+| 15 | Processo de LGPD | Baixa | Médio | Documentação | Pendente |
 
 Os itens 2 e 3 mexem em infraestrutura compartilhada com outros sistemas do servidor. Combine antes de aplicar.
 
@@ -58,7 +58,7 @@ Os itens 2 e 3 mexem em infraestrutura compartilhada com outros sistemas do serv
 
 **Observação.** Todos os aparelhos precisam remover a CA antiga e instalar a nova.
 
-**Status: implementado no script, falta gerar a CA nova.** O `gerar-certificado.sh` agora:
+**Status: concluído em 24/10/2026.** A CA nova foi gerada com restrição de nomes e chave cifrada. Detalhes da implementação: O `gerar-certificado.sh` agora:
 - cria a CA com *name constraints* críticas (sub-rede local, IPs e nome do Tailscale, nomes do servidor);
 - cifra `ca.key` com uma senha de no mínimo 12 caracteres, pedida ao criar a CA e ao renovar;
 - recusa uma CA antiga sem restrição e oferece `--nova-ca`, que apaga a antiga com `shred`;
@@ -66,13 +66,7 @@ Os itens 2 e 3 mexem em infraestrutura compartilhada com outros sistemas do serv
 
 O `deploy.sh` também recusa subir com uma CA sem restrição. Testado: certificados para `google.com` e `8.8.8.8` assinados pela CA nova são recusados (*permitted subtree violation*).
 
-Escolher a senha cabe a quem administra o servidor, então este passo precisa ser feito no terminal:
-
-```bash
-cd ~/ponto/web && scripts/gerar-certificado.sh --nova-ca
-```
-
-A CA atual nunca foi instalada em nenhum aparelho (o HTTPS ainda não foi implantado), então a troca agora não exige reinstalar nada.
+Para trocar a CA no futuro: `cd ~/ponto/web && scripts/gerar-certificado.sh --nova-ca` (pede uma senha nova; todos os aparelhos precisam reinstalar a CA).
 
 ### 2. Postgres aberto na rede do Tailscale
 
@@ -84,7 +78,9 @@ A CA atual nunca foi instalada em nenhum aparelho (o HTTPS ainda não foi implan
 
 **Observação.** Esse Postgres não é deste projeto. Confira se algum outro sistema depende do acesso pelo Tailscale antes de fechar.
 
-**Status: levantado, falta aplicar no Portainer.** O container `postgres_db` é uma stack do Portainer e publica a porta 5432 em dois endereços: o IP do Tailscale e `172.17.0.1` (a ponte do Docker). Nenhum container usa o endereço do Tailscale:
+**Status: risco aceito em 24/10/2026.** O acesso pelo Tailscale foi mantido de propósito: a tailnet tem um único dono, todos os aparelhos são dele e há travas (ACLs) configuradas no Tailscale. Se um dia a tailnet for compartilhada, ou se um dos servidores nela ficar exposto à internet, reavalie: restrinja a porta 5432 nas ACLs a um só aparelho ou remova a publicação no IP do Tailscale como descrito abaixo.
+
+Levantamento feito antes da decisão: O container `postgres_db` é uma stack do Portainer e publica a porta 5432 em dois endereços: o IP do Tailscale e `172.17.0.1` (a ponte do Docker). Nenhum container usa o endereço do Tailscale:
 - o carro-manutencao conecta por `host.docker.internal`, ou seja, `172.17.0.1`, que **precisa continuar**;
 - o ponto usa a rede Docker `postgres_pg_network`;
 - o graminas tem banco próprio.
@@ -106,18 +102,14 @@ Como aplicar (a stack é do Portainer, então a mudança precisa ser feita lá, 
 
 **Correção.** Ativar um firewall (ex.: `ufw`) liberando as portas do ponto só para a rede local e para a interface do Tailscale.
 
-**Status: implementado, falta instalar (precisa de root).** Um `ufw` comum não resolveria: o Docker publica as portas por fora dele. O novo `web/scripts/firewall.sh` coloca as regras na cadeia `DOCKER-USER`, que o Docker consulta antes de entregar o tráfego aos containers:
+**Status: concluído em 24/10/2026.** O serviço `ponto-firewall` está instalado e ativo. Detalhes da implementação: Um `ufw` comum não resolveria: o Docker publica as portas por fora dele. O novo `web/scripts/firewall.sh` coloca as regras na cadeia `DOCKER-USER`, que o Docker consulta antes de entregar o tráfego aos containers:
 - as portas do ponto (9092 e 9443) só aceitam a rede local e o Tailscale (`100.64.0.0/10`);
 - o serviço systemd `ponto-firewall` reaplica as regras a cada boot e a cada reinício do Docker;
 - o ponto passa a publicar as portas só em IPv4, que é o que o firewall filtra.
 
 Testado numa simulação com redirecionamento de porta igual ao do Docker: a rede local e o Tailscale entram, a internet é bloqueada nas portas do ponto e as outras portas não são afetadas.
 
-Como aplicar:
-
-```bash
-cd ~/ponto/web && sudo scripts/firewall.sh instalar
-```
+Para conferir: `sudo scripts/firewall.sh status` (mostra as regras e quantos pacotes foram bloqueados).
 
 Fora do escopo do ponto: os demais serviços do servidor (Portainer, Grafana, Vaultwarden, Pi-hole etc.) continuam sem esse filtro. Vale aplicar a mesma ideia a eles.
 
@@ -256,9 +248,9 @@ Além disso, **reabrir um mês apaga o registro de fechamento junto com a ciênc
 
 ## Checklist
 
-- [ ] 1. Recriar a CA com *name constraints* e chave cifrada — script pronto; falta rodar `scripts/gerar-certificado.sh --nova-ca`
-- [ ] 2. Fechar o Postgres para a rede do Tailscale — falta remover a porta na stack do Portainer
-- [ ] 3. Ativar firewall (rede local e Tailscale) — script pronto; falta rodar `sudo scripts/firewall.sh instalar`
+- [x] 1. Recriar a CA com *name constraints* e chave cifrada
+- [x] 2. Postgres no Tailscale — risco aceito (tailnet de um único dono, com ACLs)
+- [x] 3. Ativar firewall (rede local e Tailscale)
 - [ ] 4. Criptografar backups e enviar cópia para fora do servidor
 - [ ] 5. Checar `Origin` nas rotas que alteram dados
 - [ ] 6. Sessões no servidor, "sair de todos", expiração por inatividade
