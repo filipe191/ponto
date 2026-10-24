@@ -804,6 +804,7 @@ $('coForm').addEventListener('submit', async (e) => {
     }
     companyForm();
     loadCompanies(openCompanyId);
+    loadSystemAudit();
     if (openCompanyId) loadAudit();
   } catch (err) { $('coError').textContent = err.message; }
 });
@@ -827,6 +828,7 @@ $('companies').addEventListener('click', async (e) => {
     await request(`/api/companies/${company.id}`, { method: 'PATCH', body: JSON.stringify({ active: !company.active }) });
   } catch (err) { $('coError').textContent = err.message; }
   loadCompanies(openCompanyId);
+  loadSystemAudit();
   if (openCompanyId) loadAudit();
 });
 
@@ -896,6 +898,30 @@ $('settingsForm').addEventListener('submit', async (e) => {
   } catch (err) { $('settingsError').textContent = err.message; }
 });
 
+// ---------- Auditoria do sistema ----------
+
+let sysAuditLast = null;
+
+async function loadSystemAudit(more = false) {
+  const params = new URLSearchParams({ limit: AUDIT_PAGE });
+  if (more && sysAuditLast) params.set('before', sysAuditLast);
+  $('sysAudError').textContent = '';
+  let items = [];
+  try { items = await request(`/api/companies/audit?${params}`); } catch (err) { $('sysAudError').textContent = err.message; return; }
+  const rows = items.map((a) => `
+    <tr>
+      <td class="when">${fmtDT(a.at)}</td>
+      <td class="who">${esc(a.user)}${a.ip ? `<small class="contract">${esc(a.ip)}</small>` : ''}</td>
+      <td class="wrap">${esc(a.summary)}</td>
+    </tr>`).join('');
+  if (more) $('sysAudit').insertAdjacentHTML('beforeend', rows);
+  else $('sysAudit').innerHTML = rows || '<tr><td colspan="3" class="empty">Nada registrado ainda.</td></tr>';
+  if (items.length) sysAuditLast = items[items.length - 1].id;
+  $('sysAudMore').hidden = items.length < AUDIT_PAGE;
+}
+
+$('sysAudMore').addEventListener('click', () => loadSystemAudit(true));
+
 // ---------- Início ----------
 
 let openCompanyId = null;
@@ -924,6 +950,7 @@ fetch('/api/auth/admin').then((r) => (r.ok ? r.json() : null)).then((me) => {
   $('companyArea').hidden = !openCompanyId;
   if (me.superadmin) {
     loadCompanies(openCompanyId);
+    loadSystemAudit();
     if (!openCompanyId) $('coHint').insertAdjacentHTML('beforeend', ' <b>Nenhuma empresa aberta:</b> cadastre uma ou abra uma da lista.');
   }
   if (openCompanyId) loadCompanyArea();

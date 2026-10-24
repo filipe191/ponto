@@ -31,11 +31,20 @@ def _plain(value):
 
 
 class AuditLog:
-    """Auditoria de uma empresa: grava nela e só lista o que é dela."""
+    """Auditoria de uma empresa: grava nela e só lista o que é dela.
+
+    Sem empresa (`company_id=None`) é a auditoria do sistema: o que o superadmin faz fora das empresas
+    (login, senha, duas etapas, cadastro de empresas e de superadmins).
+    """
 
     def __init__(self, db: Session, company_id: int | None):
         self.db = db
         self.company_id = company_id
+
+    def _scope(self):
+        if self.company_id is None:
+            return AuditEvent.company_id.is_(None)
+        return AuditEvent.company_id == self.company_id
 
     def record(
         self,
@@ -63,7 +72,7 @@ class AuditLog:
         self, employee_id: int | None = None, action: str = "", before: int | None = None, limit: int = 50
     ) -> list[AuditEvent]:
         """Mais recentes primeiro; `action` filtra pelo prefixo (ex.: "mes." pega fechar e reabrir)."""
-        query = select(AuditEvent).where(AuditEvent.company_id == self.company_id)
+        query = select(AuditEvent).where(self._scope())
         if employee_id:
             query = query.where(AuditEvent.employee_id == employee_id)
         if action:
@@ -78,7 +87,7 @@ class AuditLog:
             self.db.scalars(
                 select(AuditEvent)
                 .where(
-                    AuditEvent.company_id == self.company_id,
+                    self._scope(),
                     AuditEvent.action == "mes.reaberto",
                     AuditEvent.employee_id == employee_id,
                     AuditEvent.details["month"].astext == month,
@@ -92,7 +101,7 @@ class AuditLog:
         return list(
             self.db.scalars(
                 select(AuditEvent)
-                .where(AuditEvent.company_id == self.company_id, AuditEvent.action == action, AuditEvent.at >= since)
+                .where(self._scope(), AuditEvent.action == action, AuditEvent.at >= since)
                 .order_by(AuditEvent.id.desc())
             )
         )

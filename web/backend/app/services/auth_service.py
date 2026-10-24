@@ -47,6 +47,11 @@ class AuthService:
     def audit(self, company_id: int | None) -> AuditLog:
         return AuditLog(self.db, company_id)
 
+    def own_audit(self, account: AdminAccount) -> AuditLog:
+        """Onde fica o que o admin faz na própria conta: na empresa dele, ou na auditoria do sistema
+        para o superadmin (os admins da empresa nº 1 não veem os logins do superadmin)."""
+        return self.audit(None if account.superadmin else account.company_id)
+
     def ensure_setup(self) -> None:
         """Na primeira subida, cria o superadmin com ADMIN_USER/ADMIN_PASSWORD do .env (ele cadastra as empresas)."""
         if not self.repo.count():
@@ -80,7 +85,7 @@ class AuthService:
 
     def log_login(self, account: AdminAccount, ok: bool, ip: str, reason: str = "") -> None:
         """Entradas e tentativas erradas numa conta que existe (usuário inexistente não é registrado)."""
-        audit = self.audit(account.company_id)
+        audit = self.own_audit(account)
         if ok:
             audit.record(account.username, "admin.login", "Entrou no painel", ip=ip)
         else:
@@ -218,7 +223,7 @@ class AuthService:
         account.password_hash = hash_password(new)
         account.must_change_password = False
         self.repo.revoke_sessions(account.id, _now(), keep_id=keep.id)
-        self.audit(account.company_id).record(account.username, "admin.senha_trocada", "Trocou a própria senha")
+        self.own_audit(account).record(account.username, "admin.senha_trocada", "Trocou a própria senha")
         self.db.commit()
 
     # ---------- Verificação em duas etapas ----------
@@ -243,7 +248,7 @@ class AuthService:
         account.totp_last_step = step
         codes = twofactor.new_recovery_codes()
         self.repo.replace_recovery_codes(account.id, [twofactor.hash_recovery_code(c) for c in codes])
-        self.audit(account.company_id).record(account.username, "admin.2fa_ativada", "Ativou a verificação em duas etapas")
+        self.own_audit(account).record(account.username, "admin.2fa_ativada", "Ativou a verificação em duas etapas")
         self.db.commit()
         return codes
 
@@ -256,7 +261,9 @@ class AuthService:
         account.totp_pending = None
         account.totp_last_step = None
         self.repo.replace_recovery_codes(account.id, [])
-        self.audit(account.company_id).record(account.username, "admin.2fa_desativada", "Desativou a verificação em duas etapas")
+        self.own_audit(account).record(
+            account.username, "admin.2fa_desativada", "Desativou a verificação em duas etapas"
+        )
         self.db.commit()
 
     def new_recovery_codes(self, account: AdminAccount, code: str) -> list[str]:
@@ -264,7 +271,9 @@ class AuthService:
             raise BadRequest("Código inválido")
         codes = twofactor.new_recovery_codes()
         self.repo.replace_recovery_codes(account.id, [twofactor.hash_recovery_code(c) for c in codes])
-        self.audit(account.company_id).record(account.username, "admin.codigos_recuperacao", "Gerou novos códigos de recuperação")
+        self.own_audit(account).record(
+            account.username, "admin.codigos_recuperacao", "Gerou novos códigos de recuperação"
+        )
         self.db.commit()
         return codes
 
@@ -375,6 +384,9 @@ class AuthService:
         )
         self.db.add(default_rule(company.id, user))
         self.audit(company.id).record(user, "empresa.criada", f"Cadastrou a empresa {name}")
+        self.audit(None).record(
+            user, "empresa.criada", f"Cadastrou a empresa {name}", details={"company_id": company.id}
+        )
         self.create_admin(company.id, admin_username, admin_password, user)  # faz o commit (ou desfaz tudo)
         return company
 
@@ -389,16 +401,20 @@ class AuthService:
         if contact is not None and contact.strip() != company.privacy_contact:
             changes.append("contato de privacidade alterado")
             company.privacy_contact = contact.strip()
-        audit = self.audit(company.id)
+        events = []
         if changes:
-            audit.record(user, "empresa.alterada", "Alterou a empresa: " + "; ".join(changes))
+            events.append(("empresa.alterada", "Alterou a empresa: " + "; ".join(changes)))
         if active is not None and active != company.active:
             company.active = active
-            audit.record(
-                user,
-                "empresa.ativada" if active else "empresa.desativada",
-                "Ativou a empresa" if active else "Desativou a empresa (admins, relógios e celulares param)",
+            events.append(
+                ("empresa.ativada", "Ativou a empresa")
+                if active
+                else ("empresa.desativada", "Desativou a empresa (admins, relógios e celulares param)")
             )
+        # Fica na auditoria da empresa (os admins dela veem) e na do sistema (com o nome da empresa)
+        for action, summary in events:
+            self.audit(company.id).record(user, action, summary)
+            self.audit(None).record(user, action, f"{company.name}: {summary}", details={"company_id": company.id})
         self.db.commit()
         return company
 

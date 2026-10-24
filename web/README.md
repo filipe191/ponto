@@ -54,7 +54,7 @@ As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
 
 Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionários, feriados, administradores, relógios, celulares e auditoria, e uma não enxerga os dados da outra.
 
-- **Superadministrador:** criado na primeira subida a partir de `ADMIN_USER`/`ADMIN_PASSWORD`. Em Administração → **Empresas** ele cadastra cada empresa já com o primeiro admin dela, edita o nome e o contato de privacidade, e desativa ou reativa a empresa. Para trabalhar numa empresa, ele a escolhe no seletor ao lado de "Ponto"; cada entrada fica na auditoria da empresa.
+- **Superadministrador:** criado na primeira subida a partir de `ADMIN_USER`/`ADMIN_PASSWORD`. Em Administração → **Empresas** ele cadastra cada empresa já com o primeiro admin dela, edita o nome e o contato de privacidade, e desativa ou reativa a empresa. Para trabalhar numa empresa, ele a escolhe no seletor ao lado de "Ponto"; cada entrada fica na auditoria da empresa. Na mesma seção fica a **auditoria do sistema**: logins e conta dos superadmins, cadastro e desativação de empresas.
 - **Admins de uma empresa** só veem e alteram a própria empresa.
 - **Empresa desativada:** os admins dela saem na hora e não conseguem entrar, e os relógios e os celulares dela param. Nada é apagado; ao reativar, tudo volta.
 - **PIN:** é único dentro de cada empresa, então duas empresas podem ter funcionários com o mesmo PIN. O relógio sabe de qual empresa é pela liberação do aparelho.
