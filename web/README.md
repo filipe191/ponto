@@ -22,7 +22,12 @@ O `deploy.sh` confere o `.env`, gera o certificado HTTPS se faltar, roda os test
 
 ### HTTPS na rede local (certificado próprio)
 
-`scripts/gerar-certificado.sh` cria uma **CA local** e um certificado do servidor para o IP da rede, o IP do Tailscale e o nome da máquina. Para os navegadores confiarem nele, **instale a CA uma vez em cada aparelho** (tablet do relógio e computadores do admin):
+`scripts/gerar-certificado.sh` cria uma **CA local** e um certificado do servidor para o IP da rede, o IP e o nome do Tailscale e o nome da máquina. A CA tem duas proteções:
+
+- **Restrição de nomes:** ela só vale para a rede local, o Tailscale e os nomes deste servidor. Mesmo que a chave vaze, não serve para se passar por outros sites (banco, e-mail) nos aparelhos que a instalaram.
+- **Chave cifrada com senha:** `certs/ca.key` só funciona com a senha, pedida ao criar a CA e ao renovar o certificado do servidor. Guarde-a num gerenciador de senhas.
+
+Para os navegadores confiarem no certificado, **instale a CA uma vez em cada aparelho** (tablet do relógio, celulares e computadores do admin):
 
 1. No aparelho, abra `http://<ip-do-servidor>:9092/ponto-ca.crt` e baixe o arquivo.
 2. Instale como autoridade certificadora:
@@ -32,7 +37,18 @@ O `deploy.sh` confere o `.env`, gera o certificado HTTPS se faltar, roda os test
    - **Linux/Chrome:** Configurações → Privacidade e segurança → Gerenciar certificados → Autoridades → Importar.
 3. Sem instalar a CA também funciona, mas o navegador mostra um aviso que precisa ser aceito.
 
-Se o IP do servidor mudar: `scripts/gerar-certificado.sh --renovar && docker compose restart frontend`. O certificado do servidor vale 825 dias (o `deploy.sh` avisa quando faltar menos de 30); a CA vale 10 anos. Guarde `certs/ca.key` com cuidado: quem tiver essa chave consegue se passar pelo servidor nos aparelhos que confiam nela.
+Se o IP do servidor mudar dentro da rede local, ou o certificado estiver para vencer: `scripts/gerar-certificado.sh --renovar && docker compose restart frontend` (pede a senha da CA). O certificado do servidor vale 825 dias (o `deploy.sh` avisa quando faltar menos de 30); a CA vale 10 anos. Se a rede local mudar (outra faixa de IPs) ou a senha for perdida, crie uma CA nova com `scripts/gerar-certificado.sh --nova-ca`: todos os aparelhos precisam remover a antiga e instalar a nova.
+
+### Firewall
+
+O Docker publica as portas por fora do `ufw`, então o `scripts/firewall.sh` coloca as regras na cadeia `DOCKER-USER`: as portas do ponto só aceitam conexões da rede local e do Tailscale. Se alguma porta for repassada pelo roteador por engano, o resto da internet é barrado. Instale uma vez (precisa de root):
+
+```bash
+sudo scripts/firewall.sh instalar   # aplica agora e a cada boot
+sudo scripts/firewall.sh status     # mostra as regras e os contadores
+```
+
+As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
 
 ### Logins
 

@@ -29,9 +29,10 @@ services:
     restart: unless-stopped
     environment:
       HTTPS_PORT: ${HTTPS_PORT:-9443}
+    # Só IPv4: o firewall (scripts/firewall.sh) filtra IPv4; em IPv6 as portas ficariam sem filtro
     ports:
-      - "9092:80"   # só redireciona para o HTTPS e entrega o certificado da CA
-      - "${HTTPS_PORT:-9443}:443"
+      - "0.0.0.0:9092:80"   # só redireciona para o HTTPS e entrega o certificado da CA
+      - "0.0.0.0:${HTTPS_PORT:-9443}:443"
     volumes:
       # Gerados por scripts/gerar-certificado.sh
       - ./certs:/etc/nginx/certs:ro

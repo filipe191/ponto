@@ -20,6 +20,11 @@ done
 
 passo "Certificado HTTPS"
 [[ -f certs/server.crt ]] || scripts/gerar-certificado.sh
+# Uma CA sem restrição de nomes serviria para qualquer site nos aparelhos que a instalaram
+if ! openssl x509 -noout -ext nameConstraints -in certs/ca.crt 2>/dev/null | grep -qi permitted; then
+    echo "A CA não tem restrição de nomes. Troque-a com: scripts/gerar-certificado.sh --nova-ca" >&2
+    exit 1
+fi
 openssl x509 -checkend $((30 * 86400)) -noout -in certs/server.crt >/dev/null \
     || echo "AVISO: o certificado vence em menos de 30 dias. Rode: scripts/gerar-certificado.sh --renovar"
 
