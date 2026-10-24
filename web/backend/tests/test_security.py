@@ -1,6 +1,9 @@
 from unittest.mock import patch
 
-from app.core.ratelimit import AttemptLimiter
+import pytest
+from pydantic import TypeAdapter, ValidationError
+
+from app.core.ratelimit import AttemptLimiter, EscalatingLimiter
 from app.core.security import (
     ROLE_ADMIN,
     ROLE_KIOSK,
@@ -11,6 +14,7 @@ from app.core.security import (
     receipt_code,
     rehash_legacy_pin,
 )
+from app.schemas.common import NewPin, Pin
 from tests.helpers import at
 
 KEYS = {"ana": "hash-da-ana", "bia": "hash-da-bia"}
@@ -87,3 +91,28 @@ def test_limite_zera_apos_acerto():
     limiter.reset("ip")
     limiter.fail("ip")
     assert not limiter.blocked("ip")
+
+
+def test_bloqueio_dobra_a_cada_rodada_de_erros():
+    limiter = EscalatingLimiter(max_attempts=3, window_seconds=60, base_block=300, max_block=1000, forget_after=3600)
+    clock = [1000.0]
+    with patch("app.core.ratelimit.time.monotonic", side_effect=lambda: clock[0]):
+        assert [limiter.fail("ip") for _ in range(3)] == [0, 0, 300]
+        assert limiter.blocked_for("ip") == 300
+        assert limiter.blocked_for("outro") == 0
+        clock[0] += 301
+        assert limiter.blocked_for("ip") == 0
+        assert [limiter.fail("ip") for _ in range(3)] == [0, 0, 600]  # segunda rodada: o dobro
+        clock[0] += 601
+        assert [limiter.fail("ip") for _ in range(3)] == [0, 0, 1000]  # nunca passa do máximo
+        clock[0] += 1000 + 3601  # um tempo sem bloqueios: volta ao início
+        assert [limiter.fail("ip") for _ in range(3)] == [0, 0, 300]
+
+
+def test_pin_novo_exige_6_digitos_mas_os_antigos_ainda_batem_ponto():
+    new_pin, pin = TypeAdapter(NewPin), TypeAdapter(Pin)
+    assert new_pin.validate_python("123456") == "123456"
+    for bad in ("1234", "12345", "123456789", "12a456", ""):
+        with pytest.raises(ValidationError):
+            new_pin.validate_python(bad)
+    assert pin.validate_python("1234") == "1234"

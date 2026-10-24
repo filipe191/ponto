@@ -3,7 +3,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.schemas.common import Pin
+from app.schemas.common import NewPin
 
 
 def _check_minutes(value: int) -> int:
@@ -25,7 +25,7 @@ Workdays = Annotated[str, AfterValidator(_check_workdays)]
 
 class EmployeeCreate(BaseModel):
     name: str = Field(default="", validate_default=True)
-    pin: Pin = Field(default="", validate_default=True)
+    pin: NewPin = Field(default="", validate_default=True)
     daily_minutes: DailyMinutes = 480
     workdays: Workdays = "12345"
     hired_on: date | None = None  # padrão: hoje
@@ -41,7 +41,7 @@ class EmployeeCreate(BaseModel):
 
 class EmployeeUpdate(BaseModel):
     name: str | None = None
-    pin: Pin | None = None
+    pin: NewPin | None = None
     active: bool | None = None
     daily_minutes: DailyMinutes | None = None
     workdays: Workdays | None = None
@@ -82,6 +82,7 @@ class EmployeeOut(EmployeeRef):
     created_at: datetime
     hired_on: date
     terminated_on: date | None
+    pin_short: bool  # PIN antigo de 4 ou 5 dígitos: trocar
     daily_minutes: int  # jornada em vigor hoje
     workdays: str
     schedules: list[ScheduleOut]

@@ -8,6 +8,8 @@ from app.api.deps import AdminUser, DbSession, require_admin
 from app.schemas.admin import (
     AdminCreate,
     AdminOut,
+    Alerts,
+    AuditOut,
     ClosureRequest,
     DeviceCreate,
     DeviceCreated,
@@ -21,6 +23,7 @@ from app.schemas.common import OkResponse
 from app.schemas.employee import EmployeeCreate, EmployeeCreated, EmployeeOut, EmployeeUpdate
 from app.schemas.punch import ManualPunchCreate, PunchChangeOut, PunchUpdate
 from app.schemas.report import MonthReport, SummaryRow
+from app.services.audit import PIN_BLOCKED, AuditLog
 from app.services.auth_service import AuthService
 from app.services.calendar_service import ClosureService, HolidayService
 from app.services.employee_service import EmployeeService
@@ -48,19 +51,19 @@ def list_employees(db: DbSession):
 
 
 @router.post("/employees", response_model=EmployeeCreated, status_code=201)
-def create_employee(body: EmployeeCreate, db: DbSession):
-    return EmployeeService(db).create(body)
+def create_employee(body: EmployeeCreate, db: DbSession, user: AdminUser):
+    return EmployeeService(db).create(body, user)
 
 
 @router.patch("/employees/{employee_id}", response_model=OkResponse)
-def update_employee(employee_id: int, body: EmployeeUpdate, db: DbSession):
-    EmployeeService(db).update(employee_id, body)
+def update_employee(employee_id: int, body: EmployeeUpdate, db: DbSession, user: AdminUser):
+    EmployeeService(db).update(employee_id, body, user)
     return OkResponse()
 
 
 @router.delete("/employees/{employee_id}", response_model=OkResponse)
-def delete_employee(employee_id: int, db: DbSession):
-    EmployeeService(db).delete(employee_id)
+def delete_employee(employee_id: int, db: DbSession, user: AdminUser):
+    EmployeeService(db).delete(employee_id, user)
     return OkResponse()
 
 
@@ -128,8 +131,9 @@ def close_month(body: ClosureRequest, db: DbSession, user: AdminUser):
 
 
 @router.delete("/closures/{employee_id}/{month}", response_model=OkResponse)
-def reopen_month(employee_id: int, month: str, db: DbSession):
-    ClosureService(db).reopen(employee_id, month)
+def reopen_month(employee_id: int, month: str, db: DbSession, user: AdminUser, note: str = ""):
+    """O motivo é obrigatório; o fechamento e a ciência anteriores ficam na auditoria."""
+    ClosureService(db).reopen(employee_id, month, user, note)
     return OkResponse()
 
 
@@ -142,14 +146,14 @@ def list_holidays(db: DbSession, year: int):
 
 
 @router.post("/holidays", response_model=OkResponse, status_code=201)
-def add_holiday(body: HolidayCreate, db: DbSession):
-    HolidayService(db).add(body)
+def add_holiday(body: HolidayCreate, db: DbSession, user: AdminUser):
+    HolidayService(db).add(body, user)
     return OkResponse()
 
 
 @router.delete("/holidays/{day}", response_model=OkResponse)
-def delete_holiday(day: date, db: DbSession):
-    HolidayService(db).delete(day)
+def delete_holiday(day: date, db: DbSession, user: AdminUser):
+    HolidayService(db).delete(day, user)
     return OkResponse()
 
 
@@ -168,8 +172,8 @@ def create_device(employee_id: int, body: DeviceCreate, db: DbSession, user: Adm
 
 
 @router.delete("/devices/{device_id}", response_model=OkResponse)
-def revoke_device(device_id: int, db: DbSession):
-    DeviceService(db).revoke(device_id)
+def revoke_device(device_id: int, db: DbSession, user: AdminUser):
+    DeviceService(db).revoke(device_id, user)
     return OkResponse()
 
 
@@ -199,8 +203,8 @@ def list_admins(db: DbSession):
 
 
 @router.post("/admins", response_model=OkResponse, status_code=201)
-def create_admin(body: AdminCreate, db: DbSession):
-    AuthService(db).create_admin(body.username, body.password)
+def create_admin(body: AdminCreate, db: DbSession, user: AdminUser):
+    AuthService(db).create_admin(body.username, body.password, user)
     return OkResponse()
 
 
@@ -211,7 +215,25 @@ def delete_admin(admin_id: int, db: DbSession, user: AdminUser):
 
 
 @router.post("/kiosks/reset", response_model=OkResponse)
-def reset_kiosks(db: DbSession):
+def reset_kiosks(db: DbSession, user: AdminUser):
     """Desliga todos os aparelhos liberados como relógio (ex.: tablet perdido)."""
-    AuthService(db).reset_kiosks()
+    AuthService(db).reset_kiosks(user)
     return OkResponse()
+
+
+# ---------- Auditoria e alertas ----------
+
+
+@router.get("/audit", response_model=list[AuditOut])
+def audit(db: DbSession, employee: int = 0, action: str = "", before: int = 0, limit: int = 50):
+    """Mais recentes primeiro; `before` (id) pagina para trás."""
+    return AuditLog(db).list(employee or None, action, before or None, limit)
+
+
+@router.get("/alerts", response_model=Alerts)
+def alerts(db: DbSession):
+    """Avisos do topo do painel: relógio bloqueado por PINs errados e PINs curtos a trocar."""
+    return Alerts(
+        pin_blocks=AuditLog(db).recent(PIN_BLOCKED, hours=24),
+        short_pins=sum(e.pin_short and e.active for e in EmployeeService(db).list()),
+    )

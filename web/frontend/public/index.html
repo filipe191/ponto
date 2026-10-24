@@ -48,7 +48,7 @@
 
     <section class="card" aria-labelledby="cardTitle">
       <header class="card-head">
-        <h1 class="card-title" id="cardTitle">Cartão de hoje</h1>
+        <h1 class="card-title" id="cardTitle">Seu cartão de hoje</h1>
         <p class="card-sub" id="cardDate"></p>
       </header>
       <div class="table-wrap">
@@ -139,9 +139,11 @@
     });
 
     let pin = '';
-    let freshTs = null;
     let slipTimer;
-    let rows = [];
+    // Batidas de hoje de quem acabou de bater o ponto; somem sozinhas (os colegas não veem)
+    let card = null;
+    let cardTimer;
+    const CARD_SECONDS = 15;
 
     // ---------- Visor ----------
 
@@ -151,7 +153,7 @@
       $('sec').textContent = pad(now.getSeconds());
       $('date').textContent = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
       $('cardDate').textContent = now.toLocaleDateString('pt-BR');
-      if (now.getSeconds() === 0) renderToday();
+      if (card && now.getSeconds() % 15 === 0) renderToday();
     }
     tick();
     setInterval(tick, 1000);
@@ -204,10 +206,12 @@
       }
       const cls = data.type === 'entrada' ? 'in' : 'out';
       const label = data.type === 'entrada' ? 'Entrada' : 'Saída';
-      freshTs = data.ts;
+      const shortPin = data.pin_short
+        ? '<br><small class="pin-warn">Seu PIN é curto. Peça ao administrador um novo PIN de 6 dígitos.</small>'
+        : '';
       slip(`<span class="stamp ${cls}">${hhmm(data.ts)}</span>
-        <span><b>${label}</b> registrada, ${esc(data.name)}.<br><small class="receipt">Comprovante nº ${data.id} · código ${esc(data.receipt)}</small></span>`, cls, 12);
-      loadToday();
+        <span><b>${label}</b> registrada, ${esc(data.name)}.<br><small class="receipt">Comprovante nº ${data.id} · código ${esc(data.receipt)}</small>${shortPin}</span>`, cls, data.pin_short ? 15 : 12);
+      showCard(data);
     }
 
     function press(k) {
@@ -282,7 +286,6 @@
       } finally {
         flushing = false;
         renderQueue();
-        loadToday();
       }
     }
     renderQueue();
@@ -290,7 +293,7 @@
     window.addEventListener('online', flushQueue);
     if (readQueue().length) flushQueue();
 
-    // ---------- Cartão de hoje ----------
+    // ---------- Cartão de hoje (só de quem bateu) ----------
 
     function workedSoFar(punches) {
       let ms = 0;
@@ -302,50 +305,46 @@
       return { ms: ms + (open ? serverNow() - open : 0), working: Boolean(open) };
     }
 
+    function showCard(data) {
+      card = { ...data, fresh: true };
+      renderToday();
+      clearTimeout(cardTimer);
+      cardTimer = setTimeout(() => { card = null; renderToday(); }, CARD_SECONDS * 1000);
+    }
+
     function renderToday() {
-      // Agrupa por funcionário (id), não por nome: dois funcionários podem ter o mesmo nome
-      const byEmployee = new Map();
-      for (const r of rows) {
-        if (!byEmployee.has(r.employee_id)) byEmployee.set(r.employee_id, []);
-        byEmployee.get(r.employee_id).push(r);
+      if (!card) {
+        $('todayHead').innerHTML = '';
+        $('todayBody').innerHTML = '<tr><td class="empty">Digite seu PIN e bata o ponto. Suas batidas de hoje aparecem aqui por alguns segundos, só para você.</td></tr>';
+        return;
       }
       // Uma lista de batidas com E/S em cada uma (e não colunas Entrada/Saída fixas):
       // uma batida enviada depois, sem conexão, pode quebrar a alternância
       $('todayHead').innerHTML = '<tr><th>Nome</th><th>Batidas</th><th class="hours">Horas</th></tr>';
-
-      if (!byEmployee.size) {
-        $('todayBody').innerHTML = '<tr><td class="empty" colspan="3">Nenhuma batida hoje. Digite seu PIN ao lado para registrar a entrada.</td></tr>';
-        return;
-      }
-
       const today = serverNow().toDateString();
-      $('todayBody').innerHTML = [...byEmployee.values()].map((punches) => {
-        const { name } = punches[0];
-        const stamps = punches.map((p) => {
-          const fresh = freshTs && new Date(p.ts).getTime() === new Date(freshTs).getTime() ? ' fresh' : '';
-          // Turno noturno: a entrada pode ter sido ontem
-          const prev = new Date(p.ts).toDateString() !== today ? '<small class="prev">ontem</small>' : '';
-          const label = p.type === 'entrada' ? 'Entrada' : 'Saída';
-          return `<span class="stamp ${p.type === 'entrada' ? 'in' : 'out'}${fresh}" style="--tilt:${tilt(p.ts)}" title="${label}">${prev}<small class="kind">${label[0]}</small>${hhmm(p.ts)}</span>`;
-        }).join('');
-        const { ms, working } = workedSoFar(punches);
-        return `<tr><td class="who">${esc(name)}</td><td class="wrap"><div class="stamps">${stamps}</div></td><td class="hours">${fmtDur(ms)}${working ? ' <span class="live">em curso</span>' : ''}</td></tr>`;
+      const stamps = card.today.map((p) => {
+        const fresh = card.fresh && new Date(p.ts).getTime() === new Date(card.ts).getTime() ? ' fresh' : '';
+        // Turno noturno: a entrada pode ter sido ontem
+        const prev = new Date(p.ts).toDateString() !== today ? '<small class="prev">ontem</small>' : '';
+        const label = p.type === 'entrada' ? 'Entrada' : 'Saída';
+        return `<span class="stamp ${p.type === 'entrada' ? 'in' : 'out'}${fresh}" style="--tilt:${tilt(p.ts)}" title="${label}">${prev}<small class="kind">${label[0]}</small>${hhmm(p.ts)}</span>`;
       }).join('');
-      freshTs = null;
+      const { ms, working } = workedSoFar(card.today);
+      card.fresh = false; // a animação da batida nova só na primeira vez
+      $('todayBody').innerHTML = `<tr><td class="who">${esc(card.name)}</td><td class="wrap"><div class="stamps">${stamps}</div></td><td class="hours">${fmtDur(ms)}${working ? ' <span class="live">em curso</span>' : ''}</td></tr>`;
     }
+    renderToday();
 
-    async function loadToday() {
+    // Mantém a hora do servidor em dia e percebe se o aparelho deixou de ser relógio
+    async function ping() {
       try {
-        const res = await fetch('/api/today');
+        const res = await fetch('/api/auth/me');
         syncClock(res);
-        if (res.status === 401) return toLogin();
-        if (!res.ok) return;
-        rows = await res.json();
-        renderToday();
+        if (res.status === 401) toLogin();
       } catch { /* tenta de novo no próximo ciclo */ }
     }
-    loadToday();
-    setInterval(loadToday, 30000);
+    ping();
+    setInterval(ping, 60000);
 
     // ---------- Meu espelho ----------
     // O PIN fica só na memória enquanto a janela estiver aberta

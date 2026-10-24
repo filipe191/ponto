@@ -17,6 +17,8 @@ class Employee(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String)
     pin_hash: Mapped[str] = mapped_column(String, unique=True)
+    # PIN de 4 ou 5 dígitos, de antes da regra de 6: continua valendo, mas o admin deve trocar
+    pin_short: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("FALSE"))
     active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("TRUE"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # Fora do período de contrato não há jornada prevista (nem faltas)

@@ -12,6 +12,11 @@ class PunchRequest(BaseModel):
     offline_ts: datetime | None = None
 
 
+class TodayPunch(BaseModel):
+    ts: datetime
+    type: PunchType
+
+
 class PunchResult(BaseModel):
     id: int
     receipt: str  # código do comprovante
@@ -19,13 +24,9 @@ class PunchResult(BaseModel):
     type: PunchType
     ts: datetime
     offline: bool = False
-
-
-class TodayPunch(BaseModel):
-    employee_id: int
-    name: str
-    ts: datetime
-    type: PunchType
+    # Só as batidas de hoje de quem bateu: o relógio não mostra mais as dos colegas
+    today: list[TodayPunch] = []
+    pin_short: bool = False  # PIN antigo de 4 ou 5 dígitos: pedir um novo ao admin
 
 
 class ManualPunchCreate(BaseModel):

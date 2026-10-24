@@ -11,7 +11,8 @@ from app.repositories.employee_repository import EmployeeRepository
 from app.repositories.punch_repository import PunchRepository
 from app.schemas.employee import EmployeeRef
 from app.schemas.punch import PunchOut
-from app.schemas.report import ClosureOut, DayReport, DayStatus, MonthReport, SummaryRow
+from app.schemas.report import ClosureOut, DayReport, DayStatus, MonthReport, ReopeningOut, SummaryRow
+from app.services.audit import AuditLog
 from app.services.shifts import Shift, pair_shifts
 from app.utils.dates import month_bounds, night_time, parse_month, to_local
 
@@ -155,6 +156,7 @@ def build_days(
 
 class ReportService:
     def __init__(self, db: Session):
+        self.db = db
         self.employees = EmployeeRepository(db)
         self.punches = PunchRepository(db)
         self.holidays = HolidayRepository(db)
@@ -165,7 +167,19 @@ class ReportService:
         if not employee:
             raise BadRequest("Funcionário inválido")
         check_month(month)
-        return self.build(employee, month, self.closures.get(employee.id, month))
+        report = self.build(employee, month, self.closures.get(employee.id, month))
+        report.reopenings = [
+            ReopeningOut(
+                reopened_at=e.at,
+                reopened_by=e.user,
+                note=e.details.get("note"),
+                closed_at=e.details.get("closed_at"),
+                closed_by=e.details.get("closed_by"),
+                acknowledged_at=e.details.get("acknowledged_at"),
+            )
+            for e in AuditLog(self.db).reopenings(employee.id, month)
+        ]
+        return report
 
     def build(self, employee: Employee, month: str, closure: MonthClosure | None) -> MonthReport:
         now = datetime.now(timezone.utc)

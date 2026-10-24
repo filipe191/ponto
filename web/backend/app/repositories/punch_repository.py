@@ -33,16 +33,12 @@ class PunchRepository:
             .limit(1)
         )
 
-    def list_between(self, start: datetime, end: datetime) -> list[Punch]:
-        """Batidas de todos os funcionários no intervalo, já com o funcionário carregado."""
-        return list(
-            self.db.scalars(
-                select(Punch)
-                .options(joinedload(Punch.employee))
-                .where(Punch.ts >= start, Punch.ts < end, _not_deleted)
-                .order_by(Punch.employee_id, Punch.ts)
-            )
-        )
+    def list_between(self, start: datetime, end: datetime, employee_id: int | None = None) -> list[Punch]:
+        """Batidas no intervalo (de todos ou de um funcionário), já com o funcionário carregado."""
+        query = select(Punch).options(joinedload(Punch.employee)).where(Punch.ts >= start, Punch.ts < end, _not_deleted)
+        if employee_id is not None:
+            query = query.where(Punch.employee_id == employee_id)
+        return list(self.db.scalars(query.order_by(Punch.employee_id, Punch.ts)))
 
     def list_for_employee(self, employee_id: int, end: datetime, include_deleted: bool = False) -> list[Punch]:
         """Todas as batidas do funcionário até `end` (o banco de horas precisa do histórico inteiro)."""

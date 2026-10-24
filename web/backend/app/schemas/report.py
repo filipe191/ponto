@@ -39,6 +39,17 @@ class ClosureOut(BaseModel):
     acknowledged_at: datetime | None
 
 
+class ReopeningOut(BaseModel):
+    """Fechamento anterior do mês, desfeito por uma reabertura (fica guardado na auditoria)."""
+
+    reopened_at: datetime
+    reopened_by: str
+    note: str | None
+    closed_at: datetime | None
+    closed_by: str | None
+    acknowledged_at: datetime | None
+
+
 class MonthReport(BaseModel):
     employee: EmployeeRef
     month: str
@@ -50,6 +61,7 @@ class MonthReport(BaseModel):
     previous_balance_ms: int = Field(serialization_alias="previousBalanceMs")  # banco antes do mês
     bank_ms: int = Field(serialization_alias="bankMs")  # banco de horas ao fim do mês
     closure: ClosureOut | None = None
+    reopenings: list[ReopeningOut] = []  # só no espelho do painel
 
 
 class SummaryRow(BaseModel):

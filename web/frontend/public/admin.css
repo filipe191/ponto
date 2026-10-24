@@ -210,3 +210,18 @@ dialog h2 { margin-bottom: 8px; font-size: 1.25rem; font-weight: 800; font-stret
 }
 .days input:checked + span { background: var(--machine); border-color: var(--machine); color: var(--machine-text); }
 .days input:focus-visible + span { outline: 2.5px solid var(--focus); outline-offset: 2px; }
+
+/* ---------- Avisos e auditoria ---------- */
+
+.alerts-card { outline: 2px solid var(--danger); outline-offset: -2px; }
+.alerts-card .history li { border-bottom-color: var(--rule-soft); }
+.reopenings { flex-basis: 100%; margin: 0; color: var(--muted); font-size: 0.84rem; }
+.reopenings li { padding: 4px 0; }
+.timecard td.when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pin-row { display: flex; gap: 8px; }
+.pin-row input { flex: 1; min-width: 0; }
+.dialog-form .pin-row .btn { height: 44px; }
+.field > label { font-size: 0.9rem; font-weight: 600; color: var(--muted); }
+@media (max-width: 640px) {
+  .timecard td.when { white-space: normal; }
+}

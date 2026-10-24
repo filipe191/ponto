@@ -61,28 +61,27 @@ class PunchService:
         punch = self.punches.add(Punch(employee_id=employee.id, ts=ts, type=kind, offline=offline_ts is not None))
         self.db.commit()
         return PunchResult(
-            id=punch.id, receipt=punch.receipt, name=employee.name, type=kind, ts=ts, offline=punch.offline
+            id=punch.id,
+            receipt=punch.receipt,
+            name=employee.name,
+            type=kind,
+            ts=ts,
+            offline=punch.offline,
+            today=self.today(employee.id),
+            pin_short=employee.pin_short,
         )
 
-    def today(self) -> list[TodayPunch]:
-        """Jornadas de hoje, incluindo a que começou ontem e ainda está aberta ou fechou hoje."""
+    def today(self, employee_id: int) -> list[TodayPunch]:
+        """Jornadas de hoje do funcionário, incluindo a que começou ontem e ainda está aberta ou fechou hoje."""
         now = datetime.now(timezone.utc)
         today = now_local().date()
         start, end = day_bounds(today)
-        punches = self.punches.list_between(start - settings.max_shift, end)
-
-        by_employee: dict[int, list[Punch]] = {}
-        for p in punches:
-            by_employee.setdefault(p.employee_id, []).append(p)
-
         result = []
-        for items in by_employee.values():
-            for shift in pair_shifts(items, settings.max_shift):
-                touches_today = any(to_local(p.ts).date() == today for p in shift.punches)
-                if touches_today or shift.is_open(now, settings.max_shift):
-                    result.extend(shift.punches)
-        result.sort(key=lambda p: p.ts)
-        return [TodayPunch(employee_id=p.employee_id, name=p.employee.name, ts=p.ts, type=p.type) for p in result]
+        for shift in pair_shifts(self.punches.list_between(start - settings.max_shift, end, employee_id), settings.max_shift):
+            touches_today = any(to_local(p.ts).date() == today for p in shift.punches)
+            if touches_today or shift.is_open(now, settings.max_shift):
+                result.extend(shift.punches)
+        return [TodayPunch(ts=p.ts, type=p.type) for p in sorted(result, key=lambda p: p.ts)]
 
     # ---------- Correções do admin (sempre com histórico) ----------
 

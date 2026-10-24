@@ -46,6 +46,7 @@ from app.schemas.mobile import (
 )
 from app.schemas.punch import ManualPunchCreate, PunchUpdate
 from app.schemas.report import DayStatus
+from app.services.audit import AuditLog
 from app.services.punch_service import MIN_PUNCH_INTERVAL, PunchService
 from app.services.report_service import ReportService, check_month
 from app.utils.dates import day_bounds, month_bounds, month_of, parse_month, to_local
@@ -101,11 +102,19 @@ class DeviceService:
         return self.repo.list_for_employee(employee_id)
 
     def create(self, employee_id: int, name: str, user: str) -> DeviceCreated:
-        if not self.employees.get(employee_id):
+        employee = self.employees.get(employee_id)
+        if not employee:
             raise NotFound("Funcionário não encontrado")
         key = new_device_key()
         device = self.repo.add(
             EmployeeDevice(employee_id=employee_id, name=name, key_hash=hash_device_key(key), created_by=user)
+        )
+        AuditLog(self.db).record(
+            user,
+            "celular.chave_gerada",
+            f"Gerou a chave do app para o celular \"{name}\" de {employee.name}",
+            employee_id=employee_id,
+            details={"device_id": device.id, "name": name},
         )
         self.db.commit()
         return DeviceCreated(
@@ -118,12 +127,20 @@ class DeviceService:
             key=key,
         )
 
-    def revoke(self, device_id: int) -> None:
+    def revoke(self, device_id: int, user: str) -> None:
         device = self.repo.get(device_id)
         if not device:
             raise NotFound("Celular não encontrado")
         if not device.revoked_at:
             device.revoked_at = datetime.now(timezone.utc)
+            employee = self.employees.get(device.employee_id)
+            AuditLog(self.db).record(
+                user,
+                "celular.revogado",
+                f"Revogou a chave do celular \"{device.name}\" de {employee.name if employee else '?'}",
+                employee_id=device.employee_id,
+                details={"device_id": device.id, "name": device.name},
+            )
             self.db.commit()
 
 

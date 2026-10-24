@@ -87,3 +87,21 @@ class RequestDecision(BaseModel):
 class ClosureRequest(BaseModel):
     month: str
     employee_id: int | None = None  # None = todos os funcionários com contrato no mês
+
+
+class AuditOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    at: datetime
+    user: str
+    action: str
+    summary: str
+    employee_id: int | None
+    details: dict | None
+    ip: str | None
+
+
+class Alerts(BaseModel):
+    pin_blocks: list[AuditOut]  # bloqueios do relógio por PINs errados nas últimas 24h
+    short_pins: int  # funcionários ativos com PIN antigo de 4 ou 5 dígitos

@@ -19,6 +19,13 @@
   </header>
 
   <main class="admin-page">
+    <section class="card alerts-card" aria-labelledby="alertsTitle" id="alertsCard" hidden>
+      <header class="card-head">
+        <h2 class="card-title" id="alertsTitle">Avisos de segurança</h2>
+      </header>
+      <ul class="history" id="alertsList"></ul>
+    </section>
+
     <section class="card" aria-labelledby="reqTitle" id="reqCard">
       <header class="card-head">
         <h2 class="card-title" id="reqTitle">Solicitações do app <span class="count" id="reqCount"></span></h2>
@@ -135,6 +142,34 @@
         <span class="hint" id="kioskMsg" role="status"></span>
       </div>
     </section>
+
+    <section class="card" aria-labelledby="audTitle">
+      <header class="card-head">
+        <h2 class="card-title" id="audTitle">Auditoria</h2>
+      </header>
+      <p class="hint">Tudo o que foi feito no cadastro, nas jornadas, nos fechamentos de mês, nos celulares, nos feriados, nos administradores e nos relógios: quem fez, quando e o que mudou. Nada aqui pode ser alterado ou apagado. As correções de batidas ficam no histórico de cada batida, no espelho.</p>
+      <div class="toolbar">
+        <select class="input" id="audEmp" aria-label="Funcionário"></select>
+        <select class="input" id="audKind" aria-label="Tipo de ação">
+          <option value="">Todas as ações</option>
+          <option value="funcionario.">Cadastro de funcionários</option>
+          <option value="jornada.">Jornadas</option>
+          <option value="mes.">Fechamento e ciência</option>
+          <option value="celular.">Celulares (app)</option>
+          <option value="feriado.">Feriados</option>
+          <option value="admin.">Administradores e logins</option>
+          <option value="relogio.">Relógios</option>
+        </select>
+      </div>
+      <p class="form-error" id="audError" role="alert"></p>
+      <div class="table-wrap">
+        <table class="timecard">
+          <thead><tr><th>Quando</th><th>Quem</th><th>O que</th></tr></thead>
+          <tbody id="audit"></tbody>
+        </table>
+      </div>
+      <div class="toolbar"><button class="btn" type="button" id="audMore" hidden>Carregar mais</button></div>
+    </section>
   </main>
 
   <!-- Cadastro / edição de funcionário -->
@@ -145,10 +180,14 @@
         <span>Nome</span>
         <input id="fName" required autocomplete="off">
       </label>
-      <label class="field">
-        <span id="fPinLabel">PIN (4 a 8 dígitos)</span>
-        <input id="fPin" type="password" inputmode="numeric" pattern="\d{4,8}" autocomplete="new-password">
-      </label>
+      <div class="field">
+        <label for="fPin" id="fPinLabel">PIN (6 a 8 dígitos)</label>
+        <div class="pin-row">
+          <input id="fPin" type="password" inputmode="numeric" pattern="\d{6,8}" title="De 6 a 8 dígitos" autocomplete="new-password">
+          <button class="btn" type="button" id="fPinGen">Gerar PIN</button>
+        </div>
+        <small class="hint" id="fPinHint" hidden>Anote e entregue ao funcionário: o PIN não aparece de novo.</small>
+      </div>
       <label class="field">
         <span>Jornada diária (horas:minutos)</span>
         <input id="fHours" inputmode="numeric" pattern="([01]?\d|2[0-4]):[0-5]\d" placeholder="08:00" title="Horas e minutos, ex.: 08:00 ou 06:30" required autocomplete="off">
@@ -307,7 +346,7 @@
       $('employees').innerHTML = employees.length
         ? employees.map((e) => `
             <tr>
-              <td class="who">${esc(e.name)}${e.active ? '' : '<span class="tag inativo">inativo</span>'}
+              <td class="who">${esc(e.name)}${e.active ? '' : '<span class="tag inativo">inativo</span>'}${e.pin_short && e.active ? '<span class="tag falta" title="PIN de 4 ou 5 dígitos: troque por um de 6">PIN curto</span>' : ''}
                 <small class="contract">${e.terminated_on ? `desligado em ${fmtD(e.terminated_on)}` : `desde ${fmtD(e.hired_on)}`}</small></td>
               <td>${fmtH(e.daily_minutes * 60000)} · ${workdaysLabel(e.workdays)}</td>
               <td class="actions">
@@ -320,8 +359,12 @@
         : '<tr><td colspan="3" class="empty">Nenhum funcionário cadastrado. Use “Novo funcionário”.</td></tr>';
 
       const current = $('repEmp').value;
-      $('repEmp').innerHTML = employees.map((e) => `<option value="${e.id}">${esc(e.name)}${e.active ? '' : ' (inativo)'}</option>`).join('');
+      const options = employees.map((e) => `<option value="${e.id}">${esc(e.name)}${e.active ? '' : ' (inativo)'}</option>`).join('');
+      $('repEmp').innerHTML = options;
       if (employees.some((e) => String(e.id) === current)) $('repEmp').value = current;
+      const audCurrent = $('audEmp').value;
+      $('audEmp').innerHTML = '<option value="">Todos os funcionários</option>' + options;
+      $('audEmp').value = audCurrent;
     }
 
     function openEmpDialog(emp = null) {
@@ -329,8 +372,14 @@
       $('empTitle').textContent = emp ? `Editar ${emp.name}` : 'Novo funcionário';
       $('fName').value = emp?.name || '';
       $('fPin').value = '';
-      $('fPin').required = !emp;
-      $('fPinLabel').textContent = emp ? 'Novo PIN (deixe em branco para manter)' : 'PIN (4 a 8 dígitos)';
+      $('fPin').type = 'password';
+      $('fPinHint').hidden = true;
+      $('fPin').required = !emp || emp.pin_short;
+      $('fPinLabel').textContent = !emp
+        ? 'PIN (6 a 8 dígitos)'
+        : emp.pin_short
+          ? 'Novo PIN (obrigatório: o atual é curto)'
+          : 'Novo PIN (deixe em branco para manter)';
       const minutes = emp ? emp.daily_minutes : 480;
       $('fHours').value = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
       const days = emp ? emp.workdays : '12345';
@@ -349,6 +398,13 @@
     }
 
     $('newEmp').addEventListener('click', () => openEmpDialog());
+    // PIN aleatório: evita PINs fáceis (datas, 123456) e o admin não precisa inventar um
+    $('fPinGen').addEventListener('click', () => {
+      const n = crypto.getRandomValues(new Uint32Array(1))[0] % 1000000;
+      $('fPin').value = String(n).padStart(6, '0');
+      $('fPin').type = 'text';
+      $('fPinHint').hidden = false;
+    });
     $('fCancel').addEventListener('click', () => $('empDialog').close());
 
     $('empForm').addEventListener('submit', async (e) => {
@@ -372,6 +428,8 @@
         $('empDialog').close();
         await loadEmployees();
         loadReport();
+        loadAlerts();
+        loadAudit();
       } catch (err) { $('fError').textContent = err.message; }
     });
 
@@ -397,6 +455,7 @@
         }
         await loadEmployees();
         loadReport();
+        loadAudit();
       } catch (err) { $('empError').textContent = err.message; }
     });
 
@@ -465,7 +524,13 @@
       // Fechamento do mês: trava as batidas e libera a ciência do funcionário no relógio
       const c = r.closure;
       const monthEnded = month < currentMonth;
-      $('closure').innerHTML = c
+      // Fechamentos desfeitos por reabertura: a ciência dada na época continua registrada
+      const reopened = r.reopenings.length
+        ? `<ul class="history reopenings">${r.reopenings.map((o) => `<li>Fechado por ${esc(o.closed_by || '?')} em ${o.closed_at ? fmtDT(o.closed_at) : '?'} ·
+            ${o.acknowledged_at ? `ciência em ${fmtDT(o.acknowledged_at)}` : 'sem ciência'} ·
+            <b>reaberto</b> por ${esc(o.reopened_by)} em ${fmtDT(o.reopened_at)}${o.note ? ` · motivo: ${esc(o.note)}` : ''}</li>`).join('')}</ul>`
+        : '';
+      $('closure').innerHTML = (c
         ? `<p><b>Mês fechado</b> por ${esc(c.closed_by)} em ${fmtDT(c.closed_at)} ·
              ${c.acknowledged_at ? `ciência do funcionário em ${fmtDT(c.acknowledged_at)}` : 'aguardando a ciência do funcionário no relógio'}</p>
            <button class="btn btn-sm" type="button" data-closure="reopen">Reabrir mês</button>`
@@ -473,7 +538,7 @@
           ? `<p>Mês em aberto: confira, corrija e feche. Depois de fechado, as batidas ficam travadas e o funcionário pode dar ciência no relógio.</p>
              <button class="btn btn-sm btn-primary" type="button" data-closure="one">Fechar mês deste funcionário</button>
              <button class="btn btn-sm" type="button" data-closure="all">Fechar mês de todos</button>`
-          : '';
+          : '') + reopened;
       $('closure').className = 'closure' + (c ? ' is-closed' : '');
 
       $('report').innerHTML = r.days.length
@@ -508,9 +573,15 @@
       $('repError').textContent = '';
       try {
         if (act === 'reopen') {
-          const ok = await ask({ title: 'Reabrir o mês?', message: 'As batidas voltam a poder ser corrigidas e a ciência do funcionário, se houver, é apagada.', ok: 'Reabrir' });
-          if (ok === null) return;
-          await api(`/closures/${emp}/${month}`, { method: 'DELETE' });
+          const note = await ask({
+            title: 'Reabrir o mês?',
+            message: 'As batidas voltam a poder ser corrigidas e o funcionário precisará dar ciência de novo depois do novo fechamento. O fechamento e a ciência atuais ficam guardados na auditoria.',
+            input: 'Motivo da reabertura (obrigatório)',
+            ok: 'Reabrir',
+          });
+          if (note === null) return;
+          if (!note) { $('repError').textContent = 'Informe o motivo da reabertura.'; return; }
+          await api(`/closures/${emp}/${month}?note=${encodeURIComponent(note)}`, { method: 'DELETE' });
         } else {
           const all = act === 'all';
           const ok = await ask({
@@ -523,6 +594,7 @@
         }
       } catch (err) { $('repError').textContent = err.message; }
       loadReport();
+      loadAudit();
     });
 
     $('summaryCsvBtn').addEventListener('click', () => downloadCsv(`/api/admin/summary?month=${$('repMonth').value}&format=csv`));
@@ -674,6 +746,7 @@
         $('holName').value = '';
         loadHolidays();
         loadReport();
+        loadAudit();
       } catch (err) { $('holError').textContent = err.message; }
     });
     $('holidays').addEventListener('click', async (e) => {
@@ -682,6 +755,7 @@
       try { await api(`/holidays/${day}`, { method: 'DELETE' }); } catch (err) { $('holError').textContent = err.message; }
       loadHolidays();
       loadReport();
+      loadAudit();
     });
 
     // ---------- Administradores e relógios ----------
@@ -707,6 +781,7 @@
         $('admUser').value = '';
         $('admPass').value = '';
         loadAdmins();
+        loadAudit();
       } catch (err) { $('admError').textContent = err.message; }
     });
     $('admins').addEventListener('click', async (e) => {
@@ -716,6 +791,7 @@
       if (ok === null) return;
       try { await api(`/admins/${btn.dataset.adm}`, { method: 'DELETE' }); } catch (err) { $('admError').textContent = err.message; }
       loadAdmins();
+      loadAudit();
     });
     $('resetKiosks').addEventListener('click', async () => {
       const ok = await ask({
@@ -728,6 +804,7 @@
       try {
         await api('/kiosks/reset', { method: 'POST' });
         $('kioskMsg').textContent = 'Relógios desligados.';
+        loadAudit();
       } catch (err) { $('kioskMsg').textContent = err.message; }
     });
 
@@ -827,6 +904,7 @@
         $('devKey').hidden = false;
         $('devName').value = '';
         loadDevices();
+        loadAudit();
       } catch (err) { $('devError').textContent = err.message; }
     });
     $('devCopy').addEventListener('click', async () => {
@@ -843,7 +921,55 @@
       if (ok === null) return;
       try { await api(`/devices/${id}`, { method: 'DELETE' }); } catch (err) { $('devError').textContent = err.message; }
       loadDevices();
+      loadAudit();
     });
+
+    // ---------- Avisos e auditoria ----------
+
+    async function loadAlerts() {
+      let a;
+      try { a = await api('/alerts'); } catch { return; }
+      const items = [];
+      if (a.pin_blocks.length) {
+        const last = a.pin_blocks[0];
+        items.push(`<li><b>Relógio bloqueado por PINs errados ${a.pin_blocks.length === 1 ? '1 vez' : `${a.pin_blocks.length} vezes`} nas últimas 24h</b>
+          (último às ${fmtDT(last.at)}${last.ip ? `, aparelho ${esc(last.ip)}` : ''}). Pode ser alguém tentando adivinhar PINs.
+          Se ninguém esqueceu o PIN, confira quem estava no relógio.</li>`);
+      }
+      if (a.short_pins) {
+        items.push(`<li><b>${a.short_pins === 1 ? '1 funcionário tem' : `${a.short_pins} funcionários têm`} PIN de 4 ou 5 dígitos.</b>
+          Esses PINs ainda funcionam, mas são fáceis de adivinhar: troque por um de 6 dígitos em “Editar” (marcados com <span class="tag falta">PIN curto</span>).</li>`);
+      }
+      $('alertsList').innerHTML = items.join('');
+      $('alertsCard').hidden = !items.length;
+    }
+
+    let auditLast = null; // id do registro mais antigo carregado (para "Carregar mais")
+    const AUDIT_PAGE = 50;
+
+    async function loadAudit(more = false) {
+      const params = new URLSearchParams({ limit: AUDIT_PAGE });
+      if ($('audEmp').value) params.set('employee', $('audEmp').value);
+      if ($('audKind').value) params.set('action', $('audKind').value);
+      if (more && auditLast) params.set('before', auditLast);
+      $('audError').textContent = '';
+      let items = [];
+      try { items = await api(`/audit?${params}`); } catch (err) { $('audError').textContent = err.message; return; }
+      const rows = items.map((a) => `
+        <tr>
+          <td class="when">${fmtDT(a.at)}</td>
+          <td class="who">${esc(a.user)}${a.ip ? `<small class="contract">${esc(a.ip)}</small>` : ''}</td>
+          <td class="wrap">${esc(a.summary)}</td>
+        </tr>`).join('');
+      if (more) $('audit').insertAdjacentHTML('beforeend', rows);
+      else $('audit').innerHTML = rows || '<tr><td colspan="3" class="empty">Nada registrado ainda.</td></tr>';
+      if (items.length) auditLast = items[items.length - 1].id;
+      $('audMore').hidden = items.length < AUDIT_PAGE;
+    }
+
+    $('audEmp').addEventListener('change', () => loadAudit());
+    $('audKind').addEventListener('change', () => loadAudit());
+    $('audMore').addEventListener('click', () => loadAudit(true));
 
     // A página só abre com o login do admin (o nginx confere o cookie antes)
     loadRequests();
@@ -853,8 +979,10 @@
       $('whoami').textContent = currentUser ? `Você entrou como ${currentUser}` : '';
       loadAdmins();
     }).catch(() => {});
-    loadEmployees().then(loadReport).catch((err) => { $('empError').textContent = err.message; });
+    loadEmployees().then(() => { loadReport(); loadAudit(); }).catch((err) => { $('empError').textContent = err.message; });
     loadHolidays();
+    loadAlerts();
+    setInterval(loadAlerts, 60000);
   </script>
 </body>
 </html>

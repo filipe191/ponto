@@ -315,6 +315,7 @@ button { font: inherit; color: inherit; }
 
 .slip.offline { border-style: solid; border-color: var(--rule); background: var(--paper); color: var(--text); }
 .receipt { color: var(--muted); font-size: 0.82rem; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.pin-warn { display: inline-block; margin-top: 4px; color: var(--danger); font-size: 0.85rem; font-weight: 600; }
 .key-wide { grid-column: 1 / -1; height: 46px; }
 .readout-queue { margin-top: 8px; color: #f6c453; font-size: 0.88rem; font-weight: 600; }
 

@@ -31,9 +31,9 @@ O sistema guarda dados pessoais de funcionários (nome, horários de trabalho, f
 | 5 | Cookie de admin enviado a outros serviços do mesmo IP / CSRF | Média | Pequeno | Backend + nginx | ✅ Concluído |
 | 6 | Sair não invalida a sessão | Média | Médio | Backend | ✅ Concluído |
 | 7 | Login de admin fraco | Média | Médio | Backend + painel | ✅ Concluído |
-| 8 | Auditoria incompleta | Média | Médio | Backend | Pendente |
-| 9 | PIN de 4 dígitos | Média | Pequeno | Backend + relógio | Pendente |
-| 10 | Cartão de hoje expõe todos os colegas | Média | Pequeno | Relógio | Pendente |
+| 8 | Auditoria incompleta | Média | Médio | Backend | ✅ Concluído |
+| 9 | PIN de 4 dígitos | Média | Pequeno | Backend + relógio | ✅ Concluído |
+| 10 | Cartão de hoje expõe todos os colegas | Média | Pequeno | Relógio | ✅ Concluído |
 | 11 | Fórmulas no CSV | Baixa | Pequeno | Backend | Pendente |
 | 12 | Scripts dentro das páginas (CSP fraco) | Baixa | Médio | Frontend | Pendente |
 | 13 | Dependências sem checagem de vulnerabilidades | Baixa | Pequeno | `web/scripts/deploy.sh` | Pendente |
@@ -211,6 +211,15 @@ Além disso, **reabrir um mês apaga o registro de fechamento junto com a ciênc
 - Criar uma tabela de auditoria geral (quem, quando, o quê, valor antes e depois) para todas as ações acima.
 - Ao reabrir o mês, manter o fechamento e a ciência anteriores no histórico em vez de apagá-los.
 
+**Status: concluído em 24/10/2026.**
+- Nova tabela `audit_log` com quem, quando, o quê, antes e depois (e o IP, nos eventos do relógio e de login).
+- Registra: cadastro, alteração, ativação, desativação e exclusão de funcionários; troca de PIN (sem o PIN); mudança de jornada; feriados; chaves de celular; criação e exclusão de admins; login e tentativas erradas em contas existentes; troca de senha e duas etapas; liberação e desligamento de relógios; fechamento, ciência e reabertura de mês; bloqueio do relógio por PINs errados.
+- O registro entra na mesma transação da ação. O banco recusa `UPDATE`, `DELETE` e `TRUNCATE` na tabela (trigger), então nem um defeito do sistema apaga o histórico.
+- Reabrir o mês exige motivo. O fechamento e a ciência anteriores ficam na auditoria e aparecem no espelho do painel ("Fechado por… · ciência em… · reaberto por… · motivo").
+- No painel: seção **Auditoria**, com filtro por funcionário e por tipo de ação.
+
+Testado na cópia do banco de produção, inclusive a recusa de alteração direta no banco.
+
 ### 9. PIN de 4 dígitos
 
 **Problema.** O PIN aceita 4 dígitos. O limite atual permite 10 erros a cada 5 minutos por aparelho, ou seja, cerca de 2.900 tentativas por dia.
@@ -222,6 +231,13 @@ Além disso, **reabrir um mês apaga o registro de fechamento junto com a ciênc
 - Aumentar o tempo de bloqueio a cada nova rodada de erros no mesmo aparelho.
 - Avisar o admin quando um relógio for bloqueado por excesso de PINs errados.
 
+**Status: concluído em 24/10/2026.**
+- PINs novos e trocados precisam ter de 6 a 8 dígitos. O cadastro ganhou o botão **Gerar PIN** (aleatório).
+- Os PINs atuais de 4 ou 5 dígitos **continuam valendo**. A migração os identifica, o painel marca "PIN curto" e mostra um aviso, e o relógio pede ao funcionário que procure o admin. Ao trocar o PIN, a marca some.
+- Bloqueio crescente no relógio: 10 erros em 5 minutos pausam o aparelho por 5 minutos; cada nova rodada dobra a pausa (10, 20, 40 minutos…, até 24 horas). A contagem zera depois de 24 horas sem bloqueio. Vale para bater o ponto e para "Ver meu espelho".
+- Cada bloqueio vai para a auditoria e aparece em **Avisos de segurança** no topo do painel por 24 horas.
+- O controle de tentativas fica na memória do backend: reiniciar o backend zera os bloqueios em andamento.
+
 ### 10. O "Cartão de hoje" expõe todos os colegas
 
 **Problema.** A tela do relógio mostra o nome e os horários de todos que bateram ponto no dia, para qualquer pessoa diante do tablet.
@@ -232,6 +248,8 @@ Além disso, **reabrir um mês apaga o registro de fechamento junto com a ciênc
 - mostrar só a batida da própria pessoa, por alguns segundos, logo após o PIN;
 - mostrar só iniciais e o status (trabalhando ou não), sem horários;
 - deixar a lista configurável no painel.
+
+**Status: concluído em 24/10/2026** (opção escolhida: só a batida da própria pessoa). A lista com todos os colegas saiu do relógio e a rota `/api/today` foi removida. Depois do PIN, o cartão mostra por 15 segundos só as batidas de hoje de quem bateu e depois volta a ficar vazio.
 
 ---
 
@@ -285,9 +303,9 @@ Além disso, **reabrir um mês apaga o registro de fechamento junto com a ciênc
 - [x] 5. Checar `Origin` nas rotas que alteram dados
 - [x] 6. Sessões no servidor, "sair de todos", expiração por inatividade
 - [x] 7. Senha mínima de 12 caracteres e TOTP para admins
-- [ ] 8. Auditoria geral e histórico preservado na reabertura do mês
-- [ ] 9. PIN de 6 dígitos e bloqueio progressivo
-- [ ] 10. Reduzir os dados mostrados no "Cartão de hoje"
+- [x] 8. Auditoria geral e histórico preservado na reabertura do mês
+- [x] 9. PIN de 6 dígitos e bloqueio progressivo
+- [x] 10. Reduzir os dados mostrados no "Cartão de hoje"
 - [ ] 11. Neutralizar fórmulas no CSV
 - [ ] 12. Scripts em arquivos `.js` e CSP sem `'unsafe-inline'`
 - [ ] 13. `pip-audit` e `npm audit` no deploy

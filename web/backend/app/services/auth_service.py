@@ -19,6 +19,7 @@ from app.core.security import (
 )
 from app.models import AdminAccount, AdminSession
 from app.repositories.admin_repository import AdminRepository
+from app.services.audit import AuditLog
 
 KIOSK_SECRET = "kiosk_secret"
 KIOSK_SUBJECT = "relogio"
@@ -39,6 +40,7 @@ class AuthService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = AdminRepository(db)
+        self.audit = AuditLog(db)
 
     def ensure_setup(self) -> None:
         """Na primeira subida, cria o login com ADMIN_USER/ADMIN_PASSWORD do .env e o segredo dos relógios."""
@@ -56,15 +58,25 @@ class AuthService:
 
     # ---------- Login do admin ----------
 
-    def authenticate(self, username: str, password: str) -> AdminAccount | None:
+    def authenticate(self, username: str, password: str, ip: str = "?") -> AdminAccount | None:
         account = self.repo.get_by_username(username)
         valid = verify_password(password, account.password_hash if account else _DUMMY_HASH)
+        if account and not valid:
+            self.log_login(account, False, ip, "senha errada")
         if not (account and valid):
             return None
         # Senha que não segue mais a política (ex.: criada antes dela): trocar antes de usar o painel
         if password_problem(password, account.username):
             account.must_change_password = True
         return account
+
+    def log_login(self, account: AdminAccount, ok: bool, ip: str, reason: str = "") -> None:
+        """Entradas e tentativas erradas numa conta que existe (usuário inexistente não é registrado)."""
+        if ok:
+            self.audit.record(account.username, "admin.login", "Entrou no painel", ip=ip)
+        else:
+            self.audit.record(account.username, "admin.login_falhou", f"Tentativa de login recusada: {reason}", ip=ip)
+        self.db.commit()
 
     def check_second_factor(self, account: AdminAccount, code: str) -> bool:
         """Código do app autenticador ou um código de recuperação (que deixa de valer depois de usado)."""
@@ -164,6 +176,7 @@ class AuthService:
         account.password_hash = hash_password(new)
         account.must_change_password = False
         self.repo.revoke_sessions(account.id, _now(), keep_id=keep.id)
+        self.audit.record(account.username, "admin.senha_trocada", "Trocou a própria senha")
         self.db.commit()
 
     # ---------- Verificação em duas etapas ----------
@@ -188,6 +201,7 @@ class AuthService:
         account.totp_last_step = step
         codes = twofactor.new_recovery_codes()
         self.repo.replace_recovery_codes(account.id, [twofactor.hash_recovery_code(c) for c in codes])
+        self.audit.record(account.username, "admin.2fa_ativada", "Ativou a verificação em duas etapas")
         self.db.commit()
         return codes
 
@@ -200,6 +214,7 @@ class AuthService:
         account.totp_pending = None
         account.totp_last_step = None
         self.repo.replace_recovery_codes(account.id, [])
+        self.audit.record(account.username, "admin.2fa_desativada", "Desativou a verificação em duas etapas")
         self.db.commit()
 
     def new_recovery_codes(self, account: AdminAccount, code: str) -> list[str]:
@@ -207,6 +222,7 @@ class AuthService:
             raise BadRequest("Código inválido")
         codes = twofactor.new_recovery_codes()
         self.repo.replace_recovery_codes(account.id, [twofactor.hash_recovery_code(c) for c in codes])
+        self.audit.record(account.username, "admin.codigos_recuperacao", "Gerou novos códigos de recuperação")
         self.db.commit()
         return codes
 
@@ -220,12 +236,19 @@ class AuthService:
         secret = self.repo.setting(KIOSK_SECRET)
         return read_session(token, ROLE_KIOSK, lambda _subject: secret) == KIOSK_SUBJECT
 
-    def new_kiosk(self) -> str:
+    def new_kiosk(self, user: str, ip: str) -> str:
+        self.audit.record(user, "relogio.ativado", "Liberou um aparelho como relógio de ponto", ip=ip)
+        self.db.commit()
         return create_session(ROLE_KIOSK, KIOSK_SUBJECT, self.repo.setting(KIOSK_SECRET), settings.kiosk_days * 86400)
 
-    def reset_kiosks(self) -> None:
+    def kiosk_disabled(self, user: str, ip: str) -> None:
+        self.audit.record(user, "relogio.desativado", "Desligou o modo relógio de um aparelho", ip=ip)
+        self.db.commit()
+
+    def reset_kiosks(self, user: str) -> None:
         """Troca o segredo: todos os aparelhos liberados como relógio precisam ser ativados de novo."""
         self.repo.set_setting(KIOSK_SECRET, secrets.token_hex(32))
+        self.audit.record(user, "relogio.todos_desligados", "Desligou todos os relógios")
         self.db.commit()
 
     # ---------- Administradores ----------
@@ -233,7 +256,7 @@ class AuthService:
     def list_admins(self) -> list[AdminAccount]:
         return self.repo.list()
 
-    def create_admin(self, username: str, password: str) -> AdminAccount:
+    def create_admin(self, username: str, password: str, user: str) -> AdminAccount:
         """A senha inicial é provisória: o novo admin troca no primeiro acesso e ativa as duas etapas."""
         username = username.strip()
         if not username or "|" in username:
@@ -245,6 +268,7 @@ class AuthService:
             account = self.repo.add(
                 AdminAccount(username=username, password_hash=hash_password(password), must_change_password=True)
             )
+            self.audit.record(user, "admin.criado", f"Criou o administrador {username}")
             self.db.commit()
         except IntegrityError:
             self.db.rollback()
@@ -259,5 +283,6 @@ class AuthService:
             raise BadRequest("Você não pode excluir a própria conta")
         if self.repo.count() <= 1:
             raise BadRequest("É preciso manter pelo menos um administrador")
+        self.audit.record(current_user, "admin.excluido", f"Excluiu o administrador {account.username}")
         self.repo.delete(account)  # as sessões e os códigos de recuperação caem junto (ON DELETE CASCADE)
         self.db.commit()

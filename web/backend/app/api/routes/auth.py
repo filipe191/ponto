@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
-from app.api.deps import AdminAccess, CurrentAccess, DbSession, client_ip, require_admin, require_clock
+from app.api.deps import AdminAccess, AdminUser, CurrentAccess, DbSession, client_ip, require_clock
 from app.core.config import settings
 from app.core.errors import TooManyRequests, Unauthorized
 from app.core.passwords import MIN_LENGTH
@@ -91,7 +91,7 @@ def login(body: LoginRequest, request: Request, response: Response, db: DbSessio
     if login_attempts.blocked(ip):
         raise TooManyRequests("Muitas tentativas erradas. Aguarde alguns minutos e tente de novo.")
     auth = AuthService(db)
-    account = auth.authenticate(body.username.strip(), body.password)
+    account = auth.authenticate(body.username.strip(), body.password, ip)
     if not account:
         login_attempts.fail(ip)
         raise Unauthorized()
@@ -101,8 +101,10 @@ def login(body: LoginRequest, request: Request, response: Response, db: DbSessio
             raise Unauthorized("Digite o código do app autenticador", otp_required=True)
         if not auth.check_second_factor(account, body.code):
             login_attempts.fail(ip)
+            auth.log_login(account, False, ip, "código de verificação errado")
             raise Unauthorized("Código inválido", otp_required=True)
     login_attempts.reset(ip)
+    auth.log_login(account, True, ip)
     # No aparelho do relógio o login do admin dura pouco, para não ficar aberto aos funcionários
     seconds = settings.admin_on_kiosk_minutes * 60 if access.kiosk else settings.session_days * 86400
     token = auth.start_session(account, seconds, ip, request.headers.get("user-agent"))
@@ -130,18 +132,19 @@ def admin_me(access: AdminAccess):
     return Me(user=access.admin_user, admin=True, kiosk=access.kiosk, pending=access.pending)
 
 
-@router.post("/kiosk", response_model=OkResponse, dependencies=[Depends(require_admin)])
-def enable_kiosk(request: Request, response: Response, db: DbSession):
+@router.post("/kiosk", response_model=OkResponse)
+def enable_kiosk(request: Request, response: Response, db: DbSession, user: AdminUser):
     """Libera este aparelho como relógio e desconecta o admin dele."""
     auth = AuthService(db)
-    _set_cookie(response, KIOSK_COOKIE, auth.new_kiosk(), settings.kiosk_days * 86400)
+    _set_cookie(response, KIOSK_COOKIE, auth.new_kiosk(user, client_ip(request)), settings.kiosk_days * 86400)
     auth.end_session(request.cookies.get(SESSION_COOKIE))
     response.delete_cookie(SESSION_COOKIE, path="/")
     return OkResponse()
 
 
-@router.delete("/kiosk", response_model=OkResponse, dependencies=[Depends(require_admin)])
-def disable_kiosk(response: Response):
+@router.delete("/kiosk", response_model=OkResponse)
+def disable_kiosk(request: Request, response: Response, db: DbSession, user: AdminUser):
+    AuthService(db).kiosk_disabled(user, client_ip(request))
     response.delete_cookie(KIOSK_COOKIE, path="/")
     return OkResponse()
 

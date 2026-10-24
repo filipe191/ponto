@@ -63,7 +63,8 @@ As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
   2. Na tela do relógio, toque em **Usar como relógio**. O aparelho passa a só bater ponto (vale 1 ano) e o admin é desconectado dele.
   3. Para administrar a partir dele, toque em **Administração** e entre: nesse aparelho o login do admin dura 30 minutos. Use **Sair** ao terminar.
   4. Perdeu um tablet? Administração → **Desligar todos os relógios** e ative de novo os que continuam em uso.
-- Dez PINs errados em 5 minutos pausam o relógio até a janela passar.
+- **PIN:** de 6 a 8 dígitos (botão **Gerar PIN** no cadastro). PINs antigos de 4 ou 5 dígitos ainda valem, mas aparecem como "PIN curto" no painel para serem trocados.
+- Dez PINs errados em 5 minutos pausam o relógio por 5 minutos; cada nova rodada de erros dobra a pausa (até 24 h). Cada bloqueio aparece em **Avisos de segurança** no topo do painel.
 
 ### Variáveis do `.env`
 
@@ -83,7 +84,7 @@ As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
 
 **Relógio**
 - O funcionário digita o PIN. É **saída** se houver uma entrada aberta há menos de 16 h, senão é **entrada**; turnos que passam da meia-noite contam no dia da entrada. Batida a menos de 1 minuto da anterior é recusada (toque duplo).
-- Mostra o **comprovante** de cada batida (número e código de 10 caracteres, que só o sistema consegue gerar).
+- Mostra o **comprovante** de cada batida (número e código de 10 caracteres, que só o sistema consegue gerar) e, por 15 segundos, as batidas de hoje **só de quem bateu**: os colegas não aparecem na tela.
 - O visor usa a **hora do servidor**, a mesma que vai na batida, mesmo se o relógio do tablet estiver errado.
 - **Sem conexão:** a batida fica guardada no aparelho e é enviada quando a conexão volta (até 24 h). Ela entra marcada como `off` para o admin conferir, porque o horário veio do aparelho.
 - **Ver meu espelho:** com o PIN, o funcionário vê o próprio mês, os comprovantes e o banco de horas, e dá **ciência** dos meses fechados. A janela fecha sozinha após 1 minuto sem uso.
@@ -102,7 +103,8 @@ As portas são publicadas só em IPv4, porque o firewall filtra IPv4.
   - Avisos para conferência: intervalo menor que 1h em jornada acima de 6h (ou 15 min acima de 4h), menos de 11h entre jornadas, mais de 2h extras no dia e trabalho em folga/feriado.
 - **Feriados:** os nacionais são calculados automaticamente (inclusive a Sexta-feira Santa). Municipais, estaduais e pontos facultativos (Carnaval, Corpus Christi) são cadastrados pelo admin.
 - **Correções com histórico:** lançamentos e correções exigem motivo e ficam marcados com `*`. O horário original do relógio é preservado, nada é apagado de verdade (excluídas podem ser vistas e restauradas) e cada ação registra quem fez, quando, antes e depois.
-- **Fechamento do mês:** depois de conferido, o mês é fechado (por funcionário ou para todos). As batidas ficam travadas e o funcionário pode dar ciência no relógio. Reabrir apaga a ciência.
+- **Fechamento do mês:** depois de conferido, o mês é fechado (por funcionário ou para todos). As batidas ficam travadas e o funcionário pode dar ciência no relógio. Reabrir exige motivo e pede uma nova ciência; o fechamento e a ciência anteriores continuam na auditoria e aparecem no espelho.
+- **Auditoria:** cadastro, PIN (sem o valor), jornada, feriados, celulares, admins, logins, relógios e fechamentos ficam registrados com quem, quando, antes e depois. O banco recusa alterar ou apagar esses registros.
 - **Exportação:** CSV do espelho de um funcionário, CSV com o resumo de todos (para a contabilidade) e página de impressão com o espelho de todos, com linha de assinatura (imprima ou salve como PDF).
 
 Limites conhecidos: os arquivos AFD/AEJ da Portaria 671 não são gerados (o sistema é para controle interno, não um REP-P registrado no INPI); a prorrogação do horário noturno após as 5h não é calculada; uma batida enviada depois, sem conexão, não muda o tipo (entrada/saída) das batidas já registradas depois dela, e o dia aparece como incompleto para o admin corrigir.
