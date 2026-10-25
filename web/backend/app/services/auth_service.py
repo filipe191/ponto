@@ -399,6 +399,8 @@ class AuthService:
                 kiosk_secret=secrets.token_hex(32),
                 timezone=settings.tz,
                 offline_max_hours=settings.offline_max_hours,
+                # Empresa nova: o controle começa hoje (dias de antes, mesmo de quem já trabalhava, não contam)
+                control_start=datetime.now(settings.timezone).date(),
             )
         )
         self.db.add(default_rule(company.id, user))

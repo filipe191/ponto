@@ -18,6 +18,19 @@ from app.utils.dates import month_of
 SINCE_ALWAYS = date(2000, 1, 1)  # vigência da primeira regra de cada empresa
 
 
+def ensure_months_open(db: Session, company_id: int, day: date, what: str, employee_id: int | None = None) -> None:
+    """Recusa uma mudança que alteraria um mês já fechado (o espelho e a ciência do funcionário mudariam).
+
+    `day` é o primeiro dia afetado; vale para a empresa toda ou só para `employee_id`.
+    """
+    from app.repositories.calendar_repository import ClosureRepository
+
+    closed = ClosureRepository(db).latest_from(company_id, month_of(day), employee_id)
+    if closed:
+        year, month = closed.split("-")
+        raise BadRequest(f"O mês {month}/{year} já foi fechado: {what} precisa começar depois dele (ou reabra o mês)")
+
+
 @dataclass(frozen=True)
 class RulePeriod:
     """Regras que valem a partir de `valid_from` (até a próxima vigência)."""
@@ -162,19 +175,7 @@ class RulesService:
         Não pode começar num mês já fechado: o espelho fechado e a ciência do funcionário mudariam.
         """
         _check_period(period)
-        closed = self.db.scalar(
-            select(MonthClosure.month)
-            .join(Employee, Employee.id == MonthClosure.employee_id)
-            .where(Employee.company_id == self.company_id, MonthClosure.month >= month_of(period.valid_from))
-            .order_by(MonthClosure.month.desc())
-            .limit(1)
-        )
-        if closed:
-            year, month = closed.split("-")
-            raise BadRequest(
-                f"O mês {month}/{year} já foi fechado: as novas regras precisam começar depois dele "
-                "(ou reabra o mês)"
-            )
+        ensure_months_open(self.db, self.company_id, period.valid_from, "a nova regra")
         before = load_rules(self.db, self.company_id).on(period.valid_from)
         row = self.db.scalar(
             select(CompanyRule).where(
@@ -199,9 +200,22 @@ class RulesService:
         )
         self.db.commit()
 
-    def update_settings(self, user: str, tz: str | None, offline_max_hours: int | None) -> Company:
+    def update_settings(
+        self, user: str, tz: str | None, offline_max_hours: int | None, control_start: date | None | bool = False
+    ) -> Company:
+        """`control_start=False` (padrão) não mexe no início do controle; `None` volta a "desde a admissão"."""
         company = self.company()
         changes = []
+        if control_start is not False and control_start != company.control_start:
+            # Muda os dias que contam desde a data mais antiga das duas; vazio ("desde a admissão") pode ser
+            # qualquer dia, então aí nenhum mês pode estar fechado
+            both = control_start and company.control_start
+            first = min(control_start, company.control_start) if both else SINCE_ALWAYS
+            ensure_months_open(self.db, self.company_id, first, "o início do controle")
+            old = f"{company.control_start:%d/%m/%Y}" if company.control_start else "admissão de cada um"
+            new = f"{control_start:%d/%m/%Y}" if control_start else "admissão de cada um"
+            changes.append(f"início do controle {old} → {new}")
+            company.control_start = control_start
         if tz is not None and tz != company.timezone:
             if tz not in available_timezones():
                 raise BadRequest("Fuso horário inválido (ex.: America/Sao_Paulo)")

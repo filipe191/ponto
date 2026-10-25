@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -14,6 +14,7 @@ class DayStatus(StrEnum):
     FOLGA = "folga"  # dia sem jornada prevista e sem batidas
     FERIADO = "feriado"  # feriado sem batidas
     FORA = "fora"  # antes da admissão ou depois do desligamento
+    ANTES = "antes"  # antes do início do controle no sistema: não conta (nem como falta)
     ANDAMENTO = "andamento"  # hoje, ou jornada ainda aberta
 
 
@@ -60,6 +61,9 @@ class MonthReport(BaseModel):
     balance_ms: int = Field(serialization_alias="balanceMs")  # saldo do mês (dias fechados)
     previous_balance_ms: int = Field(serialization_alias="previousBalanceMs")  # banco antes do mês
     bank_ms: int = Field(serialization_alias="bankMs")  # banco de horas ao fim do mês
+    # Saldo trazido do controle anterior (já somado ao banco anterior a partir do mês do início)
+    initial_balance_ms: int = Field(default=0, serialization_alias="initialBalanceMs")
+    control_from: date | None = Field(default=None, serialization_alias="controlFrom")  # primeiro dia que conta
     closure: ClosureOut | None = None
     reopenings: list[ReopeningOut] = []  # só no espelho do painel
 

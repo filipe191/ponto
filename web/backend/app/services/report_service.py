@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.core.errors import BadRequest
-from app.models import Employee, MonthClosure, Punch, PunchType
+from app.models import Company, Employee, MonthClosure, Punch, PunchType
 from app.repositories.calendar_repository import ClosureRepository, HolidayRepository
 from app.repositories.employee_repository import EmployeeRepository
 from app.repositories.punch_repository import PunchRepository
@@ -23,6 +23,7 @@ STATUS_LABEL = {
     DayStatus.FOLGA: "Folga",
     DayStatus.FERIADO: "Feriado",
     DayStatus.FORA: "Fora do contrato",
+    DayStatus.ANTES: "Antes do controle",
     DayStatus.ANDAMENTO: "Em andamento",
 }
 WEEKDAYS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
@@ -53,9 +54,11 @@ def counted_time(shift: Shift, rules: RuleBook | None = None) -> tuple[timedelta
     return shift.worked - night_real + night, night
 
 
-def expected_for(employee: Employee, day: date, holidays: dict[date, str]) -> timedelta:
-    """Jornada prevista no dia: zero fora do contrato, em feriado e nos dias sem trabalho."""
-    if not employee.employed_on(day) or day in holidays:
+def expected_for(
+    employee: Employee, day: date, holidays: dict[date, str], control_from: date | None = None
+) -> timedelta:
+    """Jornada prevista no dia: zero fora do contrato, antes do controle, em feriado e nos dias sem trabalho."""
+    if not employee.employed_on(day) or day in holidays or (control_from and day < control_from):
         return ZERO
     schedule = employee.schedule_on(day)
     if not schedule or str(day.isoweekday()) not in schedule.workdays:
@@ -92,10 +95,12 @@ def build_days(
     now: datetime,
     holidays: dict[date, str],
     rules: RuleBook | None = None,
+    control_from: date | None = None,
 ) -> list[DayReport]:
     """Um DayReport por dia de `first` a `last` (inclusive). `shifts` em ordem, de todo o histórico.
 
-    Cada dia usa a regra da empresa em vigor nele (`rules`; sem ela, os valores do .env).
+    Cada dia usa a regra da empresa em vigor nele (`rules`; sem ela, os valores do .env). Antes de
+    `control_from` (início do controle no sistema) os dias aparecem, mas não entram no saldo.
     """
     rules = rules or RuleBook()
     today = to_local(now, rules.tz).date()
@@ -119,11 +124,14 @@ def build_days(
         for s in day_shifts:
             c, n = counted_time(s, rules)
             counted, night = counted + c, night + n
-        expected = expected_for(employee, day, holidays)
+        expected = expected_for(employee, day, holidays, control_from)
+        before_control = bool(control_from and day < control_from and employee.employed_on(day))
         still_open = any(s.is_open(now, rules.max_shift_at(s.start)) for s in day_shifts)
         closed = day < today and not still_open
 
-        if not closed:
+        if before_control:
+            status = DayStatus.ANTES
+        elif not closed:
             status = DayStatus.ANDAMENTO
         elif any(not s.complete for s in day_shifts):
             status = DayStatus.INCOMPLETO
@@ -139,7 +147,7 @@ def build_days(
             status = DayStatus.FOLGA
 
         balance = ZERO
-        if closed:
+        if closed and not before_control:
             balance = counted - expected
             if status == DayStatus.OK and expected and abs(balance) <= rules.on(day).tolerance:
                 balance = ZERO  # tolerância do art. 58 §1º
@@ -156,7 +164,11 @@ def build_days(
                 status=status,
                 closed=closed,
                 holiday=holidays.get(day),
-                alerts=day_alerts(day_shifts, previous_of.get(day), counted, expected) if closed and day_shifts else [],
+                alerts=(
+                    day_alerts(day_shifts, previous_of.get(day), counted, expected)
+                    if closed and day_shifts and not before_control
+                    else []
+                ),
             )
         )
         day += timedelta(days=1)
@@ -172,6 +184,8 @@ class ReportService:
         self.holidays = HolidayRepository(db, company_id)
         self.closures = ClosureRepository(db)
         self.rules = load_rules(db, company_id)
+        company = db.get(Company, company_id)
+        self.control_start = company.control_start if company else None
 
     def monthly(self, employee_id: int, month: str) -> MonthReport:
         employee = self.employees.get(employee_id)
@@ -204,13 +218,23 @@ class ReportService:
         shifts = pair_shifts([p for p in punches if not p.deleted_at], rules.max_shift_at, rules.tz)
         deleted = [p for p in punches if p.deleted_at]
 
-        history_start = min([employee.hired_on] + [s.day for s in shifts[:1]])
+        control_from = employee.counting_from(self.control_start)
+        # O banco só soma a partir do início do controle (antes dele os dias não contam). Sem data de
+        # controle (empresas de antes da opção), o histórico começa como sempre começou.
+        if employee.control_start or self.control_start:
+            history_start = control_from
+        else:
+            history_start = min([employee.hired_on] + [s.day for s in shifts[:1]])
         holidays = self.holidays.all_between(min(history_start, first_day), max(last_day, first_day))
-        days = build_days(shifts, deleted, employee, first_day, last_day, now, holidays, rules)
-        before = build_days(shifts, [], employee, history_start, first_day - timedelta(days=1), now, holidays, rules)
+        days = build_days(shifts, deleted, employee, first_day, last_day, now, holidays, rules, control_from)
+        before = build_days(
+            shifts, [], employee, history_start, first_day - timedelta(days=1), now, holidays, rules, control_from
+        )
 
         closed = [d for d in days if d.closed]
-        previous = sum(d.balance_ms for d in before)
+        # Saldo trazido do controle anterior: vale a partir do mês em que o controle começa
+        initial = employee.initial_balance_minutes * 60000 if last_day >= control_from else 0
+        previous = initial + sum(d.balance_ms for d in before)
         balance = sum(d.balance_ms for d in closed)
         return MonthReport(
             employee=EmployeeRef.model_validate(employee),
@@ -222,6 +246,8 @@ class ReportService:
             balance_ms=balance,
             previous_balance_ms=previous,
             bank_ms=previous + balance,
+            initial_balance_ms=employee.initial_balance_minutes * 60000,
+            control_from=control_from,
             closure=ClosureOut.model_validate(closure) if closure else None,
         )
 

@@ -113,6 +113,10 @@ def new_company(sa, name: str, contact: str = "") -> tuple[int, str]:
     )
     assert response.status_code == 201, response.text
     set_password(username)
+    # Empresa nova começa o controle no dia do cadastro; os testes lançam batidas desde janeiro de 2026
+    with SessionLocal() as db:
+        db.execute(text("UPDATE companies SET control_start = '2026-01-01' WHERE id = :id"), {"id": response.json()["id"]})
+        db.commit()
     return response.json()["id"], username
 
 

@@ -162,6 +162,7 @@ class RulePeriodOut(RulePeriodIn):
 class RulesOut(BaseModel):
     timezone: str
     offline_max_hours: int
+    control_start: date | None  # início do controle (vazio = desde a admissão de cada funcionário)
     periods: list[RulePeriodOut]  # da mais antiga para a mais nova
     can_edit: bool  # só o superadmin altera
 
@@ -169,3 +170,4 @@ class RulesOut(BaseModel):
 class RulesSettingsIn(BaseModel):
     timezone: str | None = None
     offline_max_hours: int | None = None
+    control_start: date | None = None  # só muda quando enviado; null = desde a admissão

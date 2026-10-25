@@ -10,6 +10,7 @@ from app.core.errors import BadRequest, Conflict, NotFound
 from app.core.security import hash_pin
 from app.models import (
     AuditEvent,
+    Company,
     Employee,
     EmployeeDevice,
     EmployeeSchedule,
@@ -22,13 +23,34 @@ from app.repositories.employee_repository import EmployeeRepository
 from app.repositories.punch_repository import PunchRepository
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate
 from app.services.audit import AuditLog
-from app.services.rules import load_rules
+from app.services.rules import ensure_months_open, load_rules
 from app.utils.dates import now_local
 
 PIN_IN_USE = "Este PIN já está em uso"
 
 _WEEK = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
-_FIELDS = {"name": "nome", "hired_on": "admissão", "terminated_on": "desligamento"}
+_FIELDS = {
+    "name": "nome",
+    "hired_on": "admissão",
+    "terminated_on": "desligamento",
+    "control_start": "início do controle",
+}
+# Saldo inicial do banco: até 2000 horas para mais ou para menos
+MAX_INITIAL_MINUTES = 2000 * 60
+
+
+def balance_label(minutes: int) -> str:
+    sign = "+" if minutes > 0 else "−" if minutes < 0 else ""
+    return f"{sign}{abs(minutes) // 60}h{abs(minutes) % 60:02d}"
+
+
+def _check_initial(minutes: int, note: str) -> str:
+    if abs(minutes) > MAX_INITIAL_MINUTES:
+        raise BadRequest("O saldo inicial deve ficar entre −2000h e +2000h")
+    note = note.strip()
+    if minutes and not note:
+        raise BadRequest("Informe de onde vem o saldo inicial (ex.: planilha de 2026)")
+    return note
 
 
 def schedule_label(minutes: int, workdays: str) -> str:
@@ -50,7 +72,15 @@ class EmployeeService:
 
     def create(self, data: EmployeeCreate, user: str) -> Employee:
         hired_on = data.hired_on or self._today()
-        employee = Employee(name=data.name, pin_hash=hash_pin(data.pin), hired_on=hired_on)
+        note = _check_initial(data.initial_balance_minutes, data.initial_balance_note)
+        employee = Employee(
+            name=data.name,
+            pin_hash=hash_pin(data.pin),
+            hired_on=hired_on,
+            control_start=data.control_start,
+            initial_balance_minutes=data.initial_balance_minutes,
+            initial_balance_note=note,
+        )
         employee.schedules.append(
             EmployeeSchedule(valid_from=hired_on, daily_minutes=data.daily_minutes, workdays=data.workdays)
         )
@@ -66,6 +96,8 @@ class EmployeeService:
                 employee_id=employee.id,
                 details={"hired_on": hired_on, "daily_minutes": data.daily_minutes, "workdays": data.workdays},
             )
+            if data.initial_balance_minutes:
+                self._log_initial(employee, 0, user)
 
         self._commit(add)
         return employee
@@ -85,6 +117,28 @@ class EmployeeService:
             employee.terminated_on = data.terminated_on
         if employee.terminated_on and employee.terminated_on < employee.hired_on:
             raise BadRequest("O desligamento não pode ser antes da admissão")
+        if "control_start" in data.model_fields_set and data.control_start != employee.control_start:
+            # Muda os dias que contam: desde a mais antiga das datas, nenhum mês dele pode estar fechado
+            dates = [d for d in (data.control_start, employee.control_start) if d]
+            first = min(dates) if len(dates) == 2 else employee.hired_on
+            ensure_months_open(self.db, self.company_id, first, "o início do controle", employee.id)
+            employee.control_start = data.control_start
+        if data.initial_balance_minutes is not None or data.initial_balance_note is not None:
+            minutes = (
+                data.initial_balance_minutes
+                if data.initial_balance_minutes is not None
+                else employee.initial_balance_minutes
+            )
+            note = data.initial_balance_note if data.initial_balance_note is not None else employee.initial_balance_note
+            note = _check_initial(minutes, note)
+            if minutes != employee.initial_balance_minutes:
+                # O saldo inicial entra no banco de todos os meses: nenhum deles pode estar fechado
+                start = employee.counting_from(self._company_start())
+                ensure_months_open(self.db, self.company_id, start, "o saldo inicial", employee.id)
+                old = employee.initial_balance_minutes
+                employee.initial_balance_minutes, employee.initial_balance_note = minutes, note
+                self._log_initial(employee, old, user)
+            employee.initial_balance_note = note
 
         changes = {f: [before[f], getattr(employee, f)] for f in _FIELDS if before[f] != getattr(employee, f)}
         if changes:
@@ -171,6 +225,9 @@ class EmployeeService:
                 "cadastrado_em": employee.created_at,
                 "admissao": employee.hired_on,
                 "desligamento": employee.terminated_on,
+                "inicio_do_controle": employee.control_start,
+                "saldo_inicial_minutos": employee.initial_balance_minutes,
+                "saldo_inicial_motivo": employee.initial_balance_note,
                 "observacao_pin": "O PIN não é guardado, só um código derivado dele (hash), que não permite descobri-lo.",
             },
             "jornadas": [
@@ -285,6 +342,20 @@ class EmployeeService:
             details={"terminated_on": employee.terminated_on, "at": now},
         )
         self.db.commit()
+
+    def _log_initial(self, employee: Employee, old: int, user: str) -> None:
+        self.audit.record(
+            user,
+            "funcionario.saldo_inicial",
+            f"Saldo inicial do banco de horas de {employee.name}: {balance_label(old) or '0h00'} → "
+            f"{balance_label(employee.initial_balance_minutes) or '0h00'} ({employee.initial_balance_note})",
+            employee_id=employee.id,
+            details={"old": old, "new": employee.initial_balance_minutes, "note": employee.initial_balance_note},
+        )
+
+    def _company_start(self):
+        company = self.db.get(Company, self.company_id)
+        return company.control_start if company else None
 
     def _today(self):
         return now_local(load_rules(self.db, self.company_id).tz).date()

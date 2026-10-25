@@ -29,6 +29,9 @@ class EmployeeCreate(BaseModel):
     daily_minutes: DailyMinutes = 480
     workdays: Workdays = "12345"
     hired_on: date | None = None  # padrão: hoje
+    control_start: date | None = None  # vazio = o início do controle da empresa
+    initial_balance_minutes: int = 0  # banco de horas trazido do controle anterior
+    initial_balance_note: str = ""
 
     @field_validator("name")
     @classmethod
@@ -49,6 +52,9 @@ class EmployeeUpdate(BaseModel):
     schedule_from: date | None = None
     hired_on: date | None = None
     terminated_on: date | None = None  # enviar null explicitamente apaga o desligamento
+    control_start: date | None = None  # enviar null volta ao início do controle da empresa
+    initial_balance_minutes: int | None = None
+    initial_balance_note: str | None = None
 
     @field_validator("name", "pin", mode="before")
     @classmethod
@@ -82,6 +88,9 @@ class EmployeeOut(EmployeeRef):
     created_at: datetime
     hired_on: date
     terminated_on: date | None
+    control_start: date | None
+    initial_balance_minutes: int
+    initial_balance_note: str
     pin_short: bool  # PIN antigo de 4 ou 5 dígitos: trocar
     anonymized_at: datetime | None
     retention_due: bool  # passou do prazo de guarda e ainda não foi anonimizado

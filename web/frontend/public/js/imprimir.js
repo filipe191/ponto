@@ -6,7 +6,7 @@ const fmtSigned = (ms) => { const m = Math.round(ms / 60000); return (m > 0 ? '+
 const fmtT = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const fmtDT = (iso) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const localDate = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-const STATUS = { ok: '', incompleto: 'Incompleto', falta: 'Falta', folga: 'Folga', feriado: 'Feriado', fora: 'Fora do contrato', andamento: 'Em andamento' };
+const STATUS = { ok: '', incompleto: 'Incompleto', falta: 'Falta', folga: 'Folga', feriado: 'Feriado', fora: 'Fora do contrato', antes: 'Antes do controle', andamento: 'Em andamento' };
 
 async function get(path) {
   const res = await fetch('/api/admin' + path);
@@ -24,7 +24,7 @@ function sheet(r) {
       `${p.type === 'entrada' ? 'E' : 'S'} ${fmtT(p.ts)}${localDate(p.ts) !== d.date ? ' (+1)' : ''}${p.manual ? '*' : ''}${p.offline ? ' (off)' : ''}${p.source === 'app' ? ' (cel)' : ''}`).join('  ');
     const dia = new Date(d.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
     const status = [STATUS[d.status], d.holiday, ...d.alerts].filter(Boolean).join(' · ');
-    const muted = ['folga', 'feriado', 'fora'].includes(d.status) ? 'muted' : '';
+    const muted = ['folga', 'feriado', 'fora', 'antes'].includes(d.status) ? 'muted' : '';
     return `<tr class="${muted}"><td>${dia}</td><td>${punches}</td><td class="n">${d.workedMs ? fmtH(d.workedMs) : ''}</td>
       <td class="n">${d.nightMs ? fmtH(d.nightMs) : ''}</td><td class="n">${d.expectedMs ? fmtH(d.expectedMs) : ''}</td>
       <td class="n">${d.closed && (d.expectedMs || d.workedMs) ? fmtSigned(d.balanceMs) : ''}</td><td class="status">${esc(status)}</td></tr>`;

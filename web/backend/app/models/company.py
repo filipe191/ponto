@@ -25,6 +25,9 @@ class Company(Base):
     timezone: Mapped[str] = mapped_column(String)
     # Batidas guardadas no relógio sem conexão são aceitas até X horas depois
     offline_max_hours: Mapped[int] = mapped_column(Integer)
+    # Início do controle de ponto no sistema: antes dele nenhum dia conta (nem como falta).
+    # Vazio = desde a admissão de cada funcionário (empresas de antes desta opção).
+    control_start: Mapped[date | None] = mapped_column(Date)
     # Link do aviso de privacidade para os funcionários (/privacidade?e=<código>). Aleatório, para o
     # link não permitir descobrir as outras empresas atendidas.
     public_code: Mapped[str] = mapped_column(String, unique=True, default=lambda: secrets.token_urlsafe(9))

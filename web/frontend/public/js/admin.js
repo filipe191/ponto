@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = (n) => String(n).padStart(2, '0');
 const WEEK = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
-const STATUS = { falta: 'falta', incompleto: 'incompleto', andamento: 'em andamento', feriado: 'feriado', fora: 'fora do contrato' };
+const STATUS = { falta: 'falta', incompleto: 'incompleto', andamento: 'em andamento', feriado: 'feriado', fora: 'fora do contrato', antes: 'antes do controle' };
 const fmtD = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR');
 const todayISO = () => localDate(new Date().toISOString());
 const ACTION = { criada: 'lançada', alterada: 'corrigida', excluida: 'excluída', restaurada: 'restaurada' };
@@ -180,6 +180,10 @@ function openEmpDialog(emp = null) {
     : '';
   $('fHired').value = emp?.hired_on || todayISO();
   $('fTerminated').value = emp?.terminated_on || '';
+  $('fControl').value = emp?.control_start || '';
+  $('fInitial').value = emp?.initial_balance_minutes ? fmtSigned(emp.initial_balance_minutes * 60000).replace('h', ':') : '';
+  $('fInitialNote').value = emp?.initial_balance_note || '';
+  $('fControlWrap').open = !!(emp?.control_start || emp?.initial_balance_minutes);
   $('fError').textContent = '';
   $('empDialog').showModal();
   $('fName').focus();
@@ -208,6 +212,11 @@ $('empForm').addEventListener('submit', async (e) => {
     body.terminated_on = $('fTerminated').value || null;
     body.schedule_from = $('fFrom').value || null;
   }
+  body.control_start = $('fControl').value || null;
+  const initial = $('fInitial').value.trim().match(/^([+−-]?)(\d+):([0-5]\d)$/);
+  if ($('fInitial').value.trim() && !initial) { $('fError').textContent = 'Saldo inicial: use horas:minutos, ex.: +12:30 ou −3:00.'; return; }
+  body.initial_balance_minutes = initial ? (initial[1] && initial[1] !== '+' ? -1 : 1) * (Number(initial[2]) * 60 + Number(initial[3])) : 0;
+  body.initial_balance_note = $('fInitialNote').value;
   const pin = $('fPin').value.trim();
   if (pin || !editingEmp) body.pin = pin;
   try {
@@ -320,7 +329,7 @@ async function loadReport() {
     <div><span>Noturno</span><strong>${fmtH(r.nightMs)}</strong><small>base do adicional</small></div>
     <div><span>Previsto</span><strong>${fmtH(r.expectedMs)}</strong>${untilNote}</div>
     <div><span>Saldo do mês</span><strong class="${signCls(r.balanceMs)}">${fmtSigned(r.balanceMs)}</strong>${untilNote}</div>
-    <div><span>Banco de horas</span><strong class="${signCls(r.bankMs)}">${fmtSigned(r.bankMs)}</strong><small>anterior: ${fmtSigned(r.previousBalanceMs)}</small></div>
+    <div><span>Banco de horas</span><strong class="${signCls(r.bankMs)}">${fmtSigned(r.bankMs)}</strong><small>anterior: ${fmtSigned(r.previousBalanceMs)}${r.initialBalanceMs ? ` · inclui saldo inicial ${fmtSigned(r.initialBalanceMs)}` : ''}</small></div>
     <div><span>Faltas</span><strong>${count('falta')}</strong></div>
     <div><span>Incompletos</span><strong>${count('incompleto')}</strong></div>
     <div><span>Avisos da CLT</span><strong class="${alerts ? 'neg' : ''}">${alerts}</strong></div>`;
@@ -355,7 +364,7 @@ async function loadReport() {
         const warn = d.alerts.length ? `<span class="warn" tabindex="0" title="${esc(d.alerts.join('\n'))}" aria-label="${esc(d.alerts.join('; '))}">⚠</span>` : '';
         const hasHours = d.workedMs || d.punches.some((p) => !p.deleted_at);
         const showBalance = d.closed && (d.expectedMs || d.workedMs);
-        const rowCls = ['folga', 'feriado', 'fora'].includes(d.status) ? 'folga' : '';
+        const rowCls = ['folga', 'feriado', 'fora', 'antes'].includes(d.status) ? 'folga' : '';
         return `<tr class="${rowCls}">
           <td class="day">${dia}${tag}${holiday}</td>
           <td class="wrap"><div class="chips">${chips || '<span class="muted">—</span>'}${warn}</div>
@@ -924,7 +933,8 @@ async function loadRules() {
   if (!$('rFrom').value) $('rFrom').value = today;
   $('sTz').value = r.timezone;
   $('sOffline').value = r.offline_max_hours;
-  for (const id of ['sTz', 'sOffline']) $(id).disabled = !r.can_edit;
+  $('sControl').value = r.control_start || '';
+  for (const id of ['sTz', 'sOffline', 'sControl']) $(id).disabled = !r.can_edit;
   $('settingsSubmit').hidden = !r.can_edit;
 }
 
@@ -954,7 +964,7 @@ $('settingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('settingsError').textContent = '';
   try {
-    await api('/rules/settings', { method: 'PATCH', body: JSON.stringify({ timezone: $('sTz').value.trim(), offline_max_hours: Number($('sOffline').value) }) });
+    await api('/rules/settings', { method: 'PATCH', body: JSON.stringify({ timezone: $('sTz').value.trim(), offline_max_hours: Number($('sOffline').value), control_start: $('sControl').value || null }) });
     toast('Configurações salvas');
     loadRules();
     loadAudit();

@@ -112,6 +112,7 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
 **Administração**
 - **Funcionários:** nome, PIN, jornada diária e dias de trabalho, admissão e desligamento. Mudar a jornada cria uma nova vigência a partir de uma data, sem alterar o passado. Só cadastros sem nenhum registro podem ser excluídos; os demais são desativados.
 - **Espelho mensal:** todos os dias com batidas, horas trabalhadas, horas noturnas, previsto e saldo; marca faltas, incompletos, feriados e dias fora do contrato. Resumo com saldo do mês e **banco de horas** acumulado.
+- **Início do controle e saldo inicial:** o dia em que a empresa começou a usar o sistema (Configurações → Ajustes da empresa; empresa nova: o dia do cadastro). Antes dele nenhum dia conta, nem como falta, então quem foi admitido antes não começa com o banco negativo. Cada funcionário pode ter um início próprio e um **saldo inicial** do banco trazido do controle anterior, com o motivo (Editar → "Antes do sistema"). Nenhum dos dois pode mudar um mês já fechado.
 - **Regras da CLT no cálculo:**
   - Hora noturna reduzida (art. 73): por padrão das 22h às 5h, 52min30s valem 1 hora. As horas trabalhadas já consideram isso e a coluna "Noturno" é a base do adicional.
   - Tolerância (art. 58 §1º): por padrão, diferenças de até 10 minutos no dia não geram saldo.
@@ -192,6 +193,6 @@ docker rm -f ponto-testes-db && docker network rm ponto-testes
 
 Os testes de integração **apagam e recriam o banco**: só rodam quando `PGDATABASE` contém "test"; sem isso, são pulados. O `scripts/deploy.sh` faz o mesmo com um Postgres descartável, e o GitHub Actions (`.github/workflows/backend.yml`) roda tudo, mais o `pip-audit`, a cada push.
 
-Nova mudança no banco: crie `app/db/migrations/versions/0013_<descricao>.py` com `revision = "0013"` e `down_revision = "0012"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
+Nova mudança no banco: crie `app/db/migrations/versions/0014_<descricao>.py` com `revision = "0014"` e `down_revision = "0013"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
 
 Páginas: o HTML fica em `frontend/public/*.html` e o script de cada uma em `frontend/public/js/`. A CSP só aceita scripts desses arquivos (`script-src 'self'`): não coloque `<script>` com código nem `onclick=` dentro do HTML.

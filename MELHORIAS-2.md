@@ -7,7 +7,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | # | Item | Prioridade | Esforço | Onde | Status |
 |---|------|-----------|---------|------|--------|
 | 1 | Ausências justificadas (atestado, férias, folga) | Alta | Grande | Backend + painel | Pendente |
-| 2 | Início do controle e saldo inicial do banco de horas | Alta | Pequeno | Backend + painel | Pendente |
+| 2 | Início do controle e saldo inicial do banco de horas | Alta | Pequeno | Backend + painel | ✅ Concluído |
 | 3 | Jornada diferente por dia da semana e escalas | Alta | Grande | Backend + painel | Pendente |
 | 4 | Horas extras separadas em 50% e 100% | Alta | Médio | Backend + painel | Pendente |
 | 5 | Funcionário vê o resultado das solicitações no app | Média | Médio | Backend + app | Pendente |
@@ -44,6 +44,8 @@ Os itens 1 a 4 são os que mais mudam o espelho de uma empresa real: sem eles, a
 - Uma data de **início do controle** por empresa (padrão: o dia do cadastro), com ajuste por funcionário. Antes dela nenhum dia conta.
 - Um **saldo inicial** do banco por funcionário, lançado com motivo e visível no espelho como "saldo anterior ao sistema".
 - Na migração, as empresas existentes recebem a data da primeira batida de cada funcionário, para nenhum saldo atual mudar sem querer (conferir antes com o resumo do mês).
+
+**Status: concluído em 25/10/2026.** Início do controle na empresa (Configurações → Ajustes da empresa, só o superadmin) e, se preciso, por funcionário, com o **saldo inicial** do banco e o motivo (Editar funcionário → "Antes do sistema"). Antes do início, o dia aparece como "antes do controle": não é falta, não tem saldo nem avisos. O saldo inicial entra no banco a partir do mês do início e aparece no resumo do espelho. Empresa nova começa o controle no dia do cadastro. Na migração (0013), diferente do proposto, as empresas e os funcionários existentes ficaram **sem data**, ou seja, desde a admissão como antes: assim nenhum espelho muda sozinho, e o superadmin escolhe a data. Mudar o início ou o saldo é recusado se afetar um mês fechado, e tudo vai para a auditoria. Testes em `tests/integration/test_saldo_inicial.py`.
 
 ### 3. Jornada diferente por dia da semana e escalas
 
@@ -141,7 +143,7 @@ Os itens 1 a 4 são os que mais mudam o espelho de uma empresa real: sem eles, a
 ## Checklist
 
 - [ ] 1. Ausências justificadas (atestado, férias, folga)
-- [ ] 2. Início do controle e saldo inicial do banco de horas
+- [x] 2. Início do controle e saldo inicial do banco de horas
 - [ ] 3. Jornada diferente por dia da semana e escalas
 - [ ] 4. Horas extras separadas em 50% e 100%
 - [ ] 5. Funcionário vê o resultado das solicitações no app

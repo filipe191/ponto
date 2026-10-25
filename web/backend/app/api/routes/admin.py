@@ -190,6 +190,7 @@ def rules(db: DbSession, t: CompanyAdmin, access: CurrentAccess):
     return RulesOut(
         timezone=company.timezone,
         offline_max_hours=company.offline_max_hours,
+        control_start=company.control_start,
         periods=service.periods(),
         can_edit=access.account.superadmin,
     )
@@ -204,7 +205,8 @@ def add_rules(body: RulePeriodIn, db: DbSession, t: SuperCompany):
 
 @router.patch("/rules/settings", response_model=OkResponse)
 def update_rules_settings(body: RulesSettingsIn, db: DbSession, t: SuperCompany):
-    RulesService(db, t.company_id).update_settings(t.user, body.timezone, body.offline_max_hours)
+    control_start = body.control_start if "control_start" in body.model_fields_set else False
+    RulesService(db, t.company_id).update_settings(t.user, body.timezone, body.offline_max_hours, control_start)
     return OkResponse()
 
 

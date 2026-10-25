@@ -29,6 +29,11 @@ class Employee(Base):
     # Fora do período de contrato não há jornada prevista (nem faltas)
     hired_on: Mapped[date] = mapped_column(Date)
     terminated_on: Mapped[date | None] = mapped_column(Date)
+    # Início do controle só deste funcionário (vazio = o da empresa). Antes dele nenhum dia conta.
+    control_start: Mapped[date | None] = mapped_column(Date)
+    # Saldo do banco de horas trazido do controle anterior (planilha, outro sistema), em minutos
+    initial_balance_minutes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    initial_balance_note: Mapped[str] = mapped_column(String, default="", server_default="")
 
     # Batidas nunca são apagadas junto com o funcionário (o banco recusa, ver EmployeeService.delete)
     punches: Mapped[list["Punch"]] = relationship(back_populates="employee", passive_deletes="all")
@@ -60,6 +65,11 @@ class Employee(Base):
 
     def employed_on(self, day: date) -> bool:
         return self.hired_on <= day and (self.terminated_on is None or day <= self.terminated_on)
+
+    def counting_from(self, company_start: date | None) -> date:
+        """Primeiro dia que conta no espelho e no banco: a admissão ou o início do controle, o que vier depois."""
+        start = self.control_start or company_start
+        return max(self.hired_on, start) if start else self.hired_on
 
     # Jornada em vigor hoje (usada na listagem e no cadastro)
     @property

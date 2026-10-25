@@ -232,9 +232,11 @@
           <option value="America/Bahia"><option value="America/Noronha">
         </datalist>
         <label class="field-inline">Batidas sem conexão aceitas até <input class="input input-num" type="number" id="sOffline" min="0" max="72" required> h depois</label>
+        <label class="field-inline">Início do controle <input class="input" type="date" id="sControl" aria-describedby="sControlHint"></label>
         <button class="btn btn-primary" type="submit" id="settingsSubmit">Salvar ajustes</button>
       </form>
       <p class="hint">O fuso define em que dia cada batida conta e só pode ser mudado antes da primeira batida da empresa.</p>
+      <p class="hint" id="sControlHint">Início do controle: o dia em que a empresa começou a usar o sistema. Antes dele nenhum dia conta, nem como falta (quem foi admitido antes não começa com o banco negativo). Vazio: desde a admissão de cada funcionário. Não pode mudar um mês já fechado.</p>
       <p class="form-error" id="settingsError" role="alert"></p>
     </section>
 
@@ -332,6 +334,24 @@
         <input id="fFrom" type="date">
       </label>
       <ul class="history" id="fSchedules"></ul>
+      <details class="field" id="fControlWrap">
+        <summary>Antes do sistema: início do controle e saldo inicial</summary>
+        <div class="two">
+          <label class="field">
+            <span>Início do controle</span>
+            <input id="fControl" type="date" aria-describedby="fControlHint">
+          </label>
+          <label class="field">
+            <span>Saldo inicial do banco</span>
+            <input id="fInitial" placeholder="+12:30" title="Horas e minutos, com − para saldo negativo (ex.: +12:30 ou −3:00)" autocomplete="off">
+          </label>
+        </div>
+        <label class="field">
+          <span>De onde vem o saldo</span>
+          <input id="fInitialNote" autocomplete="off" placeholder="ex.: planilha de 2026">
+        </label>
+        <small class="hint" id="fControlHint">Vazio: o início da empresa. Dias antes dele não contam. O saldo inicial entra no banco de horas a partir desse dia.</small>
+      </details>
       <div class="two">
         <label class="field">
           <span>Admissão</span>
