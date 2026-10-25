@@ -40,6 +40,13 @@
   --focus: #3f5fa8;
   --shadow: 0 1px 0 rgba(29, 37, 44, 0.06), 0 12px 28px -14px rgba(29, 37, 44, 0.35);
   --bevel: rgba(255, 255, 255, 0.6);
+  /* Botão principal do painel e texto sobre o vermelho (selos, botão de excluir) */
+  --primary: #3b4852;
+  --primary-edge: #10161a;
+  --primary-text: #f2f5f7;
+  --on-danger: #fff;
+  /* Campos de data, seletores e caixas de marcar seguem o tema */
+  color-scheme: light;
   --font: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -64,6 +71,12 @@
     --focus: #8aa4e0;
     --shadow: 0 12px 28px -14px rgba(0, 0, 0, 0.7);
     --bevel: rgba(255, 255, 255, 0.04);
+    /* O cinza-escuro da máquina some no cartão escuro: o botão principal vira azul claro */
+    --primary: #8aa4e0;
+    --primary-edge: #4d6aa8;
+    --primary-text: #10161a;
+    --on-danger: #1b1012;
+    color-scheme: dark;
   }
 }
 

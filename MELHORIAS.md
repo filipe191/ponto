@@ -18,7 +18,7 @@ Levantamento feito em 24/10/2026, depois da mudança para várias empresas no me
 | 10 | Confirmações do relógio com o visual do sistema | Média | Pequeno | Relógio | ✅ Concluído |
 | 11 | Confirmação visual depois de salvar | Baixa | Pequeno | Painel | ✅ Concluído |
 | 12 | Busca de funcionários | Baixa | Pequeno | Painel | ✅ Concluído |
-| 13 | Tema escuro no painel | Baixa | Pequeno | Frontend | Pendente |
+| 13 | Tema escuro no painel | Baixa | Pequeno | Frontend | ✅ Concluído |
 | 14 | Relógio instalável no tablet | Baixa | Pequeno | Relógio | Pendente |
 
 Para começar, a melhor relação entre esforço e resultado está nos itens 1, 2, 4, 5 e 6.
@@ -154,6 +154,8 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 
 **Proposta.** Redefinir as cores (que já estão em variáveis) para o tema escuro com `prefers-color-scheme: dark`, conferindo o contraste do espelho e das marcas de batida.
 
+**Status: concluído em 25/10/2026.** O `style.css` já trocava todas as cores no tema escuro e o painel as usa, então a maior parte já funcionava. Conferido no navegador (claro e escuro, computador e celular), sobraram quatro problemas, corrigidos com tokens novos: campos de data, seletores e caixas de marcar continuavam claros (agora `color-scheme` segue o tema); o botão principal (Aprovar, Lançar, Salvar) quase sumia no cartão escuro (no escuro vira azul claro); o número nos selos vermelhos e o texto do botão de excluir eram brancos sobre rosa (agora escuros no tema escuro). As marcas de batida e os saldos do espelho já tinham contraste bom. O tema claro não mudou.
+
 ### 14. Relógio instalável no tablet
 
 **Hoje.** O relógio abre no navegador, com a barra de endereço visível.
@@ -182,5 +184,5 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - [x] 10. Confirmações do relógio com o visual do sistema
 - [x] 11. Confirmação visual depois de salvar
 - [x] 12. Busca de funcionários
-- [ ] 13. Tema escuro no painel
+- [x] 13. Tema escuro no painel
 - [ ] 14. Relógio instalável no tablet
