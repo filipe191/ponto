@@ -989,6 +989,20 @@ TABS.forEach((tab, i) => {
 window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
 showTab(location.hash.slice(1));
 
+// ---------- Tabelas em cartões no celular ----------
+// Em tela estreita cada linha vira um cartão (CSS); cada célula leva o título da sua coluna.
+
+function labelCells(table) {
+  const heads = [...table.tHead.rows[0].cells].map((th) => th.textContent.trim());
+  for (const row of table.tBodies[0].rows) {
+    [...row.cells].forEach((td, i) => { if (heads[i] && td.colSpan === 1) td.dataset.label = heads[i]; });
+  }
+}
+document.querySelectorAll('table.stack').forEach((table) => {
+  new MutationObserver(() => labelCells(table)).observe(table.tBodies[0], { childList: true });
+  labelCells(table);
+});
+
 // ---------- Início ----------
 
 let openCompanyId = null;

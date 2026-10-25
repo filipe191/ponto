@@ -48,7 +48,7 @@
       </form>
       <p class="form-error" id="coError" role="alert"></p>
       <div class="table-wrap">
-        <table class="timecard">
+        <table class="timecard stack">
           <thead><tr><th>Empresa</th><th>Contato para privacidade</th><th></th></tr></thead>
           <tbody id="companies"></tbody>
         </table>
@@ -63,7 +63,7 @@
       </form>
       <p class="form-error" id="saError" role="alert"></p>
       <div class="table-wrap">
-        <table class="timecard">
+        <table class="timecard stack">
           <thead><tr><th>Usuário</th><th>Senha alterada em</th><th></th></tr></thead>
           <tbody id="superadmins"></tbody>
         </table>
@@ -73,7 +73,7 @@
       <p class="hint">O que os superadministradores fizeram fora das empresas: logins, senha e duas etapas, cadastro e desativação de empresas e de superadministradores. O que eles fazem dentro de uma empresa fica na auditoria dela.</p>
       <p class="form-error" id="sysAudError" role="alert"></p>
       <div class="table-wrap">
-        <table class="timecard">
+        <table class="timecard stack">
           <thead><tr><th>Quando</th><th>Quem</th><th>O que</th></tr></thead>
           <tbody id="sysAudit"></tbody>
         </table>
@@ -98,7 +98,7 @@
       <p class="hint">Batidas lançadas depois e correções feitas pelos funcionários no app de celular só valem depois de aprovadas aqui. A aprovação segue as mesmas regras das suas correções (histórico, mês fechado).</p>
       <p class="form-error" id="reqError" role="alert"></p>
       <div class="table-wrap">
-        <table class="timecard">
+        <table class="timecard stack">
           <thead><tr><th>Funcionário</th><th>Pedido</th><th>Pedido em</th><th></th></tr></thead>
           <tbody id="requests"></tbody>
         </table>
@@ -112,7 +112,7 @@
       </header>
       <p class="form-error" id="empError" role="alert"></p>
       <div class="table-wrap">
-        <table class="timecard">
+        <table class="timecard stack">
           <thead><tr><th>Nome</th><th>Jornada prevista</th><th></th></tr></thead>
           <tbody id="employees"></tbody>
         </table>
@@ -174,7 +174,7 @@
       </form>
       <p class="form-error" id="holError" role="alert"></p>
       <div class="table-wrap">
-        <table class="timecard">
+        <table class="timecard stack">
           <thead><tr><th>Data</th><th>Feriado</th><th></th></tr></thead>
           <tbody id="holidays"></tbody>
         </table>
@@ -188,7 +188,7 @@
       </header>
       <p class="hint">Usadas no cálculo das horas, do horário noturno e do saldo. Cada mudança vale a partir de uma data: os dias anteriores, os meses fechados e o banco de horas acumulado continuam como estavam. Só o superadministrador altera as regras.</p>
       <div class="table-wrap">
-        <table class="timecard">
+        <table class="timecard stack">
           <thead><tr><th>Desde</th><th>Tolerância</th><th>Horário noturno</th><th>Jornada máxima</th><th>Definida por</th></tr></thead>
           <tbody id="rulePeriods"></tbody>
         </table>
@@ -240,7 +240,7 @@
       </form>
       <p class="form-error" id="admError" role="alert"></p>
       <div class="table-wrap">
-        <table class="timecard">
+        <table class="timecard stack">
           <thead><tr><th>Usuário</th><th>Senha alterada em</th><th></th></tr></thead>
           <tbody id="admins"></tbody>
         </table>
@@ -275,7 +275,7 @@
       </div>
       <p class="form-error" id="audError" role="alert"></p>
       <div class="table-wrap">
-        <table class="timecard">
+        <table class="timecard stack">
           <thead><tr><th>Quando</th><th>Quem</th><th>O que</th></tr></thead>
           <tbody id="audit"></tbody>
         </table>

@@ -11,7 +11,7 @@ Levantamento feito em 24/10/2026, depois da mudança para várias empresas no me
 | 3 | Segundo superadmin | Alta | Pequeno | Backend + painel | ✅ Concluído |
 | 4 | Testes de ponta a ponta e CI | Alta | Médio | `web/backend/tests/` + GitHub Actions | ✅ Concluído |
 | 5 | Painel em abas | Alta | Médio | Frontend | ✅ Concluído |
-| 6 | Tabelas que viram cartões no celular | Alta | Pequeno | Frontend | Pendente |
+| 6 | Tabelas que viram cartões no celular | Alta | Pequeno | Frontend | ✅ Concluído |
 | 7 | Link do aviso de privacidade por empresa | Média | Pequeno | Backend + frontend | Pendente |
 | 8 | Bloqueios de tentativas guardados no banco | Média | Pequeno | Backend | Pendente |
 | 9 | Aviso de solicitações pendentes | Média | Médio | Backend | Pendente |
@@ -90,6 +90,8 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 
 **Proposta.** Abaixo de ~600 px, cada linha vira um cartão com os dados empilhados e os botões embaixo. Só CSS, com os rótulos vindos de um `data-label` em cada célula.
 
+**Status: concluído em 25/10/2026.** Até 640 px, as tabelas de empresas, superadmins, auditorias, solicitações, funcionários, feriados, regras e administradores viram cartões: o nome em destaque, os demais dados com o título da coluna em cima e os botões embaixo, sem rolagem para os lados. Os rótulos são preenchidos pelo script a partir do cabeçalho de cada tabela, também quando a lista é recarregada. O espelho continua em tabela (as colunas de noturno e prevista já somem no celular).
+
 ---
 
 ## 🟠 Prioridade média
@@ -161,7 +163,7 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - [x] 3. Segundo superadmin
 - [x] 4. Testes de ponta a ponta no repositório e CI
 - [x] 5. Painel em abas
-- [ ] 6. Tabelas que viram cartões no celular
+- [x] 6. Tabelas que viram cartões no celular
 - [ ] 7. Link do aviso de privacidade por empresa
 - [ ] 8. Bloqueios de tentativas guardados no banco
 - [ ] 9. Aviso de solicitações pendentes
