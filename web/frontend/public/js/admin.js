@@ -164,8 +164,8 @@ document.querySelectorAll('[name="fKind"]').forEach((r) => r.addEventListener('c
   if (r.value === 'ciclo') setSchedule({ ...SCHEDULE_PRESETS['12x36'], cycle_start: $('fCycleStart').value || todayISO() });
   else setSchedule(SCHEDULE_PRESETS['5x2']);
 }));
-document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => {
-  setSchedule({ ...SCHEDULE_PRESETS[b.dataset.preset], cycle_start: $('fCycleStart').value || todayISO() });
+document.querySelectorAll('[data-sched]').forEach((b) => b.addEventListener('click', () => {
+  setSchedule({ ...SCHEDULE_PRESETS[b.dataset.sched], cycle_start: $('fCycleStart').value || todayISO() });
 }));
 $('fCycleLen').addEventListener('change', () => {
   const n = Math.min(28, Math.max(2, Number($('fCycleLen').value) || 2));
