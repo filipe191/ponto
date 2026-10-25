@@ -36,15 +36,42 @@ async function loadMe() {
 }
 loadMe();
 
+// Janela de confirmação (ou só de aviso, sem `cancel`); resolve true se o usuário confirmou
+function ask({ title, message, ok = 'Confirmar', cancel = 'Cancelar' }) {
+  const dlg = $('askDialog');
+  $('askTitle').textContent = title;
+  $('askMessage').textContent = message;
+  $('askOk').textContent = ok;
+  $('askCancel').textContent = cancel || '';
+  $('askCancel').hidden = !cancel;
+  dlg.returnValue = '';
+  dlg.showModal();
+  $(cancel ? 'askCancel' : 'askOk').focus(); // Enter sem querer não confirma
+  return new Promise((resolve) => {
+    dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok'), { once: true });
+  });
+}
+
 $('kiosk').addEventListener('click', async () => {
-  const ask = me.kiosk
-    ? 'Desligar o modo relógio neste aparelho?\n\nPara voltar a bater ponto aqui será preciso entrar de novo.'
-    : `Usar este aparelho como relógio de ponto${me.company ? ` da empresa ${me.company}` : ''}?\n\nOs funcionários dela poderão bater o ponto aqui, e a sua conta de administrador será desconectada deste aparelho.`;
-  if (!confirm(ask)) return;
+  const confirmed = me.kiosk
+    ? await ask({
+      title: 'Desligar o modo relógio?',
+      message: 'Para voltar a bater ponto neste aparelho será preciso entrar de novo.',
+      ok: 'Desligar',
+    })
+    : await ask({
+      title: 'Usar como relógio de ponto?',
+      message: `Os funcionários${me.company ? ` da empresa ${me.company}` : ''} poderão bater o ponto neste aparelho, e a sua conta de administrador será desconectada dele.`,
+      ok: 'Usar como relógio',
+    });
+  if (!confirmed) return;
   const res = await fetch('/api/auth/kiosk', { method: me.kiosk ? 'DELETE' : 'POST' }).catch(() => null);
   if (res?.status === 401) return toLogin();
   // Superadmin sem empresa aberta: escolhe uma no painel antes de liberar o relógio
-  if (res?.status === 409) return alert((await res.json().catch(() => ({}))).error || 'Escolha uma empresa no painel');
+  if (res?.status === 409) {
+    const error = (await res.json().catch(() => ({}))).error || 'Escolha uma empresa no painel.';
+    return ask({ title: 'Nenhuma empresa aberta', message: error, ok: 'Entendi', cancel: '' });
+  }
   loadMe();
 });
 
@@ -145,7 +172,7 @@ $('keypad').addEventListener('click', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if ($('mirror').open) return;
+  if ($('mirror').open || $('askDialog').open) return;
   const map = { Enter: 'ok', Backspace: 'back', Escape: 'clear' };
   const k = /^\d$/.test(e.key) ? e.key : map[e.key];
   if (!k) return;

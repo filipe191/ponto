@@ -15,7 +15,7 @@ Levantamento feito em 24/10/2026, depois da mudança para várias empresas no me
 | 7 | Link do aviso de privacidade por empresa | Média | Pequeno | Backend + frontend | ✅ Concluído |
 | 8 | Bloqueios de tentativas guardados no banco | Média | Pequeno | Backend | ✅ Concluído |
 | 9 | Aviso de solicitações pendentes | Média | Médio | Backend | Pendente |
-| 10 | Confirmações do relógio com o visual do sistema | Média | Pequeno | Relógio | Pendente |
+| 10 | Confirmações do relógio com o visual do sistema | Média | Pequeno | Relógio | ✅ Concluído |
 | 11 | Confirmação visual depois de salvar | Baixa | Pequeno | Painel | Pendente |
 | 12 | Busca de funcionários | Baixa | Pequeno | Painel | Pendente |
 | 13 | Tema escuro no painel | Baixa | Pequeno | Frontend | Pendente |
@@ -124,6 +124,8 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 
 **Proposta.** Reaproveitar a janela de confirmação que o painel já tem (`<dialog>` com título, mensagem e botões).
 
+**Status: concluído em 25/10/2026.** Ligar e desligar o modo relógio e o aviso de "nenhuma empresa aberta" usam uma janela `<dialog>` com título, mensagem e botões no estilo das teclas do relógio (grandes, para o toque no tablet), como a janela do espelho. O foco começa em Cancelar, para um Enter sem querer não confirmar, e o teclado do PIN fica parado enquanto a janela está aberta. Não sobrou nenhum `confirm()` ou `alert()` nas páginas.
+
 ---
 
 ## 🟡 Prioridade baixa
@@ -171,7 +173,7 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - [x] 7. Link do aviso de privacidade por empresa
 - [x] 8. Bloqueios de tentativas guardados no banco
 - [ ] 9. Aviso de solicitações pendentes
-- [ ] 10. Confirmações do relógio com o visual do sistema
+- [x] 10. Confirmações do relógio com o visual do sistema
 - [ ] 11. Confirmação visual depois de salvar
 - [ ] 12. Busca de funcionários
 - [ ] 13. Tema escuro no painel

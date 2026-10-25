@@ -89,6 +89,18 @@
     <p class="form-hint">Fecha sozinho depois de 1 minuto sem uso. * corrigida pelo administrador.</p>
   </dialog>
 
+  <!-- Confirmação e avisos (no lugar do confirm()/alert() do navegador) -->
+  <dialog class="ask" id="askDialog" aria-labelledby="askTitle">
+    <h2 id="askTitle"></h2>
+    <form method="dialog">
+      <p class="ask-message" id="askMessage"></p>
+      <div class="ask-actions">
+        <button class="key key-small" value="cancel" id="askCancel">Cancelar</button>
+        <button class="key key-go" value="ok" id="askOk">Confirmar</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="/js/index.js"></script>
 </body>
 </html>
