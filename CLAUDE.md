@@ -5,7 +5,7 @@ Sistema de registro de ponto: relógio em tablet, painel de administração e ap
 - `web/backend/`: API em FastAPI + PostgreSQL (SQLAlchemy, migrações Alembic em `app/db/migrations/versions/`, aplicadas na subida do backend).
 - `web/frontend/`: nginx servindo páginas estáticas (`public/*.html`, scripts em `public/js/`, CSP `script-src 'self'`, sem scripts inline).
 - `app/`: app de celular (Expo).
-- Documentos de acompanhamento: `SEGURANCA.md` (segurança) e `MELHORIAS.md` (melhorias). Ao concluir um item, atualize o status e o checklist do documento.
+- Documento de acompanhamento: `SEGURANCA.md` (segurança). Ao concluir um item, atualize o status e o checklist do documento. O antigo `MELHORIAS.md` (14 itens, todos concluídos em 24 e 25/10/2026) foi apagado e continua no histórico do git.
 
 ## Convenções
 
