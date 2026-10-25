@@ -16,6 +16,8 @@ class AdminAccount(Base):
     # no painel; a dele (se houver) é só a que abre ao entrar.
     company_id: Mapped[int | None] = mapped_column(ForeignKey("companies.id", ondelete="RESTRICT"))
     superadmin: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("FALSE"))
+    # Só consulta (ex.: contabilidade): vê espelho, resumo, CSVs e auditoria, mas não altera nada
+    read_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("FALSE"))
     username: Mapped[str] = mapped_column(String, unique=True)
     password_hash: Mapped[str] = mapped_column(String)
     updated_at: Mapped[datetime] = mapped_column(

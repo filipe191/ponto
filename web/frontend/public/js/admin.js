@@ -722,7 +722,7 @@ async function loadAdmins() {
   try { admins = await api('/admins'); } catch (err) { $('admError').textContent = err.message; }
   $('admins').innerHTML = admins.map((a) => `
     <tr>
-      <td class="who">${esc(a.username)}${a.username === currentUser ? ' <span class="muted">(você)</span>' : ''}${a.superadmin ? ' <span class="muted">· superadministrador</span>' : ''}</td>
+      <td class="who">${esc(a.username)}${a.username === currentUser ? ' <span class="muted">(você)</span>' : ''}${a.superadmin ? ' <span class="muted">· superadministrador</span>' : ''}${a.read_only ? '<span class="tag inativo">só consulta</span>' : ''}</td>
       <td>${fmtDT(a.updated_at)}</td>
       <td class="actions">${a.username === currentUser || a.superadmin ? '' : `<button class="btn btn-sm btn-danger" data-adm="${a.id}" data-name="${esc(a.username)}">Excluir</button>`}</td>
     </tr>`).join('');
@@ -732,7 +732,8 @@ $('admForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('admError').textContent = '';
   try {
-    await api('/admins', { method: 'POST', body: JSON.stringify({ username: $('admUser').value, password: $('admPass').value }) });
+    await api('/admins', { method: 'POST', body: JSON.stringify({ username: $('admUser').value, password: $('admPass').value, read_only: $('admReadOnly').checked }) });
+    $('admReadOnly').checked = false;
     $('admUser').value = '';
     $('admPass').value = '';
     toast('Administrador cadastrado');
@@ -1243,6 +1244,8 @@ fetch('/api/auth/admin').then((r) => (r.ok ? r.json() : null)).then((me) => {
   if (!me) return toLogin();
   if (me.pending) return location.replace('/senha');
   currentUser = me.user || '';
+  document.body.classList.toggle('read-only', !!me.read_only);
+  $('readOnlyNotice').hidden = !me.read_only;
   openCompanyId = me.company_id;
   $('whoami').textContent = currentUser ? `Você entrou como ${currentUser}` : '';
   $('privacyLink').textContent = me.privacy_code ? `${location.origin}/privacidade?e=${me.privacy_code}` : '';

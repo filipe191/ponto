@@ -32,6 +32,8 @@ async function loadMe() {
   me = await res.json();
   $('company').textContent = me.company || '';
   document.querySelectorAll('[data-admin]').forEach((el) => { el.hidden = !me.admin; });
+  // Admin só de consulta não libera o aparelho como relógio (o backend também recusa)
+  if (me.read_only && !me.kiosk) $('kiosk').hidden = true;
   $('kiosk').textContent = me.kiosk ? 'Desligar relógio' : 'Usar como relógio';
 }
 loadMe();

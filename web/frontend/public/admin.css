@@ -290,3 +290,10 @@ dialog h2 { margin-bottom: 8px; font-size: 1.25rem; font-weight: 800; font-stret
 .toast.toast-out { opacity: 0; transition: opacity 300ms; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* ---------- Admin só de consulta: o que altera some (o backend recusa de qualquer jeito) ---------- */
+
+.read-only-notice { margin: 0; }
+.read-only :is(.write, [data-closure], [data-hol], [data-adm], [data-req], [data-abs], [data-dev], .chip .x,
+  [data-act="edit"], [data-act="devices"], [data-act="toggle"], [data-act="del"], [data-act="anon"]) { display: none !important; }
+.read-only .chip .stamp { pointer-events: none; }

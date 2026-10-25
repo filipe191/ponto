@@ -47,6 +47,7 @@ class Me(BaseModel):
     kiosk: bool
     pending: str | None = None  # "senha" ou "2fa": o que falta resolver antes de usar o painel
     superadmin: bool = False
+    read_only: bool = False  # admin só de consulta: o painel esconde o que altera (o backend recusa)
     company_id: int | None = None  # empresa aberta (no painel, ou a do relógio em /me)
     company: str | None = None  # nome dela
     privacy_code: str | None = None  # código do link do aviso de privacidade (só para o admin)
@@ -60,6 +61,7 @@ def _me(db, access, company_id: int | None, pending: str | None = None) -> Me:
         kiosk=access.kiosk,
         pending=pending,
         superadmin=bool(access.account and access.account.superadmin),
+        read_only=bool(access.account and access.account.read_only),
         company_id=company.id if company else None,
         company=company.name if company else None,
         privacy_code=company.public_code if company and access.account else None,

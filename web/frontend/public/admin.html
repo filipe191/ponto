@@ -23,6 +23,7 @@
   </header>
 
   <main class="admin-page">
+    <p class="notice read-only-notice" id="readOnlyNotice" hidden><b>Acesso só de consulta.</b> Você vê o espelho, o resumo, os CSVs e a auditoria, mas não altera nada. Para corrigir algo, fale com um administrador da empresa.</p>
     <nav class="tabs" role="tablist" aria-label="Seções do painel">
       <button type="button" role="tab" data-tab="inicio">Início <span class="count" id="tabReqCount"></span></button>
       <button type="button" role="tab" data-tab="funcionarios">Funcionários</button>
@@ -109,7 +110,7 @@
     <section class="card" aria-labelledby="empTitleMain" data-tab="funcionarios" role="tabpanel">
       <header class="card-head">
         <h1 class="card-title" id="empTitleMain">Funcionários</h1>
-        <button class="btn btn-primary" type="button" id="newEmp">Novo funcionário</button>
+        <button class="btn btn-primary write" type="button" id="newEmp">Novo funcionário</button>
       </header>
       <div class="toolbar">
         <input class="input grow" type="search" id="empSearch" placeholder="Buscar pelo nome" autocomplete="off" aria-label="Buscar funcionário pelo nome">
@@ -156,9 +157,9 @@
       </div>
       <p class="legend">Clique numa batida para corrigi-la. * lançada ou corrigida manualmente · <sup>+1</sup> batida no dia seguinte (turno noturno) · <span class="off-mark">off</span> feita sem conexão no relógio · <span class="off-mark">cel</span> feita no app de celular (em vermelho: horário do celular adiantado) · ⚠ aviso da CLT (passe o mouse ou toque) · horas noturnas, hora noturna reduzida e tolerância diária conforme as regras de jornada da empresa (cartão abaixo) · o dia de hoje só entra no saldo quando terminar.</p>
 
-      <h3 class="subhead" id="manTitle">Lançamento manual</h3>
-      <p class="hint" id="manHint">Para registrar uma batida esquecida. O motivo é obrigatório e fica no histórico.</p>
-      <form class="toolbar" id="manual">
+      <h3 class="subhead write" id="manTitle">Lançamento manual</h3>
+      <p class="hint write" id="manHint">Para registrar uma batida esquecida. O motivo é obrigatório e fica no histórico.</p>
+      <form class="toolbar write" id="manual">
         <input class="input" type="datetime-local" id="manTs" required aria-label="Data e hora">
         <select class="input" id="manType" aria-label="Tipo">
           <option value="entrada">Entrada</option>
@@ -172,8 +173,8 @@
       <div id="history"></div>
 
       <h3 class="subhead" id="absTitle">Ausências</h3>
-      <p class="hint">Atestado, férias, licença e faltas abonadas (CLT art. 473) contam como jornada cumprida; a folga do banco não é falta, mas a jornada sai do banco de horas. Para abonar só parte do dia (ex.: consulta), informe as horas. Não escreva o diagnóstico (CID): guarde o atestado em papel.</p>
-      <form class="toolbar" id="absForm" aria-labelledby="absTitle">
+      <p class="hint write">Atestado, férias, licença e faltas abonadas (CLT art. 473) contam como jornada cumprida; a folga do banco não é falta, mas a jornada sai do banco de horas. Para abonar só parte do dia (ex.: consulta), informe as horas. Não escreva o diagnóstico (CID): guarde o atestado em papel.</p>
+      <form class="toolbar write" id="absForm" aria-labelledby="absTitle">
         <select class="input" id="absKind" aria-label="Tipo de ausência">
           <option value="atestado">Atestado médico</option>
           <option value="ferias">Férias</option>
@@ -197,7 +198,7 @@
         <input class="input" type="number" id="holYear" min="2000" max="2100" aria-label="Ano" style="width:110px">
       </header>
       <p class="hint">Os nacionais já vêm cadastrados. Adicione os municipais, estaduais e os pontos facultativos que a empresa adotar (ex.: Carnaval, Corpus Christi). Em feriado não há jornada prevista; quem trabalhar ganha saldo.</p>
-      <form class="toolbar" id="holForm">
+      <form class="toolbar write" id="holForm">
         <input class="input" type="date" id="holDate" required aria-label="Data">
         <input class="input grow" type="text" id="holName" placeholder="Nome do feriado" required aria-label="Nome">
         <button class="btn btn-primary" type="submit">Adicionar</button>
@@ -276,9 +277,10 @@
         <p class="card-sub" id="whoami"></p>
       </header>
       <p class="hint">Cada pessoa que administra o ponto deve ter o próprio login: o histórico de correções registra quem fez cada alteração. A senha inicial é provisória: no primeiro acesso, o novo admin troca a senha e ativa a verificação em duas etapas.</p>
-      <form class="toolbar" id="admForm">
+      <form class="toolbar write" id="admForm">
         <input class="input" type="text" id="admUser" placeholder="Usuário" required autocomplete="off" aria-label="Usuário">
         <input class="input" type="password" id="admPass" placeholder="Senha inicial (mín. 12)" required minlength="12" autocomplete="new-password" aria-label="Senha inicial">
+        <label class="check" title="Vê o espelho, o resumo, os CSVs e a auditoria, mas não altera nada (ex.: contabilidade)"><input type="checkbox" id="admReadOnly"> Só consulta</label>
         <button class="btn btn-primary" type="submit">Adicionar administrador</button>
       </form>
       <p class="form-error" id="admError" role="alert"></p>
@@ -295,10 +297,10 @@
         <button class="btn btn-sm" type="button" id="privacyCopy">Copiar link</button>
       </div>
 
-      <h3 class="subhead">Relógios</h3>
-      <p class="hint">Perdeu um tablet ou quer revogar todos os aparelhos liberados como relógio? Desligue todos; depois ative de novo os que continuam em uso.</p>
+      <h3 class="subhead write">Relógios</h3>
+      <p class="hint write">Perdeu um tablet ou quer revogar todos os aparelhos liberados como relógio? Desligue todos; depois ative de novo os que continuam em uso.</p>
       <div class="toolbar">
-        <button class="btn btn-danger" type="button" id="resetKiosks">Desligar todos os relógios</button>
+        <button class="btn btn-danger write" type="button" id="resetKiosks">Desligar todos os relógios</button>
         <span class="hint" id="kioskMsg" role="status"></span>
       </div>
     </section>
@@ -321,6 +323,8 @@
           <option value="relogio.">Relógios</option>
           <option value="empresa.">Empresa</option>
           <option value="regras.">Regras de jornada</option>
+          <option value="ausencia.">Ausências</option>
+          <option value="exportacao.">Exportações (CSV)</option>
         </select>
       </div>
       <p class="form-error" id="audError" role="alert"></p>
@@ -425,7 +429,7 @@
     <h2 id="devTitle">Celulares</h2>
     <p class="hint">O funcionário instala o app Ponto e, em <b>Ajustes</b>, informa o endereço do servidor e a chave gerada aqui. Cada celular tem a própria chave; revogue se o aparelho for perdido ou trocado. A chave vale 1 ano e é revogada sozinha depois de 90 dias sem uso.</p>
     <ul class="history" id="devList"></ul>
-    <form class="dialog-form" id="devForm">
+    <form class="dialog-form write" id="devForm">
       <label class="field">
         <span>Nome do celular</span>
         <input id="devName" placeholder="ex.: iPhone da Ana" required autocomplete="off">

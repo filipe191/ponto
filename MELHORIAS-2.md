@@ -15,7 +15,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 7 | Teste de restauração do backup | Média | Pequeno | `web/scripts/` | ✅ Concluído |
 | 8 | Limite de tamanho dos logs do Docker | Média | Pequeno | `docker-compose.yml` | ✅ Concluído |
 | 9 | Teste das páginas no navegador, no deploy e no CI | Média | Médio | `web/frontend/` + GitHub Actions | Pendente |
-| 10 | Administrador só de consulta (contabilidade) | Média | Médio | Backend + painel | Pendente |
+| 10 | Administrador só de consulta (contabilidade) | Média | Médio | Backend + painel | ✅ Concluído |
 | 11 | Feriados que se repetem todo ano | Baixa | Pequeno | Backend + painel | Pendente |
 | 12 | Prorrogação do horário noturno | Baixa | Médio | Backend | Pendente |
 | 13 | Dividir o `admin.js` em módulos | Baixa | Médio | Frontend | Pendente |
@@ -119,6 +119,8 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 
 **Proposta.** Um papel **consulta** no cadastro de administradores: vê o espelho, o resumo, os CSVs e a auditoria, mas não altera nada (as rotas de escrita recusam com 403, conferido no backend e não só escondendo botões). O que ele exporta vai para a auditoria.
 
+**Status: concluído em 25/10/2026.** Opção **Só consulta** ao cadastrar um administrador (migração 0017). A trava está num ponto só, a dependência `CompanyAdmin` de todas as rotas do painel da empresa: para a conta de consulta, qualquer método que não seja GET é recusado com 403, inclusive "Usar como relógio". O painel mostra uma faixa "acesso só de consulta" e esconde os formulários e botões de alteração, e a lista de admins marca quem é de consulta. Além do proposto, todo CSV baixado (espelho ou resumo, por qualquer admin) passou a ir para a auditoria, com o filtro "Exportações", e o filtro "Ausências", que faltava, entrou junto. O teste de integração tenta 9 alterações diferentes com a conta de consulta e confere que todas são recusadas.
+
 ---
 
 ## 🟡 Prioridade baixa
@@ -165,7 +167,7 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 - [x] 7. Teste de restauração do backup
 - [x] 8. Limite de tamanho dos logs do Docker
 - [ ] 9. Teste das páginas no navegador, no deploy e no CI
-- [ ] 10. Administrador só de consulta (contabilidade)
+- [x] 10. Administrador só de consulta (contabilidade)
 - [ ] 11. Feriados que se repetem todo ano
 - [ ] 12. Prorrogação do horário noturno
 - [ ] 13. Dividir o `admin.js` em módulos

@@ -341,7 +341,9 @@ class AuthService:
     def list_admins(self, company_id: int) -> list[AdminAccount]:
         return self.repo.list(company_id)
 
-    def create_admin(self, company_id: int, username: str, password: str, user: str) -> AdminAccount:
+    def create_admin(
+        self, company_id: int, username: str, password: str, user: str, read_only: bool = False
+    ) -> AdminAccount:
         """A senha inicial é provisória: o novo admin troca no primeiro acesso e ativa as duas etapas."""
         username = username.strip()
         if not username or "|" in username:
@@ -356,9 +358,11 @@ class AuthService:
                     username=username,
                     password_hash=hash_password(password),
                     must_change_password=True,
+                    read_only=read_only,
                 )
             )
-            self.audit(company_id).record(user, "admin.criado", f"Criou o administrador {username}")
+            kind = " (só consulta)" if read_only else ""
+            self.audit(company_id).record(user, "admin.criado", f"Criou o administrador {username}{kind}")
             self.db.commit()
         except IntegrityError:
             self.db.rollback()

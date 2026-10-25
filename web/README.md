@@ -62,7 +62,7 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
 
 ### Logins
 
-- **Administradores:** o superadmin é criado na primeira subida (veja acima). Os admins de cada empresa são cadastrados em Administração → "Administradores e relógios". Cada pessoa deve ter o próprio login: o histórico de correções registra quem fez cada alteração. O nome de usuário é único no sistema todo.
+- **Administradores:** o superadmin é criado na primeira subida (veja acima). Os admins de cada empresa são cadastrados em Administração → "Administradores e relógios". Cada pessoa deve ter o próprio login: o histórico de correções registra quem fez cada alteração. O nome de usuário é único no sistema todo. Marque **Só consulta** para quem só confere (ex.: contabilidade): vê o espelho, o resumo, os CSVs e a auditoria, mas toda alteração é recusada pelo backend (403) e o painel esconde os botões. Cada CSV baixado (de qualquer admin) fica na auditoria.
   - **Senha:** mínimo de 12 caracteres, recusando senhas muito comuns. Senha provisória (a do `.env`, ou a criada por outro admin) ou fora da política obriga a troca antes de usar o painel.
   - **Verificação em duas etapas (obrigatória):** no primeiro acesso, o admin cadastra a conta num app autenticador (Google Authenticator, Microsoft Authenticator, Bitwarden...) lendo um QR code, e recebe 10 códigos de recuperação para o caso de perder o celular. Depois, o login pede a senha e o código de 6 dígitos. Para desligar a obrigatoriedade: `ADMIN_2FA_REQUIRED=false` no `.env`.
   - **Sessões:** cada login fica guardado no servidor e vale até sair, por até 30 dias, caindo sozinho após 8 horas sem uso. Em **Conta e segurança** (`/senha`) dá para trocar a senha, gerenciar as duas etapas, ver os aparelhos conectados e encerrá-los. Trocar a senha encerra os outros aparelhos.
@@ -199,6 +199,6 @@ docker rm -f ponto-testes-db && docker network rm ponto-testes
 
 Os testes de integração **apagam e recriam o banco**: só rodam quando `PGDATABASE` contém "test"; sem isso, são pulados. O `scripts/deploy.sh` faz o mesmo com um Postgres descartável, e o GitHub Actions (`.github/workflows/backend.yml`) roda tudo, mais o `pip-audit`, a cada push.
 
-Nova mudança no banco: crie `app/db/migrations/versions/0017_<descricao>.py` com `revision = "0017"` e `down_revision = "0016"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
+Nova mudança no banco: crie `app/db/migrations/versions/0018_<descricao>.py` com `revision = "0018"` e `down_revision = "0017"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
 
 Páginas: o HTML fica em `frontend/public/*.html` e o script de cada uma em `frontend/public/js/`. A CSP só aceita scripts desses arquivos (`script-src 'self'`): não coloque `<script>` com código nem `onclick=` dentro do HTML.

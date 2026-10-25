@@ -10,11 +10,13 @@ class AdminOut(BaseModel):
     username: str
     updated_at: datetime
     superadmin: bool
+    read_only: bool  # só consulta
 
 
 class AdminCreate(BaseModel):
     username: str = ""
     password: str = ""
+    read_only: bool = False  # só consulta (ex.: contabilidade)
 
 
 class HolidayOut(BaseModel):

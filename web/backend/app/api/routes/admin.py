@@ -42,6 +42,12 @@ from app.services.rules import RulePeriod, RulesService
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
+def _log_export(db, t, action: str, summary: str, employee_id: int | None = None) -> None:
+    """Toda exportação de dados de funcionários fica na auditoria (quem baixou o quê, e quando)."""
+    AuditLog(db, t.company_id).record(t.user, action, summary, employee_id=employee_id)
+    db.commit()
+
+
 def _csv(content: str, filename: str) -> Response:
     return Response(
         content,
@@ -151,6 +157,7 @@ def report(db: DbSession, t: CompanyAdmin, employee: int = 0, month: str = "", f
     service = ReportService(db, t.company_id)
     result = service.monthly(employee, month)
     if format == "csv":
+        _log_export(db, t, "exportacao.espelho", f"Baixou o espelho de {result.employee.name} ({month}) em CSV", employee)
         return _csv(service.to_csv(result), service.csv_filename(result))
     return result
 
@@ -161,6 +168,7 @@ def summary(db: DbSession, t: CompanyAdmin, month: str = "", format: str = "json
     service = ReportService(db, t.company_id)
     rows = service.summary(month)
     if format == "csv":
+        _log_export(db, t, "exportacao.resumo", f"Baixou o resumo de {month} de todos os funcionários em CSV")
         return _csv(service.summary_csv(month, rows), f"ponto-resumo-{month}.csv")
     return rows
 
@@ -278,7 +286,7 @@ def list_admins(db: DbSession, t: CompanyAdmin):
 
 @router.post("/admins", response_model=OkResponse, status_code=201)
 def create_admin(body: AdminCreate, db: DbSession, t: CompanyAdmin):
-    AuthService(db).create_admin(t.company_id, body.username, body.password, t.user)
+    AuthService(db).create_admin(t.company_id, body.username, body.password, t.user, body.read_only)
     return OkResponse()
 
 

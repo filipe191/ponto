@@ -100,9 +100,15 @@ class Tenant:
     user: str
 
 
-def require_company(access: CurrentAccess, user: Annotated[str, Depends(require_admin)]) -> Tenant:
+READ_METHODS = ("GET", "HEAD")
+
+
+def require_company(request: Request, access: CurrentAccess, user: Annotated[str, Depends(require_admin)]) -> Tenant:
     if not access.company_id:
         raise _no_company()
+    # Conta só de consulta: qualquer alteração na empresa é recusada aqui, não só escondida no painel
+    if access.account.read_only and request.method not in READ_METHODS:
+        raise Forbidden("Seu acesso é só de consulta: peça a um administrador da empresa para fazer essa alteração")
     return Tenant(company_id=access.company_id, user=user)
 
 
