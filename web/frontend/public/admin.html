@@ -201,8 +201,14 @@
       <form class="toolbar write" id="holForm">
         <input class="input" type="date" id="holDate" required aria-label="Data">
         <input class="input grow" type="text" id="holName" placeholder="Nome do feriado" required aria-label="Nome">
+        <label class="check" title="Mesmo dia e mês em todos os anos, a partir deste (ex.: aniversário da cidade, padroeiro)"><input type="checkbox" id="holYearly"> Repete todo ano</label>
         <button class="btn btn-primary" type="submit">Adicionar</button>
       </form>
+      <div class="toolbar write">
+        <span class="hint">Móveis (dependem da Páscoa) no ano escolhido acima:</span>
+        <button class="btn btn-sm" type="button" data-movable="carnaval">+ Carnaval</button>
+        <button class="btn btn-sm" type="button" data-movable="corpus_christi">+ Corpus Christi</button>
+      </div>
       <p class="form-error" id="holError" role="alert"></p>
       <div class="table-wrap">
         <table class="timecard stack">

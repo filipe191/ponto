@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -43,6 +43,20 @@ class Holiday(Base):
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="RESTRICT"), primary_key=True)
     date: Mapped[date] = mapped_column(Date, primary_key=True)
     name: Mapped[str] = mapped_column(String)
+    # Repete no mesmo dia e mês todo ano, a partir do ano de `date` e até `until_year` (vazio = sempre)
+    yearly: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("FALSE"))
+    until_year: Mapped[int | None] = mapped_column(Integer)
+
+    def on_year(self, year: int) -> "date | None":
+        """Data do feriado no ano (os que não repetem só valem no próprio ano; 29/02 só nos bissextos)."""
+        if year == self.date.year:
+            return self.date
+        if not self.yearly or year < self.date.year or (self.until_year and year > self.until_year):
+            return None
+        try:
+            return self.date.replace(year=year)
+        except ValueError:
+            return None
 
 
 class MonthClosure(Base):

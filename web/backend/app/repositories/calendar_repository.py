@@ -23,12 +23,26 @@ class HolidayRepository:
             )
         )
 
+    def yearly(self) -> list[Holiday]:
+        return list(self.db.scalars(select(Holiday).where(Holiday.company_id == self.company_id, Holiday.yearly)))
+
+    def custom_on_years(self, first: date, last: date) -> dict[date, Holiday]:
+        """Cadastrados que valem entre as datas: os do próprio dia e os que repetem todo ano (o do dia ganha)."""
+        result: dict[date, Holiday] = {}
+        for h in self.yearly():
+            for year in range(first.year, last.year + 1):
+                day = h.on_year(year)
+                if day and first <= day <= last:
+                    result[day] = h
+        result.update({h.date: h for h in self.custom_between(first, last)})
+        return result
+
     def all_between(self, first: date, last: date) -> dict[date, str]:
         """Feriados nacionais + cadastrados (os cadastrados têm prioridade no nome)."""
         result: dict[date, str] = {}
         for year in range(first.year, last.year + 1):
             result.update({d: n for d, n in national_holidays(year).items() if first <= d <= last})
-        result.update({h.date: h.name for h in self.custom_between(first, last)})
+        result.update({d: h.name for d, h in self.custom_on_years(first, last).items()})
         return result
 
     def get(self, day: date) -> Holiday | None:

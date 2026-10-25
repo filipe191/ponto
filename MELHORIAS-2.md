@@ -16,7 +16,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 8 | Limite de tamanho dos logs do Docker | Média | Pequeno | `docker-compose.yml` | ✅ Concluído |
 | 9 | Teste das páginas no navegador, no deploy e no CI | Média | Médio | `web/frontend/` + GitHub Actions | Pendente |
 | 10 | Administrador só de consulta (contabilidade) | Média | Médio | Backend + painel | ✅ Concluído |
-| 11 | Feriados que se repetem todo ano | Baixa | Pequeno | Backend + painel | Pendente |
+| 11 | Feriados que se repetem todo ano | Baixa | Pequeno | Backend + painel | ✅ Concluído |
 | 12 | Prorrogação do horário noturno | Baixa | Médio | Backend | Pendente |
 | 13 | Dividir o `admin.js` em módulos | Baixa | Médio | Frontend | Pendente |
 
@@ -131,6 +131,8 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 
 **Proposta.** Uma opção **repete todo ano** no cadastro do feriado (mesmo dia e mês) e um botão "copiar os feriados de AAAA" para os móveis. O painel avisa em dezembro se o ano seguinte ainda não tem nenhum feriado da empresa.
 
+**Status: concluído em 25/10/2026.** Opção **Repete todo ano** (migração 0018): o feriado vale no mesmo dia e mês a partir do ano do cadastro, no espelho e na lista. Remover num ano seguinte só faz ele parar de repetir a partir daquele ano (guarda o último ano), sem mexer nos anteriores. Diferente do proposto, os móveis não são copiados do ano anterior, porque a data mudaria errado: os botões **+ Carnaval** (segunda e terça) e **+ Corpus Christi** calculam a data do ano escolhido pela Páscoa. O aviso de dezembro aparece no topo do painel quando o ano seguinte não tem nenhum feriado da empresa. Além do proposto, cadastrar ou remover feriado num mês fechado passou a ser recusado, o que antes não era conferido. Testes em `tests/integration/test_feriados.py`.
+
 ### 12. Prorrogação do horário noturno
 
 **Hoje.** Está nos limites conhecidos do `web/README.md`: quem trabalha a noite toda e continua depois das 5h não tem as horas seguintes contadas como noturnas. A Súmula 60 do TST manda prorrogar o adicional nesses casos.
@@ -168,6 +170,6 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 - [x] 8. Limite de tamanho dos logs do Docker
 - [ ] 9. Teste das páginas no navegador, no deploy e no CI
 - [x] 10. Administrador só de consulta (contabilidade)
-- [ ] 11. Feriados que se repetem todo ano
+- [x] 11. Feriados que se repetem todo ano
 - [ ] 12. Prorrogação do horário noturno
 - [ ] 13. Dividir o `admin.js` em módulos

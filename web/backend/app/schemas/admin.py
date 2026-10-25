@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -23,11 +24,14 @@ class HolidayOut(BaseModel):
     date: date
     name: str
     national: bool  # calculado pelo sistema (não pode ser removido)
+    yearly: bool = False  # repete todo ano (cadastrado em `since`)
+    since: date | None = None
 
 
 class HolidayCreate(BaseModel):
     date: date
     name: str = ""
+    yearly: bool = False  # repete no mesmo dia e mês todo ano
 
     @field_validator("name")
     @classmethod
@@ -36,6 +40,11 @@ class HolidayCreate(BaseModel):
         if not value:
             raise ValueError("Informe o nome do feriado")
         return value
+
+
+class MovableHolidays(BaseModel):
+    year: int
+    items: list[Literal["carnaval", "corpus_christi"]]
 
 
 class DeviceOut(BaseModel):
@@ -111,6 +120,7 @@ class Alerts(BaseModel):
     short_pins: int  # funcionários ativos com PIN antigo de 4 ou 5 dígitos
     devices_expiring: int  # chaves de celular que vencem nos próximos dias
     retention_due: int  # ex-funcionários que passaram do prazo de guarda (anonimizar)
+    holidays_missing_year: int | None = None  # em dezembro: o ano seguinte ainda sem feriado da empresa
 
 
 class CompanyOut(BaseModel):

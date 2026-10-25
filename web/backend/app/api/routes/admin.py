@@ -18,6 +18,7 @@ from app.schemas.admin import (
     DeviceOut,
     HolidayCreate,
     HolidayOut,
+    MovableHolidays,
     RequestDecision,
     RequestOut,
     RulePeriodIn,
@@ -37,7 +38,8 @@ from app.services.employee_service import EmployeeService
 from app.services.mobile_service import DeviceService, RequestService
 from app.services.punch_service import PunchService
 from app.services.report_service import ReportService
-from app.services.rules import RulePeriod, RulesService
+from app.services.rules import RulePeriod, RulesService, load_rules
+from app.utils.dates import now_local
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -203,6 +205,13 @@ def add_holiday(body: HolidayCreate, db: DbSession, t: CompanyAdmin):
     return OkResponse()
 
 
+@router.post("/holidays/movable", response_model=OkResponse, status_code=201)
+def add_movable_holidays(body: MovableHolidays, db: DbSession, t: CompanyAdmin):
+    """Carnaval e Corpus Christi do ano (dependem da Páscoa), para as empresas que os adotam."""
+    HolidayService(db, t.company_id).add_movable(body, t.user)
+    return OkResponse()
+
+
 @router.delete("/holidays/{day}", response_model=OkResponse)
 def delete_holiday(day: date, db: DbSession, t: CompanyAdmin):
     HolidayService(db, t.company_id).delete(day, t.user)
@@ -321,4 +330,7 @@ def alerts(db: DbSession, t: CompanyAdmin):
         short_pins=sum(e.pin_short and e.active for e in employees),
         devices_expiring=DeviceService(db, t.company_id).expiring(),
         retention_due=sum(e.retention_due for e in employees),
+        holidays_missing_year=HolidayService(db, t.company_id).missing_next_year(
+            now_local(load_rules(db, t.company_id).tz).date()
+        ),
     )

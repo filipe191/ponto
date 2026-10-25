@@ -7,13 +7,13 @@ from app.core.security import hash_pin
 from app.models import Employee, Holiday, MonthClosure
 from app.repositories.calendar_repository import ClosureRepository, HolidayRepository
 from app.repositories.employee_repository import EmployeeRepository
-from app.schemas.admin import HolidayCreate, HolidayOut
+from app.schemas.admin import HolidayCreate, HolidayOut, MovableHolidays
 from app.schemas.report import MonthReport
 from app.services.audit import EMPLOYEE_USER, AuditLog
 from app.services.report_service import ReportService, check_month
-from app.services.rules import load_rules
+from app.services.rules import ensure_months_open, load_rules
 from app.utils.dates import month_bounds, now_local, parse_month, to_local
-from app.utils.holidays import national_holidays
+from app.utils.holidays import easter, national_holidays
 
 
 class HolidayService:
@@ -21,40 +21,78 @@ class HolidayService:
         self.db = db
         self.repo = HolidayRepository(db, company_id)
         self.audit = AuditLog(db, company_id)
+        self.company_id = company_id
 
     def list(self, year: int) -> list[HolidayOut]:
         national = national_holidays(year)
-        custom = self.repo.custom_between(date(year, 1, 1), date(year, 12, 31))
+        custom = self.repo.custom_on_years(date(year, 1, 1), date(year, 12, 31))
         items = [HolidayOut(date=d, name=n, national=True) for d, n in national.items()]
-        items += [HolidayOut(date=h.date, name=h.name, national=False) for h in custom if h.date not in national]
+        items += [
+            HolidayOut(date=d, name=h.name, national=False, yearly=h.yearly, since=h.date if h.yearly else None)
+            for d, h in custom.items()
+            if d not in national
+        ]
         return sorted(items, key=lambda h: h.date)
 
     def add(self, data: HolidayCreate, user: str) -> None:
         if data.date in national_holidays(data.date.year):
             raise Conflict("Essa data já é feriado nacional")
-        if self.repo.get(data.date):
+        if data.date in self.repo.custom_on_years(data.date, data.date):
             raise Conflict("Já existe um feriado cadastrado nessa data")
-        self.repo.add(Holiday(date=data.date, name=data.name))
+        # O feriado tira a jornada do dia (e, se repete, dos anos seguintes): nada disso pode estar fechado
+        ensure_months_open(self.db, self.company_id, data.date, "o feriado", until=None if data.yearly else data.date)
+        self.repo.add(Holiday(date=data.date, name=data.name, yearly=data.yearly))
+        every = " (repete todo ano)" if data.yearly else ""
         self.audit.record(
             user,
             "feriado.adicionado",
-            f"Cadastrou o feriado {data.name} em {data.date:%d/%m/%Y}",
-            details={"date": data.date, "name": data.name},
+            f"Cadastrou o feriado {data.name} em {data.date:%d/%m/%Y}{every}",
+            details={"date": data.date, "name": data.name, "yearly": data.yearly},
         )
         self.db.commit()
 
+    def add_movable(self, data: MovableHolidays, user: str) -> int:
+        """Pontos facultativos que dependem da Páscoa (mudam de data todo ano), calculados para o ano."""
+        days = {
+            "carnaval": [
+                (easter(data.year) - timedelta(days=48), "Carnaval (segunda-feira)"),
+                (easter(data.year) - timedelta(days=47), "Carnaval (terça-feira)"),
+            ],
+            "corpus_christi": [(easter(data.year) + timedelta(days=60), "Corpus Christi")],
+        }
+        added = 0
+        for item in data.items:
+            for day, name in days[item]:
+                if day in self.repo.custom_on_years(day, day):
+                    continue
+                self.add(HolidayCreate(date=day, name=name), user)
+                added += 1
+        return added
+
     def delete(self, day: date, user: str) -> None:
-        holiday = self.repo.get(day)
+        """Remove o feriado do dia. Se ele repete todo ano, para de repetir a partir deste ano (o passado fica)."""
+        holiday = self.repo.custom_on_years(day, day).get(day)
         if not holiday:
             raise NotFound("Feriado não encontrado (os nacionais não podem ser removidos)")
+        ensure_months_open(self.db, self.company_id, day, "o feriado", until=None if holiday.yearly else day)
+        if holiday.yearly and day.year > holiday.date.year:
+            holiday.until_year = day.year - 1
+            summary = f"Parou de repetir o feriado {holiday.name} a partir de {day.year} (valeu de {holiday.date.year} a {day.year - 1})"
+        else:
+            self.repo.delete(holiday)
+            summary = f"Removeu o feriado {holiday.name} de {day:%d/%m/%Y}" + (" (repetia todo ano)" if holiday.yearly else "")
         self.audit.record(
-            user,
-            "feriado.removido",
-            f"Removeu o feriado {holiday.name} de {day:%d/%m/%Y}",
-            details={"date": day, "name": holiday.name},
+            user, "feriado.removido", summary, details={"date": day, "name": holiday.name, "yearly": holiday.yearly}
         )
-        self.repo.delete(holiday)
         self.db.commit()
+
+    def missing_next_year(self, today: date) -> int | None:
+        """Em dezembro: o ano seguinte, se a empresa ainda não tem nenhum feriado próprio nele."""
+        if today.month != 12:
+            return None
+        year = today.year + 1
+        has_any = self.repo.custom_on_years(date(year, 1, 1), date(year, 12, 31))
+        return None if has_any else year
 
 
 class ClosureService:

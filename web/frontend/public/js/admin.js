@@ -685,8 +685,8 @@ async function loadHolidays() {
   $('holidays').innerHTML = items.map((h) => `
     <tr>
       <td>${new Date(h.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
-      <td>${esc(h.name)}${h.national ? ' <span class="muted">· nacional</span>' : ''}</td>
-      <td class="actions">${h.national ? '' : `<button class="btn btn-sm btn-danger" data-hol="${h.date}">Remover</button>`}</td>
+      <td>${esc(h.name)}${h.national ? ' <span class="muted">· nacional</span>' : ''}${h.yearly ? ` <span class="muted">· todo ano, desde ${h.since.slice(0, 4)}</span>` : ''}</td>
+      <td class="actions">${h.national ? '' : `<button class="btn btn-sm btn-danger" data-hol="${h.date}" data-yearly="${h.yearly ? h.since.slice(0, 4) : ''}">Remover</button>`}</td>
     </tr>`).join('');
 }
 
@@ -695,7 +695,8 @@ $('holForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('holError').textContent = '';
   try {
-    await api('/holidays', { method: 'POST', body: JSON.stringify({ date: $('holDate').value, name: $('holName').value }) });
+    await api('/holidays', { method: 'POST', body: JSON.stringify({ date: $('holDate').value, name: $('holName').value, yearly: $('holYearly').checked }) });
+    $('holYearly').checked = false;
     $('holYear').value = $('holDate').value.slice(0, 4);
     $('holName').value = '';
     toast('Feriado cadastrado');
@@ -705,13 +706,34 @@ $('holForm').addEventListener('submit', async (e) => {
   } catch (err) { $('holError').textContent = err.message; }
 });
 $('holidays').addEventListener('click', async (e) => {
-  const day = e.target.closest('[data-hol]')?.dataset.hol;
+  const btn = e.target.closest('[data-hol]');
+  const day = btn?.dataset.hol;
   if (!day) return;
+  // Feriado que repete: remover num ano seguinte só para de repetir dali em diante (o passado fica)
+  if (btn.dataset.yearly && btn.dataset.yearly !== day.slice(0, 4)) {
+    const ok = await ask({
+      title: 'Parar de repetir este feriado?',
+      message: `Ele deixa de valer a partir de ${day.slice(0, 4)}. Os anos anteriores (desde ${btn.dataset.yearly}) continuam com o feriado.`,
+      ok: 'Parar de repetir',
+      danger: true,
+    });
+    if (ok === null) return;
+  }
   try { await api(`/holidays/${day}`, { method: 'DELETE' }); toast('Feriado removido'); } catch (err) { $('holError').textContent = err.message; }
   loadHolidays();
   loadReport();
   loadAudit();
 });
+document.querySelectorAll('[data-movable]').forEach((b) => b.addEventListener('click', async () => {
+  $('holError').textContent = '';
+  try {
+    await api('/holidays/movable', { method: 'POST', body: JSON.stringify({ year: Number($('holYear').value), items: [b.dataset.movable] }) });
+    toast(`${b.textContent.replace('+ ', '')} de ${$('holYear').value} cadastrado`);
+    loadHolidays();
+    loadReport();
+    loadAudit();
+  } catch (err) { $('holError').textContent = err.message; }
+}));
 
 // ---------- Administradores e relógios ----------
 
@@ -906,6 +928,10 @@ async function loadAlerts() {
   if (a.short_pins) {
     items.push(`<li><b>${a.short_pins === 1 ? '1 funcionário tem' : `${a.short_pins} funcionários têm`} PIN de 4 ou 5 dígitos.</b>
       Esses PINs ainda funcionam, mas são fáceis de adivinhar: troque por um de 6 dígitos em “Editar” (marcados com <span class="tag falta">PIN curto</span>).</li>`);
+  }
+  if (a.holidays_missing_year) {
+    items.push(`<li><b>Ainda não há feriados da empresa para ${a.holidays_missing_year}.</b>
+      Cadastre os municipais e estaduais (ou marque “Repete todo ano”) em Configurações → Feriados, senão esses dias viram falta.</li>`);
   }
   $('alertsList').innerHTML = items.join('');
   $('alertsCard').hidden = !items.length;
