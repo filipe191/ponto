@@ -15,9 +15,10 @@
 #   BACKUP_MESES         quantos backups mensais manter (padrão: 60)
 #   BACKUP_REMOTO        destino rsync da cópia fora do servidor, ex.: "usuario@maquina:/backups/ponto/"
 #                        (vazio = sem cópia remota). Os arquivos já vão cifrados.
+# Falha do backup ou da cópia remota manda um e-mail a ALERTA_EMAIL (scripts/alertar.sh, com o SMTP do .env).
 # O usuário do banco vem do .env (PGUSER). A PIN_KEY NÃO vai no backup: guarde-a à parte
 # (gerenciador de senhas); sem ela os PINs do backup restaurado não funcionam.
-set -euo pipefail
+set -Eeuo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
 DESTINO="$RAIZ/backups"
@@ -36,6 +37,15 @@ MESES="${BACKUP_MESES:-60}"
 REMOTO="${BACKUP_REMOTO:-$(ler_env BACKUP_REMOTO)}"
 
 log() { echo "[$(date '+%F %T')] $*"; }
+alertar() { "$RAIZ/scripts/alertar.sh" "$@"; }
+
+# Qualquer comando que falhe para o backup (set -e): antes de sair, registra e avisa por e-mail
+falhou() {
+    log "ERRO: o backup falhou na linha $1 ($2)" >&2
+    alertar "Ponto: o backup de $(date +%d/%m) falhou" "O backup do banco do ponto falhou na linha $1 do backup.sh, no comando: $2
+Nenhum backup novo foi gravado. Veja $DESTINO/backup.log."
+}
+trap 'falhou $LINENO "$BASH_COMMAND"' ERR
 
 mkdir -p "$DESTINO"
 chmod 700 "$DESTINO" # contém dados pessoais
@@ -43,6 +53,7 @@ umask 077
 
 if [[ ! -f "$PUBLICA" ]]; then
     log "ERRO: falta a chave $PUBLICA. Crie com: scripts/backup-chave.sh" >&2
+    alertar "Ponto: o backup de $(date +%d/%m) falhou" "Falta a chave pública dos backups ($PUBLICA): nenhum backup é gravado até ela voltar. Crie com scripts/backup-chave.sh."
     exit 1
 fi
 
@@ -92,6 +103,7 @@ if [[ -n "$REMOTO" ]]; then
         log "Cópia remota OK: $REMOTO"
     else
         log "AVISO: falhou a cópia remota para $REMOTO (tenta de novo no próximo backup)"
+        alertar "Ponto: a cópia remota do backup falhou" "O backup local de hoje está OK, mas a cópia para $REMOTO falhou. O próximo backup tenta de novo."
     fi
 else
     log "AVISO: sem cópia fora do servidor (defina BACKUP_REMOTO no .env)"

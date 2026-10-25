@@ -32,10 +32,11 @@ def recipients(addresses: str) -> list[str]:
 
 def send_email(to: list[str], subject: str, body: str) -> None:
     """Envia em segundo plano: um servidor de e-mail lento ou fora do ar não atrasa o app."""
-    threading.Thread(target=_deliver, args=(to, subject, body), daemon=True).start()
+    threading.Thread(target=deliver, args=(to, subject, body), daemon=True).start()
 
 
-def _deliver(to: list[str], subject: str, body: str) -> None:
+def deliver(to: list[str], subject: str, body: str) -> bool:
+    """Envia agora; devolve se deu certo (a falha só vai para o log)."""
     message = EmailMessage()
     message["From"] = settings.smtp_from or settings.smtp_user
     message["To"] = ", ".join(to)
@@ -52,8 +53,10 @@ def _deliver(to: list[str], subject: str, body: str) -> None:
             if settings.smtp_user:
                 server.login(settings.smtp_user, settings.smtp_password)
             server.send_message(message)
+        return True
     except (OSError, smtplib.SMTPException) as e:
         log.warning("E-mail de aviso não enviado para %s: %s", message["To"], e)
+        return False
 
 
 class RequestNotifier:

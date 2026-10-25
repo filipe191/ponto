@@ -93,6 +93,7 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
 | `EMPRESA_NOME`   | Só para instalações anteriores às várias empresas: nome da empresa nº 1 na migração. Depois, o nome fica no cadastro da empresa |
 | `PRIVACIDADE_CONTATO` | Idem: contato de privacidade da empresa nº 1 na migração |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Servidor de e-mail do aviso de solicitações do app. Sem `SMTP_HOST`, nenhum e-mail é enviado. Porta `465` usa SSL; as outras, STARTTLS (padrão `587`) |
+| `ALERTA_EMAIL`   | Quem cuida do servidor: recebe por e-mail (mesmo SMTP) o aviso de backup com falha, de cópia remota que não saiu e de sistema fora do ar e de volta |
 | `PAINEL_URL`     | Endereço do painel no e-mail de aviso (ex.: `https://192.168.0.34:9443/admin`); vazio, o e-mail vai sem link |
 
 ## Funcionalidades
@@ -134,7 +135,9 @@ Limites conhecidos: os arquivos AFD/AEJ da Portaria 671 não são gerados (o sis
 
 ## Backup
 
-`scripts/backup.sh` roda todo dia às 03:15 (cron do usuário `filipe`) e guarda em `backups/`: os últimos 14 diários e um por mês por 5 anos. Log em `backups/backup.log`. O `deploy.sh` também faz um backup antes de cada atualização.
+`scripts/backup.sh` roda todo dia às 03:15 (cron do usuário `filipe`) e guarda em `backups/`: os últimos 14 diários e um por mês por 5 anos. Log em `backups/backup.log`. Se falhar (ou a cópia remota não sair), manda um e-mail a `ALERTA_EMAIL`.
+
+**Monitor:** `scripts/monitorar.sh` roda a cada 5 minutos (cron) e confere `/api/health` pelo nginx. Depois de 2 falhas seguidas manda um e-mail a `ALERTA_EMAIL` dizendo que o sistema está fora do ar, com o estado dos containers, e outro quando ele volta. Log em `backups/monitor.log`. Os e-mails saem por `scripts/alertar.sh`, que roda a imagem do backend à parte (funciona mesmo com o backend parado). Sem SMTP ou `ALERTA_EMAIL`, os avisos ficam só nos logs. O `deploy.sh` também faz um backup antes de cada atualização.
 
 **Os backups são criptografados.** Cada dump é cifrado com a chave pública `backups/chave-publica.asc`; só a chave **privada**, guardada fora do servidor, decifra. O dump em texto aberto só existe na memória durante a conferência. Assim, uma cópia dos backups levada do servidor não pode ser lida.
 

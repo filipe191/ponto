@@ -84,6 +84,8 @@ class Settings(BaseSettings):
     painel_url: str = ""
     # Um aviso por empresa a cada X minutos, no máximo: várias solicitações seguidas viram um e-mail só
     aviso_intervalo_minutos: int = 30
+    # Quem cuida do servidor: recebe o aviso de backup com falha e de sistema fora do ar (vírgula separa)
+    alerta_email: str = ""
 
     # Documentação interativa em /api/docs (deixe desligada em produção)
     api_docs: bool = False

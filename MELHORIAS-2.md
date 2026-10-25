@@ -11,7 +11,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 3 | Jornada diferente por dia da semana e escalas | Alta | Grande | Backend + painel | ✅ Concluído |
 | 4 | Horas extras separadas em 50% e 100% | Alta | Médio | Backend + painel | ✅ Concluído |
 | 5 | Funcionário vê o resultado das solicitações no app | Média | Médio | Backend + app | ✅ Concluído |
-| 6 | Aviso por e-mail quando o backup ou o sistema falha | Média | Pequeno | Scripts + backend | Pendente |
+| 6 | Aviso por e-mail quando o backup ou o sistema falha | Média | Pequeno | Scripts + backend | ✅ Concluído |
 | 7 | Teste de restauração do backup | Média | Pequeno | `web/scripts/` | Pendente |
 | 8 | Limite de tamanho dos logs do Docker | Média | Pequeno | `docker-compose.yml` | ✅ Concluído |
 | 9 | Teste das páginas no navegador, no deploy e no CI | Média | Médio | `web/frontend/` + GitHub Actions | Pendente |
@@ -89,6 +89,8 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 
 **Proposta.** Reaproveitar o SMTP do aviso de solicitações (`SMTP_*` no `.env`): o `backup.sh` manda um e-mail ao superadmin (`ALERTA_EMAIL`) quando falha ou quando a cópia remota não sai, e um script no cron confere `/api/health` a cada 5 minutos e avisa na primeira falha e na volta. Sem SMTP configurado, segue só o log.
 
+**Status: concluído em 25/10/2026.** `scripts/alertar.sh` manda o e-mail a `ALERTA_EMAIL` pelo mesmo SMTP, rodando a imagem do backend à parte (`python -m app.alerta`), então funciona com o backend parado. O `backup.sh` avisa em qualquer comando que falhe (com a linha e o comando), na falta da chave pública e quando a cópia remota não sai. O `scripts/monitorar.sh`, no cron a cada 5 minutos, confere `/api/health` pelo nginx. Diferente do proposto, ele avisa na **segunda** falha seguida (10 minutos), para um deploy não virar alerta, manda o estado dos containers e avisa uma vez por queda e outra na volta. Testado com falhas simuladas (backup sem o Postgres e monitor apontando para uma porta fechada). **Para receber os e-mails:** preencher `SMTP_*` e `ALERTA_EMAIL` no `.env`; até lá os avisos ficam em `backups/backup.log` e `backups/monitor.log`.
+
 ### 7. Teste de restauração do backup
 
 **Hoje.** Cada backup é conferido com `pg_restore --list`, que só prova que o arquivo é legível. Nunca se restaura um backup de verdade, então um dump incompleto ou uma chave privada perdida só seriam descobertos no dia em que fizessem falta.
@@ -157,7 +159,7 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 - [x] 3. Jornada diferente por dia da semana e escalas
 - [x] 4. Horas extras separadas em 50% e 100%
 - [x] 5. Funcionário vê o resultado das solicitações no app
-- [ ] 6. Aviso por e-mail quando o backup ou o sistema falha
+- [x] 6. Aviso por e-mail quando o backup ou o sistema falha
 - [ ] 7. Teste de restauração do backup
 - [x] 8. Limite de tamanho dos logs do Docker
 - [ ] 9. Teste das páginas no navegador, no deploy e no CI
