@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, Request, Response
 from app.api.deps import DbSession, client_ip
 from app.core.errors import TooManyRequests, Unauthorized
 from app.core.ratelimit import AttemptLimiter
-from app.schemas.mobile import AjusteRequest, BatidaServidor, LoteRequest, LoteResponse, ResumoMes
+from app.schemas.mobile import AjusteRequest, BatidaServidor, LoteRequest, LoteResponse, ResumoMes, SolicitacaoApp
 from app.services.mobile_service import DeviceService, MobileService
 
 router = APIRouter(prefix="/pontos", tags=["app de celular"])
@@ -38,6 +38,12 @@ App = Annotated[MobileService, Depends(mobile)]
 @router.post("/lote", response_model=LoteResponse)
 def sync(body: LoteRequest, app: App):
     return app.sync(body.batidas)
+
+
+@router.get("/solicitacoes", response_model=list[SolicitacaoApp])
+def my_requests(app: App):
+    """Pedidos feitos pelo app nos últimos 90 dias e a decisão do admin (aprovada, recusada e o motivo)."""
+    return app.my_requests()
 
 
 @router.get("/ultima", response_model=BatidaServidor | None)

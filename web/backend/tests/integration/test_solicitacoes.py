@@ -62,3 +62,25 @@ def test_email_invalido_e_recusado(superadmin):
     assert response.status_code == 400
     response = superadmin.patch(f"/api/companies/{company}", json={"notify_email": " rh@ok.com "}, headers=ORIGIN)
     assert response.json()["notify_email"] == "rh@ok.com"
+
+
+def test_app_ve_o_resultado_das_solicitacoes(superadmin):
+    company, phone = _phone(superadmin, "Resultado", "")
+    _forgot(phone, "2026-03-02T08:00:00-03:00")
+    _forgot(phone, "2026-03-03T08:00:00-03:00")
+    mine = TestClient(app).get("/api/pontos/solicitacoes", headers=phone).json()
+    assert [s["status"] for s in mine] == ["pendente", "pendente"]
+    assert mine[0]["acao"] == "incluir" and mine[0]["tipo"] == "ENTRADA" and mine[0]["ocorridoEm"].startswith("2026-03-03T08:00")
+
+    adm = login("adm-resultado")
+    requests = adm.get("/api/admin/requests?status=pendente").json()
+    first, second = sorted(requests, key=lambda r: r["ts"])
+    assert adm.post(f"/api/admin/requests/{first['id']}/approve", json={"note": ""}, headers=ORIGIN).status_code == 200
+    assert adm.post(f"/api/admin/requests/{second['id']}/reject", json={"note": "Você bateu no relógio"}, headers=ORIGIN).status_code == 200
+
+    mine = {s["id"]: s for s in TestClient(app).get("/api/pontos/solicitacoes", headers=phone).json()}
+    assert mine[first["id"]]["status"] == "aprovada" and mine[first["id"]]["decididoEm"]
+    assert mine[second["id"]]["status"] == "recusada" and mine[second["id"]]["motivoDecisao"] == "Você bateu no relógio"
+    # Outro celular (outro funcionário) não vê esses pedidos
+    _, other = _phone(superadmin, "Resultado Outro", "")
+    assert TestClient(app).get("/api/pontos/solicitacoes", headers=other).json() == []

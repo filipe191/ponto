@@ -56,6 +56,20 @@ class BatidaServidor(CamelModel):
     relogio_suspeito: bool
 
 
+class SolicitacaoApp(CamelModel):
+    """Pedido feito pelo app e o que o admin decidiu (para o funcionário acompanhar)."""
+
+    id: int
+    acao: str  # incluir, alterar, excluir
+    tipo: TipoBatida | None  # pedido (incluir/alterar) ou o da batida atual
+    ocorrido_em: datetime | None  # horário pedido (incluir/alterar) ou o da batida (excluir)
+    horario_atual: datetime | None  # alterar/excluir: como a batida estava quando o pedido foi feito
+    status: str  # pendente, aprovada, recusada
+    pedido_em: datetime
+    decidido_em: datetime | None
+    motivo_decisao: str | None  # observação do admin (ex.: motivo da recusa)
+
+
 class DiaResumo(CamelModel):
     data: date
     trabalhado_minutos: int

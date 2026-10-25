@@ -1,5 +1,5 @@
 import { Config } from './config';
-import { AjustePendente, Batida, BatidaServidor, ResumoMes, TipoBatida } from './tipos';
+import { AjustePendente, Batida, BatidaServidor, ResumoMes, Solicitacao, TipoBatida } from './tipos';
 
 /**
  * Cliente HTTP. Toda funcao aqui pode falhar — quem chama trata.
@@ -150,4 +150,9 @@ export async function ultimaDoServidor(config: Config): Promise<BatidaServidor |
   return requisicao<BatidaServidor | null>(
     config, '/api/pontos/ultima', { method: 'GET' }, TIMEOUT_CONSULTA_RAPIDA_MS,
   );
+}
+
+/** Pedidos feitos pelo app nos ultimos 90 dias e o que o admin decidiu. */
+export async function buscarSolicitacoes(config: Config): Promise<Solicitacao[]> {
+  return requisicao<Solicitacao[]>(config, '/api/pontos/solicitacoes', { method: 'GET' }, TIMEOUT_TELA_MS);
 }

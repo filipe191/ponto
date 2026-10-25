@@ -30,6 +30,7 @@ import {
   somarDias,
 } from '../tempo';
 import { MarcacaoEditavel, TipoBatida } from '../tipos';
+import { MeusPedidos } from './MeusPedidos';
 
 /**
  * Tela Corrigir: conserta o que ficou errado — hora trocada, marcacao a mais,
@@ -422,6 +423,8 @@ export function Corrigir({ estado }: { estado: EstadoPonto }) {
           Correção feita aqui vale para o servidor. Sem rede, ela fica na fila e
           sai na próxima sincronização.
         </Text>
+
+        <MeusPedidos atualizar={ajustes} />
       </ScrollView>
     </KeyboardAvoidingView>
   );

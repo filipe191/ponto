@@ -10,7 +10,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 2 | Início do controle e saldo inicial do banco de horas | Alta | Pequeno | Backend + painel | ✅ Concluído |
 | 3 | Jornada diferente por dia da semana e escalas | Alta | Grande | Backend + painel | ✅ Concluído |
 | 4 | Horas extras separadas em 50% e 100% | Alta | Médio | Backend + painel | ✅ Concluído |
-| 5 | Funcionário vê o resultado das solicitações no app | Média | Médio | Backend + app | Pendente |
+| 5 | Funcionário vê o resultado das solicitações no app | Média | Médio | Backend + app | ✅ Concluído |
 | 6 | Aviso por e-mail quando o backup ou o sistema falha | Média | Pequeno | Scripts + backend | Pendente |
 | 7 | Teste de restauração do backup | Média | Pequeno | `web/scripts/` | Pendente |
 | 8 | Limite de tamanho dos logs do Docker | Média | Pequeno | `docker-compose.yml` | Pendente |
@@ -80,6 +80,8 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 **Hoje.** Uma batida esquecida, correção ou exclusão pedida pelo app vira solicitação, e o admin aprova ou recusa no painel. O app não fica sabendo do resultado: o funcionário só descobre pela batida aparecendo (ou não) no resumo, e nunca vê o motivo da recusa.
 
 **Proposta.** Uma rota `GET /api/pontos/solicitacoes` com as solicitações do próprio funcionário (pendente, aprovada, recusada, motivo), e uma lista no app com o estado de cada uma. Os ajustes pendentes que o app guarda passam a mostrar "aprovado" ou "recusado: motivo".
+
+**Status: concluído em 25/10/2026.** Rota `GET /api/pontos/solicitacoes` (só os pedidos do próprio celular/funcionário, últimos 90 dias, até 50) e, no app, o bloco **Seus pedidos ao administrador** no fim da tela Corrigir: o que foi pedido, quando, o selo aguardando/aprovado/recusado e o motivo do admin. Recarrega junto com a tela. Sem rede, avisa e mostra o resto. O app foi conferido com o `tsc` e a rota com testes de integração; **falta testar no iPhone**, que não dá para fazer a partir do servidor.
 
 ### 6. Aviso por e-mail quando o backup ou o sistema falha
 
@@ -152,7 +154,7 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 - [x] 2. Início do controle e saldo inicial do banco de horas
 - [x] 3. Jornada diferente por dia da semana e escalas
 - [x] 4. Horas extras separadas em 50% e 100%
-- [ ] 5. Funcionário vê o resultado das solicitações no app
+- [x] 5. Funcionário vê o resultado das solicitações no app
 - [ ] 6. Aviso por e-mail quando o backup ou o sistema falha
 - [ ] 7. Teste de restauração do backup
 - [ ] 8. Limite de tamanho dos logs do Docker

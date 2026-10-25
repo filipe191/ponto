@@ -45,6 +45,7 @@ from app.schemas.mobile import (
     LoteResponse,
     Rejeitada,
     ResumoMes,
+    SolicitacaoApp,
 )
 from app.schemas.punch import ManualPunchCreate, PunchUpdate
 from app.schemas.report import DayStatus
@@ -325,6 +326,35 @@ class MobileService:
         )
 
     # ---------- Correções pedidas pelo app ----------
+
+    def my_requests(self) -> list[SolicitacaoApp]:
+        """Pedidos do funcionário nos últimos 90 dias, do mais novo para o mais antigo (até 50)."""
+        since = datetime.now(timezone.utc) - timedelta(days=90)
+        rows = self.db.scalars(
+            select(PunchRequest)
+            .where(PunchRequest.employee_id == self.employee.id, PunchRequest.requested_at >= since)
+            .order_by(PunchRequest.requested_at.desc())
+            .limit(50)
+        )
+        result = []
+        for r in rows:
+            punch = r.punch
+            kind = r.type or (punch.type if punch else None)
+            when = r.ts or (punch.ts if punch else None)
+            result.append(
+                SolicitacaoApp(
+                    id=r.id,
+                    acao=r.action,
+                    tipo=kind.upper() if kind else None,
+                    ocorrido_em=to_local(when, self.tz) if when else None,
+                    horario_atual=to_local(punch.ts, self.tz) if punch and r.action != RequestAction.INCLUIR else None,
+                    status=r.status,
+                    pedido_em=to_local(r.requested_at, self.tz),
+                    decidido_em=to_local(r.decided_at, self.tz) if r.decided_at else None,
+                    motivo_decisao=r.decision_note,
+                )
+            )
+        return result
 
     def request_change(self, public_id: str, data: AjusteRequest) -> BatidaServidor:
         punch = self._punch(public_id)

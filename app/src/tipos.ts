@@ -73,6 +73,24 @@ export interface ResumoMes {
   dias: DiaResumo[];
 }
 
+/**
+ * Pedido feito pelo app (batida esquecida, correcao, exclusao) e a decisao do
+ * admin. Datas em ISO com o fuso da empresa.
+ */
+export type StatusSolicitacao = 'pendente' | 'aprovada' | 'recusada';
+
+export interface Solicitacao {
+  id: number;
+  acao: 'incluir' | 'alterar' | 'excluir';
+  tipo: TipoBatida | null;
+  ocorridoEm: string | null;
+  horarioAtual: string | null;
+  status: StatusSolicitacao;
+  pedidoEm: string;
+  decididoEm: string | null;
+  motivoDecisao: string | null;
+}
+
 /** Uma marcacao na tela Corrigir, venha ela do servidor ou da fila local. */
 export interface MarcacaoEditavel {
   id: string;
