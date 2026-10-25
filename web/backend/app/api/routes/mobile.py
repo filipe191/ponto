@@ -17,7 +17,7 @@ from app.services.mobile_service import DeviceService, MobileService
 router = APIRouter(prefix="/pontos", tags=["app de celular"])
 
 # Chave errada repetida: 10 em 5 minutos bloqueiam o IP
-key_attempts = AttemptLimiter(max_attempts=10, window_seconds=300)
+key_attempts = AttemptLimiter("celular", max_attempts=10, window_seconds=300)
 
 
 def mobile(request: Request, db: DbSession, x_api_key: Annotated[str | None, Header()] = None) -> MobileService:

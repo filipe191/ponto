@@ -1,40 +1,52 @@
-"""Limite de tentativas erradas por chave (ex.: IP), guardado na memória do processo."""
+"""Limite de tentativas erradas por chave (ex.: IP), guardado no banco.
 
-import threading
-import time
-from collections import deque
+Cada limitador usa a própria sessão: o erro fica gravado mesmo quando a requisição é desfeita, e
+reiniciar o backend não zera os bloqueios em andamento. As tentativas e os bloqueios vencidos são
+apagados a cada novo erro.
+"""
+
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import delete, func, select
+
+from app.db.session import SessionLocal
+from app.models.attempt import AttemptBlock, AttemptFailure
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
 
 
 class AttemptLimiter:
-    def __init__(self, max_attempts: int, window_seconds: int):
+    def __init__(self, scope: str, max_attempts: int, window_seconds: int):
+        self.scope = scope
         self.max_attempts = max_attempts
-        self.window = window_seconds
-        self._failures: dict[str, deque[float]] = {}
-        self._lock = threading.Lock()
+        self.window = timedelta(seconds=window_seconds)
 
     def blocked(self, key: str) -> bool:
-        with self._lock:
-            return len(self._recent(key, time.monotonic())) >= self.max_attempts
+        with SessionLocal() as db:
+            count = db.scalar(
+                select(func.count()).where(
+                    AttemptFailure.scope == self.scope,
+                    AttemptFailure.key == key,
+                    AttemptFailure.at > _now() - self.window,
+                )
+            )
+        return count >= self.max_attempts
 
     def fail(self, key: str) -> None:
-        now = time.monotonic()
-        with self._lock:
-            if len(self._failures) > 10_000:  # não deixa o dicionário crescer sem limite
-                for k in list(self._failures):
-                    self._recent(k, now)
-            self._failures.setdefault(key, deque()).append(now)
+        now = _now()
+        with SessionLocal() as db:
+            db.execute(
+                delete(AttemptFailure).where(AttemptFailure.scope == self.scope, AttemptFailure.at <= now - self.window)
+            )
+            db.add(AttemptFailure(scope=self.scope, key=key, at=now))
+            db.commit()
 
     def reset(self, key: str) -> None:
-        with self._lock:
-            self._failures.pop(key, None)
-
-    def _recent(self, key: str, now: float) -> deque[float]:
-        attempts = self._failures.get(key, deque())
-        while attempts and attempts[0] <= now - self.window:
-            attempts.popleft()
-        if not attempts:
-            self._failures.pop(key, None)
-        return attempts
+        with SessionLocal() as db:
+            db.execute(delete(AttemptFailure).where(AttemptFailure.scope == self.scope, AttemptFailure.key == key))
+            db.commit()
 
 
 class EscalatingLimiter:
@@ -44,19 +56,22 @@ class EscalatingLimiter:
     A contagem de bloqueios zera depois de `forget_after` segundos sem nenhum bloqueio.
     """
 
-    def __init__(self, max_attempts: int, window_seconds: int, base_block: int, max_block: int, forget_after: int):
-        self.attempts = AttemptLimiter(max_attempts, window_seconds)
+    def __init__(
+        self, scope: str, max_attempts: int, window_seconds: int, base_block: int, max_block: int, forget_after: int
+    ):
+        self.scope = scope
+        self.attempts = AttemptLimiter(scope, max_attempts, window_seconds)
         self.base_block = base_block
         self.max_block = max_block
-        self.forget_after = forget_after
-        self._blocks: dict[str, tuple[int, float]] = {}  # chave → (bloqueios seguidos, fim do último)
-        self._lock = threading.Lock()
+        self.forget_after = timedelta(seconds=forget_after)
 
     def blocked_for(self, key: str) -> int:
         """Segundos que ainda faltam de bloqueio (0 = liberado)."""
-        with self._lock:
-            _, until = self._blocks.get(key, (0, 0.0))
-            return max(0, int(until - time.monotonic() + 0.999))
+        with SessionLocal() as db:
+            block = db.get(AttemptBlock, (self.scope, key))
+        if not block:
+            return 0
+        return max(0, int((block.until - _now()).total_seconds() + 0.999))
 
     def fail(self, key: str) -> int:
         """Registra um erro; devolve a duração do bloqueio que ele causou (0 se não bloqueou)."""
@@ -64,13 +79,23 @@ class EscalatingLimiter:
         if not self.attempts.blocked(key):
             return 0
         self.attempts.reset(key)
-        now = time.monotonic()
-        with self._lock:
-            if len(self._blocks) > 10_000:
-                self._blocks = {k: v for k, v in self._blocks.items() if now - v[1] < self.forget_after}
-            strikes, until = self._blocks.get(key, (0, 0.0))
-            if now - until > self.forget_after:
-                strikes = 0
-            seconds = min(self.base_block * 2**strikes, self.max_block)
-            self._blocks[key] = (strikes + 1, now + seconds)
+        now = _now()
+        with SessionLocal() as db:
+            db.execute(
+                delete(AttemptBlock).where(
+                    AttemptBlock.scope == self.scope,
+                    AttemptBlock.key != key,
+                    AttemptBlock.until < now - self.forget_after,
+                )
+            )
+            block = db.get(AttemptBlock, (self.scope, key))
+            if not block:
+                block = AttemptBlock(scope=self.scope, key=key, strikes=0, until=now)
+                db.add(block)
+            elif now - block.until > self.forget_after:
+                block.strikes = 0
+            seconds = min(self.base_block * 2**block.strikes, self.max_block)
+            block.strikes += 1
+            block.until = now + timedelta(seconds=seconds)
+            db.commit()
             return seconds

@@ -17,7 +17,7 @@ router = APIRouter(tags=["relógio"], dependencies=[Depends(require_clock)])
 # Dificulta adivinhar PINs no relógio: 10 PINs errados em 5 minutos pausam o aparelho por 5 minutos;
 # cada nova rodada de erros dobra a pausa (10, 20, 40 min... até 24h). Cada bloqueio vai para a auditoria.
 pin_attempts = EscalatingLimiter(
-    max_attempts=10, window_seconds=300, base_block=300, max_block=86400, forget_after=86400
+    "pin", max_attempts=10, window_seconds=300, base_block=300, max_block=86400, forget_after=86400
 )
 
 

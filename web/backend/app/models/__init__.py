@@ -1,4 +1,5 @@
 from app.models.admin_account import AdminAccount, AdminRecoveryCode, AdminSession
+from app.models.attempt import AttemptBlock, AttemptFailure
 from app.models.audit import AuditEvent
 from app.models.company import Company, CompanyRule
 from app.models.employee import Employee, EmployeeSchedule
@@ -19,6 +20,8 @@ __all__ = [
     "AdminRecoveryCode",
     "AdminSession",
     "AppSetting",
+    "AttemptBlock",
+    "AttemptFailure",
     "AuditEvent",
     "Company",
     "CompanyRule",

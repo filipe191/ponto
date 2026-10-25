@@ -1,9 +1,6 @@
-from unittest.mock import patch
-
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from app.core.ratelimit import AttemptLimiter, EscalatingLimiter
 from app.core.security import (
     ROLE_ADMIN,
     ROLE_KIOSK,
@@ -72,41 +69,6 @@ def test_comprovante_depende_da_batida():
     assert len(code) == 10 and code == receipt_code(1, 1, at("2026-03-02 08:00"))
     assert code != receipt_code(1, 1, at("2026-03-02 08:01"))
     assert code != receipt_code(2, 1, at("2026-03-02 08:00"))
-
-
-def test_limite_de_tentativas():
-    limiter = AttemptLimiter(max_attempts=3, window_seconds=60)
-    with patch("app.core.ratelimit.time.monotonic", return_value=1000.0):
-        for _ in range(3):
-            limiter.fail("1.2.3.4")
-        assert limiter.blocked("1.2.3.4")
-        assert not limiter.blocked("5.6.7.8")
-    with patch("app.core.ratelimit.time.monotonic", return_value=1061.0):
-        assert not limiter.blocked("1.2.3.4")  # a janela passou
-
-
-def test_limite_zera_apos_acerto():
-    limiter = AttemptLimiter(max_attempts=2, window_seconds=60)
-    limiter.fail("ip")
-    limiter.reset("ip")
-    limiter.fail("ip")
-    assert not limiter.blocked("ip")
-
-
-def test_bloqueio_dobra_a_cada_rodada_de_erros():
-    limiter = EscalatingLimiter(max_attempts=3, window_seconds=60, base_block=300, max_block=1000, forget_after=3600)
-    clock = [1000.0]
-    with patch("app.core.ratelimit.time.monotonic", side_effect=lambda: clock[0]):
-        assert [limiter.fail("ip") for _ in range(3)] == [0, 0, 300]
-        assert limiter.blocked_for("ip") == 300
-        assert limiter.blocked_for("outro") == 0
-        clock[0] += 301
-        assert limiter.blocked_for("ip") == 0
-        assert [limiter.fail("ip") for _ in range(3)] == [0, 0, 600]  # segunda rodada: o dobro
-        clock[0] += 601
-        assert [limiter.fail("ip") for _ in range(3)] == [0, 0, 1000]  # nunca passa do máximo
-        clock[0] += 1000 + 3601  # um tempo sem bloqueios: volta ao início
-        assert [limiter.fail("ip") for _ in range(3)] == [0, 0, 300]
 
 
 def test_pin_novo_exige_6_digitos_mas_os_antigos_ainda_batem_ponto():

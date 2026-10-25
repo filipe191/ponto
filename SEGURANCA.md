@@ -235,8 +235,8 @@ Testado na cópia do banco de produção, inclusive a recusa de alteração dire
 - PINs novos e trocados precisam ter de 6 a 8 dígitos. O cadastro ganhou o botão **Gerar PIN** (aleatório).
 - Os PINs atuais de 4 ou 5 dígitos **continuam valendo**. A migração os identifica, o painel marca "PIN curto" e mostra um aviso, e o relógio pede ao funcionário que procure o admin. Ao trocar o PIN, a marca some.
 - Bloqueio crescente no relógio: 10 erros em 5 minutos pausam o aparelho por 5 minutos; cada nova rodada dobra a pausa (10, 20, 40 minutos…, até 24 horas). A contagem zera depois de 24 horas sem bloqueio. Vale para bater o ponto e para "Ver meu espelho".
-- Cada bloqueio vai para a auditoria e aparece em **Avisos de segurança** no topo do painel por 24 horas.
-- O controle de tentativas fica na memória do backend: reiniciar o backend zera os bloqueios em andamento.
+- Cada bloqueio vai para a auditoria e aparece em **Avisos de segurança**, na aba Início do painel, por 24 horas.
+- O controle de tentativas fica no banco (tabelas `attempt_failures` e `attempt_blocks`, desde 25/10/2026): reiniciar o backend não zera os bloqueios em andamento.
 
 ### 10. O "Cartão de hoje" expõe todos os colegas
 

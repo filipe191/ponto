@@ -27,7 +27,7 @@ from app.services.auth_service import AuthService
 router = APIRouter(prefix="/auth", tags=["login"])
 
 # 5 tentativas erradas (senha ou código) em 5 minutos bloqueiam o IP até a janela passar
-login_attempts = AttemptLimiter(max_attempts=5, window_seconds=300)
+login_attempts = AttemptLimiter("login", max_attempts=5, window_seconds=300)
 
 
 class LoginRequest(BaseModel):

@@ -74,7 +74,7 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
   3. Para administrar a partir dele, toque em **Administração** e entre: nesse aparelho o login do admin dura 30 minutos. Use **Sair** ao terminar.
   4. Perdeu um tablet? Administração → **Desligar todos os relógios** e ative de novo os que continuam em uso. Isso desliga só os relógios da empresa aberta.
 - **PIN:** de 6 a 8 dígitos (botão **Gerar PIN** no cadastro). PINs antigos de 4 ou 5 dígitos ainda valem, mas aparecem como "PIN curto" no painel para serem trocados.
-- Dez PINs errados em 5 minutos pausam o relógio por 5 minutos; cada nova rodada de erros dobra a pausa (até 24 h). Cada bloqueio aparece em **Avisos de segurança**, na aba Início do painel.
+- Dez PINs errados em 5 minutos pausam o relógio por 5 minutos; cada nova rodada de erros dobra a pausa (até 24 h). Os bloqueios ficam no banco e continuam valendo depois de reiniciar o backend. Cada bloqueio aparece em **Avisos de segurança**, na aba Início do painel.
 
 ### Variáveis do `.env`
 
@@ -189,6 +189,6 @@ docker rm -f ponto-testes-db && docker network rm ponto-testes
 
 Os testes de integração **apagam e recriam o banco**: só rodam quando `PGDATABASE` contém "test"; sem isso, são pulados. O `scripts/deploy.sh` faz o mesmo com um Postgres descartável, e o GitHub Actions (`.github/workflows/backend.yml`) roda tudo, mais o `pip-audit`, a cada push.
 
-Nova mudança no banco: crie `app/db/migrations/versions/0011_<descricao>.py` com `revision = "0011"` e `down_revision = "0010"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
+Nova mudança no banco: crie `app/db/migrations/versions/0012_<descricao>.py` com `revision = "0012"` e `down_revision = "0011"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
 
 Páginas: o HTML fica em `frontend/public/*.html` e o script de cada uma em `frontend/public/js/`. A CSP só aceita scripts desses arquivos (`script-src 'self'`): não coloque `<script>` com código nem `onclick=` dentro do HTML.

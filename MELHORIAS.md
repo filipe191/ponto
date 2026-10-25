@@ -13,7 +13,7 @@ Levantamento feito em 24/10/2026, depois da mudança para várias empresas no me
 | 5 | Painel em abas | Alta | Médio | Frontend | ✅ Concluído |
 | 6 | Tabelas que viram cartões no celular | Alta | Pequeno | Frontend | ✅ Concluído |
 | 7 | Link do aviso de privacidade por empresa | Média | Pequeno | Backend + frontend | ✅ Concluído |
-| 8 | Bloqueios de tentativas guardados no banco | Média | Pequeno | Backend | Pendente |
+| 8 | Bloqueios de tentativas guardados no banco | Média | Pequeno | Backend | ✅ Concluído |
 | 9 | Aviso de solicitações pendentes | Média | Médio | Backend | Pendente |
 | 10 | Confirmações do relógio com o visual do sistema | Média | Pequeno | Relógio | Pendente |
 | 11 | Confirmação visual depois de salvar | Baixa | Pequeno | Painel | Pendente |
@@ -110,6 +110,8 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 
 **Proposta.** Guardar as tentativas numa tabela, com limpeza das antigas. O comportamento visto pelo usuário não muda.
 
+**Status: concluído em 25/10/2026.** Tabelas `attempt_failures` (cada erro, por tipo e IP) e `attempt_blocks` (bloqueio crescente do relógio: quantos seguidos e até quando), na migração 0011. Os limites continuam os mesmos (PIN, login e chave do app). Cada limitador grava numa sessão própria, então o erro fica registrado mesmo quando a requisição é desfeita. Tentativas fora da janela e bloqueios esquecidos são apagados a cada novo erro. Os testes do limitador passaram para `tests/integration/test_tentativas.py`, com um teste de que o bloqueio continua depois de reiniciar.
+
 ### 9. Aviso de solicitações pendentes
 
 **Hoje.** O admin só fica sabendo das solicitações feitas pelo app (batida esquecida, correção, exclusão) quando abre o painel.
@@ -167,7 +169,7 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - [x] 5. Painel em abas
 - [x] 6. Tabelas que viram cartões no celular
 - [x] 7. Link do aviso de privacidade por empresa
-- [ ] 8. Bloqueios de tentativas guardados no banco
+- [x] 8. Bloqueios de tentativas guardados no banco
 - [ ] 9. Aviso de solicitações pendentes
 - [ ] 10. Confirmações do relógio com o visual do sistema
 - [ ] 11. Confirmação visual depois de salvar
