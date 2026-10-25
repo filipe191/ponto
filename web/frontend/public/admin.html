@@ -111,6 +111,15 @@
         <h1 class="card-title" id="empTitleMain">Funcionários</h1>
         <button class="btn btn-primary" type="button" id="newEmp">Novo funcionário</button>
       </header>
+      <div class="toolbar">
+        <input class="input grow" type="search" id="empSearch" placeholder="Buscar pelo nome" autocomplete="off" aria-label="Buscar funcionário pelo nome">
+        <select class="input" id="empStatus" aria-label="Mostrar">
+          <option value="ativos">Ativos</option>
+          <option value="inativos">Inativos</option>
+          <option value="todos">Todos</option>
+        </select>
+        <span class="muted" id="empCount"></span>
+      </div>
       <p class="form-error" id="empError" role="alert"></p>
       <div class="table-wrap">
         <table class="timecard stack">
@@ -126,6 +135,7 @@
         <p class="card-sub" id="repSub"></p>
       </header>
       <div class="toolbar">
+        <input class="input" type="search" id="repSearch" placeholder="Buscar" autocomplete="off" aria-label="Buscar funcionário no espelho" style="width:140px">
         <select class="input" id="repEmp" aria-label="Funcionário"></select>
         <input class="input" type="month" id="repMonth" aria-label="Mês">
         <label class="check"><input type="checkbox" id="showDeleted"> Mostrar excluídas</label>

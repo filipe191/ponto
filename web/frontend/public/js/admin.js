@@ -101,10 +101,28 @@ $('logout').addEventListener('click', async () => {
 
 $('fDays').innerHTML = WEEK.map((d, i) => `<label><input type="checkbox" value="${i + 1}"><span>${d}</span></label>`).join('');
 
+// Busca sem diferenciar maiúsculas nem acentos ("joao" acha "João")
+const fold = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const matches = (e, query) => fold(e.name).includes(fold(query.trim()));
+
 async function loadEmployees() {
   employees = await api('/employees');
-  $('employees').innerHTML = employees.length
-    ? employees.map((e) => `
+  renderEmployees();
+  renderReportPicker();
+  const audCurrent = $('audEmp').value;
+  $('audEmp').innerHTML = '<option value="">Todos os funcionários</option>' + employeeOptions(employees);
+  $('audEmp').value = audCurrent;
+}
+
+const employeeOptions = (list) => list.map((e) => `<option value="${e.id}">${esc(e.name)}${e.active ? '' : ' (inativo)'}</option>`).join('');
+
+function renderEmployees() {
+  const status = $('empStatus').value;
+  const shown = employees.filter((e) => matches(e, $('empSearch').value)
+    && (status === 'todos' || (status === 'ativos') === e.active));
+  $('empCount').textContent = shown.length === employees.length ? '' : `${shown.length} de ${employees.length}`;
+  $('employees').innerHTML = shown.length
+    ? shown.map((e) => `
         <tr>
           <td class="who">${esc(e.name)}${e.active ? '' : '<span class="tag inativo">inativo</span>'}${e.pin_short && e.active ? '<span class="tag falta" title="PIN de 4 ou 5 dígitos: troque por um de 6">PIN curto</span>' : ''}
             <small class="contract">${e.terminated_on ? `desligado em ${fmtD(e.terminated_on)}` : `desde ${fmtD(e.hired_on)}`}</small></td>
@@ -119,16 +137,23 @@ async function loadEmployees() {
             <button class="btn btn-sm btn-danger" data-act="del" data-id="${e.id}">Excluir</button>`}`}
           </td>
         </tr>`).join('')
-    : '<tr><td colspan="3" class="empty">Nenhum funcionário cadastrado. Use “Novo funcionário”.</td></tr>';
-
-  const current = $('repEmp').value;
-  const options = employees.map((e) => `<option value="${e.id}">${esc(e.name)}${e.active ? '' : ' (inativo)'}</option>`).join('');
-  $('repEmp').innerHTML = options;
-  if (employees.some((e) => String(e.id) === current)) $('repEmp').value = current;
-  const audCurrent = $('audEmp').value;
-  $('audEmp').innerHTML = '<option value="">Todos os funcionários</option>' + options;
-  $('audEmp').value = audCurrent;
+    : `<tr><td colspan="3" class="empty">${employees.length ? 'Ninguém encontrado com essa busca.' : 'Nenhum funcionário cadastrado. Use “Novo funcionário”.'}</td></tr>`;
 }
+
+// Seletor do espelho: só os nomes que batem com a busca. Se o escolhido sumir da lista, abre o primeiro.
+function renderReportPicker() {
+  const current = $('repEmp').value;
+  const shown = employees.filter((e) => matches(e, $('repSearch').value));
+  $('repEmp').innerHTML = employeeOptions(shown);
+  if (shown.some((e) => String(e.id) === current)) $('repEmp').value = current;
+  return shown.length > 0 && $('repEmp').value !== current;
+}
+
+$('empSearch').addEventListener('input', renderEmployees);
+$('empStatus').addEventListener('change', renderEmployees);
+$('repSearch').addEventListener('input', () => {
+  if (renderReportPicker()) { cancelEdit(); loadReport(); }
+});
 
 function openEmpDialog(emp = null) {
   editingEmp = emp;

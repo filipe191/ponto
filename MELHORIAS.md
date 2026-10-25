@@ -17,7 +17,7 @@ Levantamento feito em 24/10/2026, depois da mudança para várias empresas no me
 | 9 | Aviso de solicitações pendentes | Média | Médio | Backend | ✅ Concluído |
 | 10 | Confirmações do relógio com o visual do sistema | Média | Pequeno | Relógio | ✅ Concluído |
 | 11 | Confirmação visual depois de salvar | Baixa | Pequeno | Painel | ✅ Concluído |
-| 12 | Busca de funcionários | Baixa | Pequeno | Painel | Pendente |
+| 12 | Busca de funcionários | Baixa | Pequeno | Painel | ✅ Concluído |
 | 13 | Tema escuro no painel | Baixa | Pequeno | Frontend | Pendente |
 | 14 | Relógio instalável no tablet | Baixa | Pequeno | Relógio | Pendente |
 
@@ -146,6 +146,8 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 
 **Proposta.** Um campo de busca acima da lista e no seletor do espelho, com filtro de ativos e inativos. Fica importante quando a empresa passa de umas 20 pessoas.
 
+**Status: concluído em 25/10/2026.** A aba Funcionários tem busca pelo nome e o filtro **Ativos / Inativos / Todos** (abre em Ativos), com a contagem "N de M" quando há filtro. O espelho tem uma busca ao lado do seletor: a lista mostra só os nomes que batem e, se o funcionário aberto sair da lista, o primeiro encontrado é aberto. A busca ignora maiúsculas e acentos ("joao" acha "João"). Tudo no navegador, sem mudança na API.
+
 ### 13. Tema escuro no painel
 
 **Hoje.** O `style.css` tem só uma regra para o tema escuro do sistema e o `admin.css` nenhuma.
@@ -179,6 +181,6 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - [x] 9. Aviso de solicitações pendentes
 - [x] 10. Confirmações do relógio com o visual do sistema
 - [x] 11. Confirmação visual depois de salvar
-- [ ] 12. Busca de funcionários
+- [x] 12. Busca de funcionários
 - [ ] 13. Tema escuro no painel
 - [ ] 14. Relógio instalável no tablet
