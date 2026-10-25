@@ -57,6 +57,25 @@ function workdaysLabel(w) {
 
 // ---------- Janela de confirmação ----------
 
+// Mensagem curta no canto da tela depois de salvar; some sozinha. É um popover, para ficar acima
+// até das janelas abertas (navegador sem popover: só aparece, como um elemento comum)
+let toastTimer;
+function toast(message) {
+  const el = $('toast');
+  const show = (on) => {
+    if (el.showPopover) { if (el.matches(':popover-open') !== on) el.togglePopover(on); } else el.hidden = !on;
+  };
+  el.textContent = message;
+  el.classList.remove('toast-out');
+  show(true);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.classList.add('toast-out');
+    toastTimer = setTimeout(() => show(false), 300);
+  }, 2500);
+}
+if (!$('toast').showPopover) $('toast').hidden = true;
+
 function ask({ title, message, input = '', ok = 'Confirmar', danger = false }) {
   const dlg = $('askDialog');
   $('askTitle').textContent = title;
@@ -170,6 +189,7 @@ $('empForm').addEventListener('submit', async (e) => {
     if (editingEmp) await api('/employees/' + editingEmp.id, { method: 'PATCH', body: JSON.stringify(body) });
     else await api('/employees', { method: 'POST', body: JSON.stringify(body) });
     $('empDialog').close();
+    toast(editingEmp ? 'Funcionário salvo' : 'Funcionário cadastrado');
     await loadEmployees();
     loadReport();
     loadAlerts();
@@ -195,10 +215,12 @@ $('employees').addEventListener('click', async (e) => {
       });
       if (ok === null) return;
       await api(`/employees/${emp.id}/anonymize`, { method: 'POST' });
+      toast('Dados pessoais apagados');
       loadAlerts();
     }
     if (btn.dataset.act === 'toggle') {
       await api('/employees/' + emp.id, { method: 'PATCH', body: JSON.stringify({ active: !emp.active }) });
+      toast(emp.active ? 'Funcionário desativado' : 'Funcionário ativado');
     } else if (btn.dataset.act === 'del') {
       const ok = await ask({
         title: `Excluir ${emp.name}?`,
@@ -208,6 +230,7 @@ $('employees').addEventListener('click', async (e) => {
       });
       if (ok === null) return;
       await api('/employees/' + emp.id, { method: 'DELETE' });
+      toast('Funcionário excluído');
     }
     await loadEmployees();
     loadReport();
@@ -338,6 +361,7 @@ $('closure').addEventListener('click', async (e) => {
       if (note === null) return;
       if (!note) { $('repError').textContent = 'Informe o motivo da reabertura.'; return; }
       await api(`/closures/${emp}/${month}?note=${encodeURIComponent(note)}`, { method: 'DELETE' });
+      toast('Mês reaberto');
     } else {
       const all = act === 'all';
       const ok = await ask({
@@ -347,6 +371,7 @@ $('closure').addEventListener('click', async (e) => {
       });
       if (ok === null) return;
       await api('/closures', { method: 'POST', body: JSON.stringify({ month, employee_id: all ? null : Number(emp) }) });
+      toast(all ? 'Mês fechado para todos' : 'Mês fechado');
     }
   } catch (err) { $('repError').textContent = err.message; }
   loadReport();
@@ -376,9 +401,11 @@ $('report').addEventListener('click', async (e) => {
       });
       if (note === null) return;
       await api(`/punches/${id}?note=${encodeURIComponent(note)}`, { method: 'DELETE' });
+      toast('Batida excluída');
       if (id === editingId) cancelEdit();
     } else {
       await api(`/punches/${t.dataset.restore}/restore`, { method: 'POST' });
+      toast('Batida restaurada');
     }
   } catch (err) { $('manError').textContent = err.message; }
   loadReport();
@@ -451,9 +478,11 @@ $('manual').addEventListener('submit', async (e) => {
     if (editingId) {
       await api('/punches/' + editingId, { method: 'PATCH', body: JSON.stringify(fields) });
       cancelEdit();
+      toast('Correção salva');
     } else {
       await api('/punches', { method: 'POST', body: JSON.stringify({ employee_id: $('repEmp').value, ...fields }) });
       $('manNote').value = '';
+      toast('Batida lançada');
     }
     loadReport();
   } catch (err) { $('manError').textContent = err.message; }
@@ -502,6 +531,7 @@ $('holForm').addEventListener('submit', async (e) => {
     await api('/holidays', { method: 'POST', body: JSON.stringify({ date: $('holDate').value, name: $('holName').value }) });
     $('holYear').value = $('holDate').value.slice(0, 4);
     $('holName').value = '';
+    toast('Feriado cadastrado');
     loadHolidays();
     loadReport();
     loadAudit();
@@ -510,7 +540,7 @@ $('holForm').addEventListener('submit', async (e) => {
 $('holidays').addEventListener('click', async (e) => {
   const day = e.target.closest('[data-hol]')?.dataset.hol;
   if (!day) return;
-  try { await api(`/holidays/${day}`, { method: 'DELETE' }); } catch (err) { $('holError').textContent = err.message; }
+  try { await api(`/holidays/${day}`, { method: 'DELETE' }); toast('Feriado removido'); } catch (err) { $('holError').textContent = err.message; }
   loadHolidays();
   loadReport();
   loadAudit();
@@ -538,6 +568,7 @@ $('admForm').addEventListener('submit', async (e) => {
     await api('/admins', { method: 'POST', body: JSON.stringify({ username: $('admUser').value, password: $('admPass').value }) });
     $('admUser').value = '';
     $('admPass').value = '';
+    toast('Administrador cadastrado');
     loadAdmins();
     loadAudit();
   } catch (err) { $('admError').textContent = err.message; }
@@ -547,7 +578,7 @@ $('admins').addEventListener('click', async (e) => {
   if (!btn) return;
   const ok = await ask({ title: `Excluir o administrador ${btn.dataset.name}?`, message: 'Ele perde o acesso na hora. O histórico de correções feitas por ele é mantido.', ok: 'Excluir', danger: true });
   if (ok === null) return;
-  try { await api(`/admins/${btn.dataset.adm}`, { method: 'DELETE' }); } catch (err) { $('admError').textContent = err.message; }
+  try { await api(`/admins/${btn.dataset.adm}`, { method: 'DELETE' }); toast('Administrador excluído'); } catch (err) { $('admError').textContent = err.message; }
   loadAdmins();
   loadAudit();
 });
@@ -620,6 +651,7 @@ $('requests').addEventListener('click', async (e) => {
   if (note === null) return;
   try {
     await api(`/requests/${btn.dataset.id}/${btn.dataset.req}`, { method: 'POST', body: JSON.stringify({ note }) });
+    toast(approve ? 'Solicitação aprovada' : 'Solicitação recusada');
   } catch (err) { $('reqError').textContent = err.message; }
   loadRequests();
   loadReport();
@@ -678,7 +710,7 @@ $('devList').addEventListener('click', async (e) => {
   if (!id) return;
   const ok = await ask({ title: 'Revogar este celular?', message: 'O app nesse aparelho para de sincronizar na hora. Batidas já enviadas continuam valendo.', ok: 'Revogar', danger: true });
   if (ok === null) return;
-  try { await api(`/devices/${id}`, { method: 'DELETE' }); } catch (err) { $('devError').textContent = err.message; }
+  try { await api(`/devices/${id}`, { method: 'DELETE' }); toast('Celular revogado'); } catch (err) { $('devError').textContent = err.message; }
   loadDevices();
   loadAudit();
 });
@@ -804,6 +836,7 @@ $('coForm').addEventListener('submit', async (e) => {
       const created = await request('/api/companies', { method: 'POST', body: JSON.stringify(body) });
       if (!openCompanyId) return openCompany(created.id); // primeira empresa: já abre
     }
+    toast(editingCompany ? 'Empresa salva' : 'Empresa cadastrada');
     companyForm();
     loadCompanies(openCompanyId);
     loadSystemAudit();
@@ -828,6 +861,7 @@ $('companies').addEventListener('click', async (e) => {
   }
   try {
     await request(`/api/companies/${company.id}`, { method: 'PATCH', body: JSON.stringify({ active: !company.active }) });
+    toast(company.active ? 'Empresa desativada' : 'Empresa ativada');
   } catch (err) { $('coError').textContent = err.message; }
   loadCompanies(openCompanyId);
   loadSystemAudit();
@@ -885,6 +919,7 @@ $('ruleForm').addEventListener('submit', async (e) => {
   if (ok === null) return;
   try {
     await api('/rules', { method: 'POST', body: JSON.stringify(body) });
+    toast('Regras salvas');
     loadRules();
     loadReport();
     loadAudit();
@@ -895,6 +930,7 @@ $('settingsForm').addEventListener('submit', async (e) => {
   $('settingsError').textContent = '';
   try {
     await api('/rules/settings', { method: 'PATCH', body: JSON.stringify({ timezone: $('sTz').value.trim(), offline_max_hours: Number($('sOffline').value) }) });
+    toast('Configurações salvas');
     loadRules();
     loadAudit();
   } catch (err) { $('settingsError').textContent = err.message; }
@@ -920,6 +956,7 @@ $('saForm').addEventListener('submit', async (e) => {
     await request('/api/companies/superadmins', { method: 'POST', body: JSON.stringify({ username: $('saUser').value, password: $('saPass').value }) });
     $('saUser').value = '';
     $('saPass').value = '';
+    toast('Superadministrador cadastrado');
     loadSuperadmins();
     loadSystemAudit();
   } catch (err) { $('saError').textContent = err.message; }
@@ -929,7 +966,7 @@ $('superadmins').addEventListener('click', async (e) => {
   if (!btn) return;
   const ok = await ask({ title: `Excluir o superadministrador ${btn.dataset.name}?`, message: 'Ele perde o acesso na hora. O histórico do que ele fez é mantido.', ok: 'Excluir', danger: true });
   if (ok === null) return;
-  try { await request(`/api/companies/superadmins/${btn.dataset.sa}`, { method: 'DELETE' }); } catch (err) { $('saError').textContent = err.message; }
+  try { await request(`/api/companies/superadmins/${btn.dataset.sa}`, { method: 'DELETE' }); toast('Superadministrador excluído'); } catch (err) { $('saError').textContent = err.message; }
   loadSuperadmins();
   loadSystemAudit();
 });

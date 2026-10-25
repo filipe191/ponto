@@ -16,7 +16,7 @@ Levantamento feito em 24/10/2026, depois da mudança para várias empresas no me
 | 8 | Bloqueios de tentativas guardados no banco | Média | Pequeno | Backend | ✅ Concluído |
 | 9 | Aviso de solicitações pendentes | Média | Médio | Backend | ✅ Concluído |
 | 10 | Confirmações do relógio com o visual do sistema | Média | Pequeno | Relógio | ✅ Concluído |
-| 11 | Confirmação visual depois de salvar | Baixa | Pequeno | Painel | Pendente |
+| 11 | Confirmação visual depois de salvar | Baixa | Pequeno | Painel | ✅ Concluído |
 | 12 | Busca de funcionários | Baixa | Pequeno | Painel | Pendente |
 | 13 | Tema escuro no painel | Baixa | Pequeno | Frontend | Pendente |
 | 14 | Relógio instalável no tablet | Baixa | Pequeno | Relógio | Pendente |
@@ -138,6 +138,8 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 
 **Proposta.** Uma mensagem curta no canto da tela ("Funcionário salvo", "Mês fechado"), que some sozinha.
 
+**Status: concluído em 25/10/2026.** Toda gravação bem-sucedida do painel mostra uma mensagem curta no canto inferior direito, que some em 2,5 s: funcionários, batidas (lançar, corrigir, excluir, restaurar), fechamento e reabertura do mês, feriados, regras e configurações, administradores, celulares, solicitações, empresas e superadministradores. A mensagem é um `popover`, para aparecer até por cima de uma janela aberta, e é anunciada pelos leitores de tela (`role="status"`). Os erros continuam aparecendo junto do formulário.
+
 ### 12. Busca de funcionários
 
 **Hoje.** A lista de funcionários e os seletores do espelho e da auditoria mostram todos os nomes, sem busca.
@@ -176,7 +178,7 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - [x] 8. Bloqueios de tentativas guardados no banco
 - [x] 9. Aviso de solicitações pendentes
 - [x] 10. Confirmações do relógio com o visual do sistema
-- [ ] 11. Confirmação visual depois de salvar
+- [x] 11. Confirmação visual depois de salvar
 - [ ] 12. Busca de funcionários
 - [ ] 13. Tema escuro no painel
 - [ ] 14. Relógio instalável no tablet

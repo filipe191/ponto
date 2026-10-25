@@ -273,3 +273,24 @@ dialog h2 { margin-bottom: 8px; font-size: 1.25rem; font-weight: 800; font-stret
 @media (max-width: 640px) {
   .timecard td.when { white-space: normal; }
 }
+
+/* ---------- Confirmação depois de salvar ---------- */
+
+/* Popover: fica acima até das janelas abertas */
+.toast {
+  position: fixed;
+  inset: auto 16px 16px auto;
+  margin: 0;
+  max-width: calc(100vw - 32px);
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--machine);
+  color: var(--machine-text);
+  box-shadow: var(--shadow);
+  font-weight: 700;
+  animation: toast-in 160ms ease-out;
+}
+.toast.toast-out { opacity: 0; transition: opacity 300ms; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
