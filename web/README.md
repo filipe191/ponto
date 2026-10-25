@@ -203,4 +203,4 @@ Os testes de integração **apagam e recriam o banco**: só rodam quando `PGDATA
 
 Nova mudança no banco: crie `app/db/migrations/versions/0020_<descricao>.py` com `revision = "0020"` e `down_revision = "0019"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
 
-Páginas: o HTML fica em `frontend/public/*.html` e o script de cada uma em `frontend/public/js/`. A CSP só aceita scripts desses arquivos (`script-src 'self'`): não coloque `<script>` com código nem `onclick=` dentro do HTML.
+Páginas: o HTML fica em `frontend/public/*.html` e o script de cada uma em `frontend/public/js/`. O painel (`admin.html`) usa módulos ES sem etapa de build: `js/admin.js` só faz a subida da página, e cada aba tem o seu módulo em `js/admin/` (`funcionarios.js`, `espelho.js`, `configuracoes.js`, `inicio.js`, `auditoria.js`, `empresas.js`, `abas.js`), com o que é comum em `comum.js` (API, janela de confirmação, mensagem de "salvo", formatação e a `sessao`). A CSP só aceita scripts desses arquivos (`script-src 'self'`): não coloque `<script>` com código nem `onclick=` dentro do HTML.

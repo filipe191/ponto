@@ -18,9 +18,9 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 10 | Administrador só de consulta (contabilidade) | Média | Médio | Backend + painel | ✅ Concluído |
 | 11 | Feriados que se repetem todo ano | Baixa | Pequeno | Backend + painel | ✅ Concluído |
 | 12 | Prorrogação do horário noturno | Baixa | Médio | Backend | ✅ Concluído |
-| 13 | Dividir o `admin.js` em módulos | Baixa | Médio | Frontend | Pendente |
+| 13 | Dividir o `admin.js` em módulos | Baixa | Médio | Frontend | ✅ Concluído |
 
-Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram concluídos em 25/10/2026.
+Todos os 13 itens foram concluídos em 25/10/2026.
 
 ---
 
@@ -149,6 +149,8 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 
 **Proposta.** Módulos ES nativos (`<script type="module">`, aceito pela CSP `script-src 'self'`), um por aba (`js/admin/funcionarios.js`, `espelho.js`...) e um com o que é comum (`api`, `ask`, `toast`). Sem bundler nem etapa de build. Fica mais fácil depois de existir o item 9, que confere que nada quebrou.
 
+**Status: concluído em 25/10/2026.** O `admin.js` de cerca de 1300 linhas virou 8 módulos em `js/admin/` (`comum`, `funcionarios`, `espelho`, `configuracoes`, `inicio`, `auditoria`, `empresas`, `abas`) e uma entrada de 50 linhas, carregada com `<script type="module">`, sem build. O código não mudou: a divisão foi feita por um script que calcula os `export` e os `import` de cada módulo. O que era estado compartilhado ficou com o módulo dono, e o usuário logado e a empresa aberta foram para `sessao` em `comum.js`. Os testes no navegador (item 9) pegaram dois erros da primeira versão, um `export` e dois imports faltando, antes de qualquer deploy; agora os 18 passam. Uma conferência automática verifica que todo nome usado e declarado em outro módulo está importado.
+
 ---
 
 ## Já registrados em outros documentos
@@ -176,4 +178,4 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 - [x] 10. Administrador só de consulta (contabilidade)
 - [x] 11. Feriados que se repetem todo ano
 - [x] 12. Prorrogação do horário noturno
-- [ ] 13. Dividir o `admin.js` em módulos
+- [x] 13. Dividir o `admin.js` em módulos
