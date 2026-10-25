@@ -12,7 +12,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 4 | Horas extras separadas em 50% e 100% | Alta | Médio | Backend + painel | ✅ Concluído |
 | 5 | Funcionário vê o resultado das solicitações no app | Média | Médio | Backend + app | ✅ Concluído |
 | 6 | Aviso por e-mail quando o backup ou o sistema falha | Média | Pequeno | Scripts + backend | ✅ Concluído |
-| 7 | Teste de restauração do backup | Média | Pequeno | `web/scripts/` | Pendente |
+| 7 | Teste de restauração do backup | Média | Pequeno | `web/scripts/` | ✅ Concluído |
 | 8 | Limite de tamanho dos logs do Docker | Média | Pequeno | `docker-compose.yml` | ✅ Concluído |
 | 9 | Teste das páginas no navegador, no deploy e no CI | Média | Médio | `web/frontend/` + GitHub Actions | Pendente |
 | 10 | Administrador só de consulta (contabilidade) | Média | Médio | Backend + painel | Pendente |
@@ -97,6 +97,8 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 
 **Proposta.** Um `scripts/testar-restauracao.sh`, rodado uma vez por mês: decifra o backup mais recente num chaveiro temporário, restaura num Postgres descartável (container), compara a contagem de linhas das tabelas principais com o banco atual e registra o resultado (e avisa por e-mail se falhar, ver item 6). Exige a chave privada à mão, então pode ficar como passo manual com lembrete.
 
+**Status: concluído em 25/10/2026.** `scripts/testar-restauracao.sh <chave-privada.asc> [backup]`: decifra na memória, restaura com `pg_restore --exit-on-error` num Postgres 18 descartável e sem rede, mostra a versão do banco do backup e a contagem de 10 tabelas no backup e hoje, e grava em `backups/restauracao.log`. Falha manda e-mail (item 6). O container, o dump decifrado e o chaveiro temporário são apagados no fim, mesmo com erro. Testado com um par de chaves de teste e um dump do banco atual, e com uma chave errada (falha registrada e alerta). Fica como passo manual, porque precisa da chave privada, que não mora no servidor. **Falta rodar o primeiro teste com a chave de verdade.**
+
 ### 8. Limite de tamanho dos logs do Docker
 
 **Hoje.** Os containers usam o driver `json-file` sem limite (o `daemon.json` do servidor só define DNS). Os logs do backend e do nginx crescem para sempre e, com o tempo, podem encher o disco, levando junto o banco e os backups.
@@ -160,7 +162,7 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 - [x] 4. Horas extras separadas em 50% e 100%
 - [x] 5. Funcionário vê o resultado das solicitações no app
 - [x] 6. Aviso por e-mail quando o backup ou o sistema falha
-- [ ] 7. Teste de restauração do backup
+- [x] 7. Teste de restauração do backup
 - [x] 8. Limite de tamanho dos logs do Docker
 - [ ] 9. Teste das páginas no navegador, no deploy e no CI
 - [ ] 10. Administrador só de consulta (contabilidade)

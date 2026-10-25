@@ -156,6 +156,8 @@ docker compose start backend
 rm -rf "$GNUPGHOME"; unset GNUPGHOME
 ```
 
+**Teste de restauração (uma vez por mês):** `scripts/testar-restauracao.sh ponto-backup-chave-privada.asc` decifra o backup diário mais recente num chaveiro temporário, restaura num Postgres descartável e sem rede (apagado no fim) e compara as tabelas principais com o banco atual. Não toca no banco do ponto. Traga a chave privada de fora do servidor e apague depois (`shred -u`). Resultado em `backups/restauracao.log`; falha manda e-mail a `ALERTA_EMAIL`.
+
 O backup não contém a `PIN_KEY`: sem ela, os PINs, os códigos de comprovante e a verificação em duas etapas dos admins não funcionam no banco restaurado. Guarde-a também fora do servidor.
 
 ## Estrutura do backend
