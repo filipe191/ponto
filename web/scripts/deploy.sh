@@ -44,6 +44,15 @@ docker run --rm -u root --network "$TESTE_REDE" -e PYTHONDONTWRITEBYTECODE=1 \
     ponto-backend-testes sh -c "pip install -q --root-user-action=ignore -r requirements-dev.txt && python -m pytest -q -p no:cacheprovider tests"
 limpar_testes
 
+passo "Testes das páginas no navegador"
+# Pilha descartável (Postgres, backend e nginx do código atual) e Playwright; capturas em e2e/resultados/.
+# Em emergência (ex.: sem internet para baixar as imagens), pule com PULAR_E2E=1 scripts/deploy.sh
+if [[ "${PULAR_E2E:-}" == "1" ]]; then
+    echo "AVISO: testes das páginas pulados (PULAR_E2E=1)"
+else
+    e2e/rodar.sh || { echo "Os testes das páginas falharam (veja acima e e2e/resultados/). Deploy interrompido." >&2; exit 1; }
+fi
+
 passo "Vulnerabilidades conhecidas nas dependências"
 # Backend: falha conhecida interrompe o deploy (atualize a versão em backend/requirements.txt).
 # Em emergência (ex.: sem internet), pule com PULAR_AUDITORIA=1 scripts/deploy.sh

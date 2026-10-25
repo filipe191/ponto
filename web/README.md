@@ -197,7 +197,9 @@ docker run --rm -u root --network ponto-testes -e PGHOST=ponto-testes-db -e PGUS
 docker rm -f ponto-testes-db && docker network rm ponto-testes
 ```
 
-Os testes de integração **apagam e recriam o banco**: só rodam quando `PGDATABASE` contém "test"; sem isso, são pulados. O `scripts/deploy.sh` faz o mesmo com um Postgres descartável, e o GitHub Actions (`.github/workflows/backend.yml`) roda tudo, mais o `pip-audit`, a cada push.
+**Testes das páginas no navegador** (`e2e/`, Playwright): `e2e/rodar.sh` sobe uma pilha descartável (Postgres, backend e nginx construídos do código atual, numa rede só deles, com certificado temporário), prepara dados de exemplo pela API e testa no Chromium, em largura de computador e de celular: as abas do painel nos temas claro e escuro, sem erro de script e sem rolagem lateral, cadastro de funcionário, ausência no espelho, aprovação de solicitação, admin de consulta, superadmin, batida no relógio e login. As capturas de cada tela ficam em `e2e/resultados/`. Só precisa do Docker (os testes rodam na imagem do Playwright).
+
+Os testes de integração **apagam e recriam o banco**: só rodam quando `PGDATABASE` contém "test"; sem isso, são pulados. O `scripts/deploy.sh` roda os dois (backend com um Postgres descartável e páginas no navegador; `PULAR_E2E=1` pula as páginas numa emergência), e o GitHub Actions roda o backend com o `pip-audit` (`.github/workflows/backend.yml`) e as páginas (`.github/workflows/paginas.yml`, com as capturas como artefato) a cada push.
 
 Nova mudança no banco: crie `app/db/migrations/versions/0020_<descricao>.py` com `revision = "0020"` e `down_revision = "0019"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
 

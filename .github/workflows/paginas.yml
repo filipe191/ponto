@@ -1,0 +1,21 @@
+# Testes das páginas (painel, relógio, login) num navegador de verdade, contra a pilha descartável.
+name: Páginas
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  navegador:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testes no navegador (Playwright)
+        run: web/e2e/rodar.sh
+      - name: Capturas e falhas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: paginas
+          path: web/e2e/resultados/
+          retention-days: 14

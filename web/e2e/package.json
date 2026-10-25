@@ -1,0 +1,11 @@
+{
+  "name": "ponto-e2e",
+  "private": true,
+  "description": "Testes das páginas do ponto num navegador de verdade (rodam com e2e/rodar.sh)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.47.0"
+  }
+}

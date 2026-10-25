@@ -14,7 +14,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 6 | Aviso por e-mail quando o backup ou o sistema falha | Média | Pequeno | Scripts + backend | ✅ Concluído |
 | 7 | Teste de restauração do backup | Média | Pequeno | `web/scripts/` | ✅ Concluído |
 | 8 | Limite de tamanho dos logs do Docker | Média | Pequeno | `docker-compose.yml` | ✅ Concluído |
-| 9 | Teste das páginas no navegador, no deploy e no CI | Média | Médio | `web/frontend/` + GitHub Actions | Pendente |
+| 9 | Teste das páginas no navegador, no deploy e no CI | Média | Médio | `web/frontend/` + GitHub Actions | ✅ Concluído |
 | 10 | Administrador só de consulta (contabilidade) | Média | Médio | Backend + painel | ✅ Concluído |
 | 11 | Feriados que se repetem todo ano | Baixa | Pequeno | Backend + painel | ✅ Concluído |
 | 12 | Prorrogação do horário noturno | Baixa | Médio | Backend | ✅ Concluído |
@@ -113,6 +113,8 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 
 **Proposta.** Testes com Playwright contra a pilha completa (Postgres, backend e nginx em containers descartáveis, com dados de exemplo): login, abrir cada aba, cadastrar funcionário, bater ponto no relógio, aprovar solicitação, nenhum erro no console, e capturas em largura de computador e de celular, nos temas claro e escuro. Roda no `deploy.sh` e no GitHub Actions.
 
+**Status: concluído em 25/10/2026.** `web/e2e/`: `rodar.sh` sobe a pilha descartável (Postgres, backend e nginx do código atual, rede própria, certificado temporário), e os testes rodam na imagem oficial do Playwright 1.47, então só precisam do Docker, igual no servidor e no GitHub Actions. `preparar.js` cria os dados pela API, inclusive as trocas de senha obrigatórias. São 10 testes, em computador e em celular: as 5 abas nos temas claro e escuro (sem erro de script, sem rolagem lateral, com captura de cada uma), cadastro de funcionário com jornada 44h, ausência no espelho, aprovação de solicitação do app, admin de consulta sem botões, aba Empresas do superadmin, batida no relógio pelo PIN, a janela de "Usar como relógio" e o erro de login. Qualquer erro de script na página reprova o teste. Roda no `deploy.sh` (que para se falhar; `PULAR_E2E=1` para emergência) e no workflow `paginas.yml`, que guarda as capturas como artefato. Os testes do backend estão em 119.
+
 ### 10. Administrador só de consulta (contabilidade)
 
 **Hoje.** Todo admin de uma empresa pode tudo: corrigir batidas, fechar o mês, criar admins, desligar relógios. Para dar acesso ao contador ou ao dono que só quer conferir, é preciso dar acesso total.
@@ -170,7 +172,7 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 - [x] 6. Aviso por e-mail quando o backup ou o sistema falha
 - [x] 7. Teste de restauração do backup
 - [x] 8. Limite de tamanho dos logs do Docker
-- [ ] 9. Teste das páginas no navegador, no deploy e no CI
+- [x] 9. Teste das páginas no navegador, no deploy e no CI
 - [x] 10. Administrador só de consulta (contabilidade)
 - [x] 11. Feriados que se repetem todo ano
 - [x] 12. Prorrogação do horário noturno

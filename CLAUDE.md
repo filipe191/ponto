@@ -16,7 +16,7 @@ Sistema de registro de ponto: relógio em tablet, painel de administração e ap
 
 ## Testes
 
-Comandos em `web/README.md` → Desenvolvimento. Os testes de integração (`tests/integration/`) precisam de um Postgres descartável, com `PGDATABASE` contendo `test` (eles apagam e recriam o banco); sem isso são pulados. Nunca aponte esses testes para o banco de produção.
+Comandos em `web/README.md` → Desenvolvimento. Os testes de integração (`tests/integration/`) precisam de um Postgres descartável, com `PGDATABASE` contendo `test` (eles apagam e recriam o banco); sem isso são pulados. Nunca aponte esses testes para o banco de produção. As páginas têm testes no navegador (`web/e2e/rodar.sh`, Playwright, pilha descartável); mudou uma tela, rode-os e olhe as capturas em `web/e2e/resultados/`.
 
 ## Depois de terminar qualquer atualização
 
