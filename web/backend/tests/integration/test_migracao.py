@@ -53,3 +53,10 @@ def test_auditoria_continua_so_aceitando_inclusoes(legacy):
 
     with SessionLocal() as db, pytest.raises(DBAPIError):
         db.execute(text("UPDATE audit_log SET company_id = 99"))
+
+
+def test_jornada_antiga_vira_minutos_por_dia(legacy):
+    # Ana tinha 8h de segunda a sexta (480, "12345"): a migração 0014 mantém o mesmo previsto
+    assert rows("SELECT kind, day_minutes, cycle_start FROM employee_schedules WHERE employee_id = 1") == [
+        ("semana", "480,480,480,480,480,0,0", None)
+    ]

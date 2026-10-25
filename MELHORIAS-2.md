@@ -8,7 +8,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 |---|------|-----------|---------|------|--------|
 | 1 | Ausências justificadas (atestado, férias, folga) | Alta | Grande | Backend + painel | Pendente |
 | 2 | Início do controle e saldo inicial do banco de horas | Alta | Pequeno | Backend + painel | ✅ Concluído |
-| 3 | Jornada diferente por dia da semana e escalas | Alta | Grande | Backend + painel | Pendente |
+| 3 | Jornada diferente por dia da semana e escalas | Alta | Grande | Backend + painel | ✅ Concluído |
 | 4 | Horas extras separadas em 50% e 100% | Alta | Médio | Backend + painel | Pendente |
 | 5 | Funcionário vê o resultado das solicitações no app | Média | Médio | Backend + app | Pendente |
 | 6 | Aviso por e-mail quando o backup ou o sistema falha | Média | Pequeno | Scripts + backend | Pendente |
@@ -55,6 +55,8 @@ Os itens 1 a 4 são os que mais mudam o espelho de uma empresa real: sem eles, a
 - Jornada com minutos **por dia da semana** (ex.: seg–sex 8h, sáb 4h), mantendo a vigência por data como hoje.
 - Escalas cíclicas: um padrão (ex.: 12h trabalhando, 36h de folga) e a data de início do ciclo; o sistema calcula quais dias são de trabalho.
 - O formulário de funcionário oferece os modelos mais comuns (5x2, 6x1, 12x36) e mostra a prévia das próximas duas semanas.
+
+**Status: concluído em 25/10/2026.** A jornada tem dois tipos: **dias da semana**, com as horas de cada dia (vazio = folga), e **escala**, com as horas de cada dia de um ciclo de 2 a 28 dias e o dia em que ele começa. Atalhos 5x2 (8h), 44h (sáb 4h), 6x1 (7h20), 12x36 e 24x48, prévia dos próximos 14 dias e total da semana. A descrição por extenso ("seg a sex 8h00 · sáb 4h00", "escala 12x36 (12h00, folga)") aparece na lista, no espelho e na auditoria. A migração 0014 converte cada jornada antiga em 7 valores, sem mudar nenhum previsto. A API continua aceitando o formato antigo (`daily_minutes` + `workdays`). Além do proposto, mudar a jornada passou a ser recusado num mês fechado, o que antes não era conferido. Testes em `tests/test_jornada.py`, na migração e na API.
 
 ### 4. Horas extras separadas em 50% e 100%
 
@@ -144,7 +146,7 @@ Os itens 1 a 4 são os que mais mudam o espelho de uma empresa real: sem eles, a
 
 - [ ] 1. Ausências justificadas (atestado, férias, folga)
 - [x] 2. Início do controle e saldo inicial do banco de horas
-- [ ] 3. Jornada diferente por dia da semana e escalas
+- [x] 3. Jornada diferente por dia da semana e escalas
 - [ ] 4. Horas extras separadas em 50% e 100%
 - [ ] 5. Funcionário vê o resultado das solicitações no app
 - [ ] 6. Aviso por e-mail quando o backup ou o sistema falha

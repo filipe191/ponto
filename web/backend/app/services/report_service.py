@@ -61,9 +61,7 @@ def expected_for(
     if not employee.employed_on(day) or day in holidays or (control_from and day < control_from):
         return ZERO
     schedule = employee.schedule_on(day)
-    if not schedule or str(day.isoweekday()) not in schedule.workdays:
-        return ZERO
-    return timedelta(minutes=schedule.daily_minutes)
+    return timedelta(minutes=schedule.minutes_on(day)) if schedule else ZERO
 
 
 def day_alerts(day_shifts: list[Shift], previous: Shift | None, counted: timedelta, expected: timedelta) -> list[str]:

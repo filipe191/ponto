@@ -22,5 +22,5 @@ def employee(
 ) -> Employee:
     emp = Employee(id=1, name="Ana", hired_on=hired_on, terminated_on=terminated_on, created_at=at("2026-01-01 00:00"))
     for valid_from, minutes, days in schedules or [(hired_on, daily_minutes, workdays)]:
-        emp.schedules.append(EmployeeSchedule(valid_from=valid_from, daily_minutes=minutes, workdays=days))
+        emp.schedules.append(EmployeeSchedule.weekly(valid_from, minutes, days))
     return emp

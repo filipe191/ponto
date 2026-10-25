@@ -66,3 +66,32 @@ def test_mes_fechado_trava_inicio_e_saldo(superadmin):
     assert response.status_code == 400 and "02/2026" in response.json()["error"]
     body = {"initial_balance_minutes": 60, "initial_balance_note": "acerto"}
     assert client.patch(f"/api/admin/employees/{emp}", json=body, headers=ORIGIN).status_code == 400
+
+
+def test_escala_12x36_pela_api(superadmin):
+    company, adm = new_company(superadmin, "Escala Api")
+    client = login(adm)
+    body = {"name": "Téo", "pin": "898989", "hired_on": "2026-03-01",
+            "schedule": {"kind": "ciclo", "minutes": [720, 0], "cycle_start": "2026-03-02"}}
+    response = client.post("/api/admin/employees", json=body, headers=ORIGIN)
+    assert response.status_code == 201, response.text
+    emp = response.json()["id"]
+    out = next(e for e in client.get("/api/admin/employees").json() if e["id"] == emp)
+    assert out["schedule_label"] == "escala 12x36 (12h00, folga)"
+    mar = report(client, emp, "2026-03")
+    assert [day(mar, f"2026-03-0{d}")["expectedMs"] // HOUR for d in (2, 3, 4)] == [12, 0, 12]
+
+    # Semana com sábado de meio período a partir de abril
+    week = {"kind": "semana", "minutes": [480, 480, 480, 480, 480, 240, 0]}
+    assert client.patch(f"/api/admin/employees/{emp}", json={"schedule": week, "schedule_from": "2026-04-01"}, headers=ORIGIN).status_code == 200
+    abr = report(client, emp, "2026-04")
+    assert day(abr, "2026-04-04")["expectedMs"] == 4 * HOUR  # sábado
+    assert report(client, emp, "2026-03")["expectedMs"] == mar["expectedMs"]  # março não muda
+
+    # Escala inválida e mudança em mês fechado são recusadas
+    bad = {"schedule": {"kind": "ciclo", "minutes": [0, 0], "cycle_start": "2026-05-01"}, "schedule_from": "2026-05-01"}
+    assert client.patch(f"/api/admin/employees/{emp}", json=bad, headers=ORIGIN).status_code == 400
+    assert client.post("/api/admin/closures", json={"month": "2026-04", "employee_id": emp}, headers=ORIGIN).status_code == 200
+    late = {"schedule": {"kind": "semana", "minutes": [360] * 5 + [0, 0]}, "schedule_from": "2026-04-15"}
+    response = client.patch(f"/api/admin/employees/{emp}", json=late, headers=ORIGIN)
+    assert response.status_code == 400 and "04/2026" in response.json()["error"]

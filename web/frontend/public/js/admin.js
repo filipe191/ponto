@@ -50,10 +50,6 @@ const localDate = (iso) => { const d = new Date(iso); return `${d.getFullYear()}
 // ISO → valor do <input type="datetime-local"> no horário local
 const toLocalInput = (iso) => { const d = new Date(iso); return `${localDate(iso)}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
-function workdaysLabel(w) {
-  const named = { '': 'sem dias de trabalho', 12345: 'seg a sex', 123456: 'seg a sáb', 1234567: 'todos os dias' };
-  return named[w] ?? [...w].map((d) => WEEK[d - 1]).join(', ');
-}
 
 // ---------- Janela de confirmação ----------
 
@@ -99,7 +95,84 @@ $('logout').addEventListener('click', async () => {
 
 // ---------- Funcionários ----------
 
-$('fDays').innerHTML = WEEK.map((d, i) => `<label><input type="checkbox" value="${i + 1}"><span>${d}</span></label>`).join('');
+// ---------- Jornada: horas de cada dia da semana ou de cada dia da escala ----------
+
+const SCHEDULE_PRESETS = {
+  '5x2': { kind: 'semana', minutes: [480, 480, 480, 480, 480, 0, 0] },
+  '44h': { kind: 'semana', minutes: [480, 480, 480, 480, 480, 240, 0] },
+  '6x1': { kind: 'semana', minutes: [440, 440, 440, 440, 440, 440, 0] },
+  '12x36': { kind: 'ciclo', minutes: [720, 0] },
+  '24x48': { kind: 'ciclo', minutes: [1440, 0, 0] },
+};
+// "08:00" ou "8" → minutos; vazio = folga; NaN se inválido
+const parseHM = (v) => {
+  const t = v.trim();
+  if (!t) return 0;
+  const m = t.match(/^(\d{1,2})(?::([0-5]\d))?$/);
+  const min = m ? Number(m[1]) * 60 + Number(m[2] || 0) : NaN;
+  return min <= 1440 ? min : NaN;
+};
+const toHM = (min) => (min ? `${pad(Math.floor(min / 60))}:${pad(min % 60)}` : '');
+const shortH = (min) => (min ? (min % 60 ? `${Math.floor(min / 60)}h${pad(min % 60)}` : `${min / 60}h`) : 'folga');
+
+function hmInputs(el, labels, minutes) {
+  el.innerHTML = labels.map((l, i) => `<label>${l}<input class="input" inputmode="numeric" placeholder="folga" value="${toHM(minutes[i] || 0)}" aria-label="${l}: horas de trabalho (vazio = folga)" autocomplete="off"></label>`).join('');
+}
+
+function setSchedule(spec) {
+  const cycle = spec.kind === 'ciclo';
+  document.querySelector(`[name="fKind"][value="${cycle ? 'ciclo' : 'semana'}"]`).checked = true;
+  $('fWeekWrap').hidden = cycle;
+  $('fCycleWrap').hidden = !cycle;
+  if (cycle) {
+    $('fCycleLen').value = spec.minutes.length;
+    hmInputs($('fCycle'), spec.minutes.map((_, i) => `${i + 1}º dia`), spec.minutes);
+    if (spec.cycle_start) $('fCycleStart').value = spec.cycle_start;
+  } else {
+    hmInputs($('fWeek'), WEEK, spec.minutes);
+  }
+  schedulePreview();
+}
+
+// Lê o formulário; lança Error com a mensagem para o usuário
+function readSchedule() {
+  const cycle = document.querySelector('[name="fKind"]:checked').value === 'ciclo';
+  const minutes = [...$(cycle ? 'fCycle' : 'fWeek').querySelectorAll('input')].map((i) => parseHM(i.value));
+  if (minutes.some(Number.isNaN)) throw new Error('Jornada: use horas:minutos em cada dia (ex.: 08:00), ou deixe vazio para folga.');
+  if (!cycle) return { kind: 'semana', minutes };
+  if (!$('fCycleStart').value) throw new Error('Informe o 1º dia da escala.');
+  return { kind: 'ciclo', minutes, cycle_start: $('fCycleStart').value };
+}
+
+function minutesOn(spec, day) {
+  if (spec.kind !== 'ciclo') return spec.minutes[(day.getDay() + 6) % 7];
+  const n = spec.minutes.length;
+  const diff = Math.round((day - new Date(spec.cycle_start + 'T12:00:00')) / 86400000);
+  return spec.minutes[((diff % n) + n) % n];
+}
+
+function schedulePreview() {
+  let spec;
+  try { spec = readSchedule(); } catch (err) { $('fPreview').textContent = err.message; return; }
+  const from = new Date((($('fFromWrap').hidden ? '' : $('fFrom').value) || todayISO()) + 'T12:00:00');
+  const days = Array.from({ length: 14 }, (_, i) => new Date(from.getTime() + i * 86400000));
+  const total = spec.kind === 'semana' ? ` Total: ${fmtH(spec.minutes.reduce((a, b) => a + b, 0) * 60000)} por semana.` : '';
+  $('fPreview').textContent = `Próximos 14 dias: ${days.map((d) => `${WEEK[(d.getDay() + 6) % 7]} ${d.getDate()}: ${shortH(minutesOn(spec, d))}`).join(' · ')}.${total}`;
+}
+
+document.querySelectorAll('[name="fKind"]').forEach((r) => r.addEventListener('change', () => {
+  if (r.value === 'ciclo') setSchedule({ ...SCHEDULE_PRESETS['12x36'], cycle_start: $('fCycleStart').value || todayISO() });
+  else setSchedule(SCHEDULE_PRESETS['5x2']);
+}));
+document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => {
+  setSchedule({ ...SCHEDULE_PRESETS[b.dataset.preset], cycle_start: $('fCycleStart').value || todayISO() });
+}));
+$('fCycleLen').addEventListener('change', () => {
+  const n = Math.min(28, Math.max(2, Number($('fCycleLen').value) || 2));
+  const current = [...$('fCycle').querySelectorAll('input')].map((i) => parseHM(i.value) || 0);
+  setSchedule({ kind: 'ciclo', minutes: Array.from({ length: n }, (_, i) => current[i] || 0), cycle_start: $('fCycleStart').value });
+});
+for (const id of ['fWeek', 'fCycle', 'fCycleStart', 'fFrom']) $(id).addEventListener('input', schedulePreview);
 
 // Busca sem diferenciar maiúsculas nem acentos ("joao" acha "João")
 const fold = (s) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -126,7 +199,7 @@ function renderEmployees() {
         <tr>
           <td class="who">${esc(e.name)}${e.active ? '' : '<span class="tag inativo">inativo</span>'}${e.pin_short && e.active ? '<span class="tag falta" title="PIN de 4 ou 5 dígitos: troque por um de 6">PIN curto</span>' : ''}
             <small class="contract">${e.terminated_on ? `desligado em ${fmtD(e.terminated_on)}` : `desde ${fmtD(e.hired_on)}`}</small></td>
-          <td>${fmtH(e.daily_minutes * 60000)} · ${workdaysLabel(e.workdays)}</td>
+          <td>${esc(e.schedule_label)}</td>
           <td class="actions">${e.anonymized_at ? `
             <span class="tag inativo" title="Dados pessoais apagados em ${fmtDT(e.anonymized_at)} (LGPD)">anonimizado</span>` : `
             <button class="btn btn-sm" data-act="edit" data-id="${e.id}">Editar</button>
@@ -168,17 +241,18 @@ function openEmpDialog(emp = null) {
     : emp.pin_short
       ? 'Novo PIN (obrigatório: o atual é curto)'
       : 'Novo PIN (deixe em branco para manter)';
-  const minutes = emp ? emp.daily_minutes : 480;
-  $('fHours').value = `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
-  const days = emp ? emp.workdays : '12345';
-  document.querySelectorAll('#fDays input').forEach((cb) => { cb.checked = days.includes(cb.value); });
+  // Jornada em vigor hoje (a última que já começou)
+  const today = todayISO();
+  const current = emp ? (emp.schedules.filter((s) => s.valid_from <= today).pop() || emp.schedules[0]) : null;
   // Jornada com vigência: a mudança vale a partir de uma data e não altera o passado
   $('fFromWrap').hidden = !emp;
   $('fFrom').value = todayISO();
   $('fSchedules').innerHTML = emp && emp.schedules.length > 1
-    ? emp.schedules.map((s) => `<li>desde ${fmtD(s.valid_from)}: ${fmtH(s.daily_minutes * 60000)} · ${workdaysLabel(s.workdays)}</li>`).join('')
+    ? emp.schedules.map((s) => `<li>desde ${fmtD(s.valid_from)}: ${esc(s.label)}</li>`).join('')
     : '';
   $('fHired').value = emp?.hired_on || todayISO();
+  $('fCycleStart').value = current?.cycle_start || todayISO();
+  setSchedule(current || SCHEDULE_PRESETS['5x2']);
   $('fTerminated').value = emp?.terminated_on || '';
   $('fControl').value = emp?.control_start || '';
   $('fInitial').value = emp?.initial_balance_minutes ? fmtSigned(emp.initial_balance_minutes * 60000).replace('h', ':') : '';
@@ -201,11 +275,11 @@ $('fCancel').addEventListener('click', () => $('empDialog').close());
 
 $('empForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const [h, m] = ($('fHours').value || '00:00').split(':').map(Number);
+  let schedule;
+  try { schedule = readSchedule(); } catch (err) { $('fError').textContent = err.message; return; }
   const body = {
     name: $('fName').value,
-    daily_minutes: h * 60 + m,
-    workdays: [...document.querySelectorAll('#fDays input:checked')].map((cb) => cb.value).join(''),
+    schedule,
     hired_on: $('fHired').value || null,
   };
   if (editingEmp) {
@@ -319,7 +393,7 @@ async function loadReport() {
 
   const showDeleted = $('showDeleted').checked;
   const e = employees.find((x) => String(x.id) === emp);
-  $('repSub').textContent = e ? `Jornada atual: ${fmtH(e.daily_minutes * 60000)} · ${workdaysLabel(e.workdays)}` : '';
+  $('repSub').textContent = e ? `Jornada atual: ${e.schedule_label}` : '';
   punches = {};
   const count = (s) => r.days.filter((d) => d.status === s).length;
   const alerts = r.days.reduce((n, d) => n + d.alerts.length, 0);

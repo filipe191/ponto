@@ -82,9 +82,29 @@ class Employee(Base):
         current = self.schedule_on(now_local().date())
         return current.workdays if current else ""
 
+    @property
+    def schedule_label(self) -> str:
+        current = self.schedule_on(now_local().date())
+        return current.label if current else "sem jornada"
+
+
+SCHEDULE_WEEK = "semana"  # minutos de cada dia da semana (seg … dom)
+SCHEDULE_CYCLE = "ciclo"  # escala que se repete a cada N dias (ex.: 12x36), a partir de `cycle_start`
+_WEEK = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+# Escalas conhecidas pelo nome (minutos de cada dia do ciclo)
+_NAMED_CYCLES = {(720, 0): "12x36", (1440, 0, 0): "24x48", (720, 720, 0, 0): "12x36 em dupla"}
+
+
+def hours_label(minutes: int) -> str:
+    return f"{minutes // 60}h{minutes % 60:02d}"
+
 
 class EmployeeSchedule(Base):
-    """Jornada prevista a partir de uma data. Mudar a jornada cria uma nova vigência e não altera o passado."""
+    """Jornada prevista a partir de uma data. Mudar a jornada cria uma nova vigência e não altera o passado.
+
+    Semanal: 7 valores (seg … dom), 0 = folga. Escala em ciclo: N valores que se repetem a partir de
+    `cycle_start` (o dia que corresponde ao primeiro valor), ex.: 12x36 = [720, 0].
+    """
 
     __tablename__ = "employee_schedules"
     __table_args__ = (UniqueConstraint("employee_id", "valid_from", name="employee_schedules_emp_from_key"),)
@@ -92,6 +112,62 @@ class EmployeeSchedule(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"))
     valid_from: Mapped[date] = mapped_column(Date)
-    # Minutos por dia nos dias de trabalho (dias da semana ISO, "1"=seg … "7"=dom)
-    daily_minutes: Mapped[int] = mapped_column(Integer)
-    workdays: Mapped[str] = mapped_column(String)
+    kind: Mapped[str] = mapped_column(String, default=SCHEDULE_WEEK, server_default=SCHEDULE_WEEK)
+    day_minutes: Mapped[str] = mapped_column(String)  # minutos separados por vírgula
+    cycle_start: Mapped[date | None] = mapped_column(Date)
+
+    @classmethod
+    def weekly(cls, valid_from: date, daily_minutes: int, workdays: str) -> "EmployeeSchedule":
+        """Jornada no formato antigo: os mesmos minutos em cada dia de trabalho ("1"=seg … "7"=dom)."""
+        minutes = [daily_minutes if str(d) in workdays else 0 for d in range(1, 8)]
+        return cls(valid_from=valid_from, kind=SCHEDULE_WEEK, day_minutes=",".join(map(str, minutes)))
+
+    @property
+    def minutes(self) -> list[int]:
+        return [int(m) for m in self.day_minutes.split(",")]
+
+    def minutes_on(self, day: date) -> int:
+        values = self.minutes
+        if self.kind == SCHEDULE_CYCLE:
+            return values[(day - (self.cycle_start or self.valid_from)).days % len(values)]
+        return values[day.weekday()]
+
+    # Formato antigo (listagem, app e relatórios que ainda o usam): o maior dia e os dias com jornada
+    @property
+    def daily_minutes(self) -> int:
+        return max(self.minutes, default=0)
+
+    @property
+    def workdays(self) -> str:
+        if self.kind == SCHEDULE_CYCLE:
+            return ""
+        return "".join(str(i + 1) for i, m in enumerate(self.minutes) if m)
+
+    @property
+    def label(self) -> str:
+        """Ex.: "8h00 · seg a sex", "seg a sex 8h00 · sáb 4h00", "12x36 (12h00 em dias alternados)"."""
+        values = self.minutes
+        if self.kind == SCHEDULE_CYCLE:
+            name = _NAMED_CYCLES.get(tuple(values))
+            days = ", ".join(hours_label(m) if m else "folga" for m in values)
+            return f"escala {name} ({days})" if name else f"escala de {len(values)} dias ({days})"
+        groups: list[tuple[int, int, int]] = []  # (primeiro dia, último dia, minutos)
+        for i, m in enumerate(values):
+            if m and groups and groups[-1][1] == i - 1 and groups[-1][2] == m:
+                groups[-1] = (groups[-1][0], i, m)
+            elif m:
+                groups.append((i, i, m))
+        if not groups:
+            return "sem dias de trabalho"
+
+        def span(a: int, b: int) -> str:
+            return _WEEK[a] if a == b else f"{_WEEK[a]} {'e' if b == a + 1 else 'a'} {_WEEK[b]}"
+
+        if len({m for _, _, m in groups}) == 1:
+            return f"{hours_label(groups[0][2])} · " + ", ".join(span(a, b) for a, b, _ in groups)
+        return " · ".join(f"{span(a, b)} {hours_label(m)}" for a, b, m in groups)
+
+    @property
+    def weekly_minutes(self) -> int | None:
+        """Total da semana (só na jornada semanal)."""
+        return sum(self.minutes) if self.kind == SCHEDULE_WEEK else None

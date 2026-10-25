@@ -110,7 +110,7 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
 - A batida feita na hora no app entra direto no ponto, marcada `cel` (em vermelho se o relógio do celular estiver adiantado em relação ao servidor). Batida lançada depois, correção e exclusão feitas no app viram **solicitações** que o admin aprova ou recusa na aba Início do painel (a aba mostra quantas estão pendentes). Com o SMTP configurado e um e-mail de avisos no cadastro da empresa, chega um e-mail quando há solicitação nova: só com a quantidade pendente (sem nomes nem horários) e no máximo um a cada 30 minutos por empresa.
 
 **Administração**
-- **Funcionários:** nome, PIN, jornada diária e dias de trabalho, admissão e desligamento. Mudar a jornada cria uma nova vigência a partir de uma data, sem alterar o passado. Só cadastros sem nenhum registro podem ser excluídos; os demais são desativados.
+- **Funcionários:** nome, PIN, jornada, admissão e desligamento. A jornada é por **dia da semana** (ex.: seg a sex 8h e sáb 4h; atalhos 5x2, 44h e 6x1) ou uma **escala** que se repete a cada N dias a partir de uma data (atalhos 12x36 e 24x48), com a prévia dos próximos 14 dias. Mudar a jornada cria uma nova vigência a partir de uma data, sem alterar o passado, e não pode começar num mês fechado. Só cadastros sem nenhum registro podem ser excluídos; os demais são desativados.
 - **Espelho mensal:** todos os dias com batidas, horas trabalhadas, horas noturnas, previsto e saldo; marca faltas, incompletos, feriados e dias fora do contrato. Resumo com saldo do mês e **banco de horas** acumulado.
 - **Início do controle e saldo inicial:** o dia em que a empresa começou a usar o sistema (Configurações → Ajustes da empresa; empresa nova: o dia do cadastro). Antes dele nenhum dia conta, nem como falta, então quem foi admitido antes não começa com o banco negativo. Cada funcionário pode ter um início próprio e um **saldo inicial** do banco trazido do controle anterior, com o motivo (Editar → "Antes do sistema"). Nenhum dos dois pode mudar um mês já fechado.
 - **Regras da CLT no cálculo:**
@@ -193,6 +193,6 @@ docker rm -f ponto-testes-db && docker network rm ponto-testes
 
 Os testes de integração **apagam e recriam o banco**: só rodam quando `PGDATABASE` contém "test"; sem isso, são pulados. O `scripts/deploy.sh` faz o mesmo com um Postgres descartável, e o GitHub Actions (`.github/workflows/backend.yml`) roda tudo, mais o `pip-audit`, a cada push.
 
-Nova mudança no banco: crie `app/db/migrations/versions/0014_<descricao>.py` com `revision = "0014"` e `down_revision = "0013"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
+Nova mudança no banco: crie `app/db/migrations/versions/0015_<descricao>.py` com `revision = "0015"` e `down_revision = "0014"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
 
 Páginas: o HTML fica em `frontend/public/*.html` e o script de cada uma em `frontend/public/js/`. A CSP só aceita scripts desses arquivos (`script-src 'self'`): não coloque `<script>` com código nem `onclick=` dentro do HTML.

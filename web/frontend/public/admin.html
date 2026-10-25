@@ -321,13 +321,33 @@
         </div>
         <small class="hint" id="fPinHint" hidden>Anote e entregue ao funcionário: o PIN não aparece de novo.</small>
       </div>
-      <label class="field">
-        <span>Jornada diária (horas:minutos)</span>
-        <input id="fHours" inputmode="numeric" pattern="([01]?\d|2[0-4]):[0-5]\d" placeholder="08:00" title="Horas e minutos, ex.: 08:00 ou 06:30" required autocomplete="off">
-      </label>
-      <fieldset class="field" style="border:0;padding:0;margin:0">
-        <legend style="padding:0;margin-bottom:6px;font-size:.9rem;font-weight:600;color:var(--muted)">Dias de trabalho</legend>
-        <div class="days" id="fDays"></div>
+      <fieldset class="field sched">
+        <legend>Jornada</legend>
+        <div class="sched-kind" role="radiogroup" aria-label="Tipo de jornada">
+          <label class="check"><input type="radio" name="fKind" value="semana" checked> Dias da semana</label>
+          <label class="check"><input type="radio" name="fKind" value="ciclo"> Escala (12x36 e outras)</label>
+        </div>
+        <div id="fWeekWrap">
+          <div class="hm-grid" id="fWeek"></div>
+          <div class="presets">
+            <button class="btn btn-sm" type="button" data-preset="5x2">5x2 · 8h</button>
+            <button class="btn btn-sm" type="button" data-preset="44h">44h · sáb 4h</button>
+            <button class="btn btn-sm" type="button" data-preset="6x1">6x1 · 7h20</button>
+          </div>
+        </div>
+        <div id="fCycleWrap" hidden>
+          <div class="presets">
+            <button class="btn btn-sm" type="button" data-preset="12x36">12x36</button>
+            <button class="btn btn-sm" type="button" data-preset="24x48">24x48</button>
+            <label class="field-inline">Dias da escala <input class="input input-num" type="number" id="fCycleLen" min="2" max="28"></label>
+          </div>
+          <div class="hm-grid" id="fCycle"></div>
+          <label class="field">
+            <span>1º dia da escala em</span>
+            <input id="fCycleStart" type="date">
+          </label>
+        </div>
+        <small class="hint" id="fPreview" aria-live="polite"></small>
       </fieldset>
       <label class="field" id="fFromWrap">
         <span>Mudança de jornada vale a partir de</span>

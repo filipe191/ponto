@@ -21,14 +21,14 @@ from app.models import (
 )
 from app.repositories.employee_repository import EmployeeRepository
 from app.repositories.punch_repository import PunchRepository
-from app.schemas.employee import EmployeeCreate, EmployeeUpdate
+from app.models.employee import SCHEDULE_CYCLE
+from app.schemas.employee import EmployeeCreate, EmployeeUpdate, ScheduleIn
 from app.services.audit import AuditLog
 from app.services.rules import ensure_months_open, load_rules
 from app.utils.dates import now_local
 
 PIN_IN_USE = "Este PIN já está em uso"
 
-_WEEK = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
 _FIELDS = {
     "name": "nome",
     "hired_on": "admissão",
@@ -53,10 +53,17 @@ def _check_initial(minutes: int, note: str) -> str:
     return note
 
 
-def schedule_label(minutes: int, workdays: str) -> str:
-    """Ex.: "8h00 · seg, ter, qua, qui, sex"."""
-    days = ", ".join(_WEEK[int(d) - 1] for d in workdays) or "sem dias de trabalho"
-    return f"{minutes // 60}h{minutes % 60:02d} · {days}"
+def _new_schedule(valid_from, spec: ScheduleIn) -> EmployeeSchedule:
+    return EmployeeSchedule(
+        valid_from=valid_from,
+        kind=spec.kind,
+        day_minutes=",".join(map(str, spec.minutes)),
+        cycle_start=spec.cycle_start if spec.kind == SCHEDULE_CYCLE else None,
+    )
+
+
+def _schedule_details(s: EmployeeSchedule) -> dict:
+    return {"kind": s.kind, "minutes": s.minutes, "cycle_start": s.cycle_start}
 
 
 class EmployeeService:
@@ -81,9 +88,8 @@ class EmployeeService:
             initial_balance_minutes=data.initial_balance_minutes,
             initial_balance_note=note,
         )
-        employee.schedules.append(
-            EmployeeSchedule(valid_from=hired_on, daily_minutes=data.daily_minutes, workdays=data.workdays)
-        )
+        schedule = _new_schedule(hired_on, data.schedule_spec)
+        employee.schedules.append(schedule)
 
         def add():
             self.repo.add(employee)
@@ -92,9 +98,9 @@ class EmployeeService:
                 user,
                 "funcionario.criado",
                 f"Cadastrou {employee.name} (admissão {hired_on:%d/%m/%Y}, "
-                f"jornada {schedule_label(data.daily_minutes, data.workdays)})",
+                f"jornada {schedule.label})",
                 employee_id=employee.id,
-                details={"hired_on": hired_on, "daily_minutes": data.daily_minutes, "workdays": data.workdays},
+                details={"hired_on": hired_on, "schedule": _schedule_details(schedule)},
             )
             if data.initial_balance_minutes:
                 self._log_initial(employee, 0, user)
@@ -163,7 +169,7 @@ class EmployeeService:
             employee.pin_short = False
             # O PIN em si nunca vai para a auditoria
             self.audit.record(user, "funcionario.pin_trocado", f"Trocou o PIN de {employee.name}", employee_id=employee.id)
-        if data.daily_minutes is not None or data.workdays is not None:
+        if data.schedule is not None or data.daily_minutes is not None or data.workdays is not None:
             self._set_schedule(employee, data, user)
         self._commit()
 
@@ -171,27 +177,33 @@ class EmployeeService:
         """Nova jornada a partir de `schedule_from`; a anterior continua valendo antes dessa data."""
         start = data.schedule_from or self._today()
         current = employee.schedule_on(start)
-        minutes = data.daily_minutes if data.daily_minutes is not None else (current.daily_minutes if current else 480)
-        workdays = data.workdays if data.workdays is not None else (current.workdays if current else "12345")
-        if current and current.daily_minutes == minutes and current.workdays == workdays:
+        if data.schedule is not None:
+            spec = data.schedule
+        else:  # formato antigo: o que não veio continua como está
+            minutes = data.daily_minutes if data.daily_minutes is not None else (current.daily_minutes if current else 480)
+            workdays = data.workdays if data.workdays is not None else (current.workdays if current else "12345")
+            spec = ScheduleIn.legacy(minutes, workdays)
+        new = _new_schedule(start, spec)
+        if current and _schedule_details(current) == _schedule_details(new):
             return
+        # A jornada muda o previsto dos dias a partir de `start`: nenhum mês dele pode estar fechado
+        ensure_months_open(self.db, self.company_id, start, "a nova jornada", employee.id)
         same_day = next((s for s in employee.schedules if s.valid_from == start), None)
         if same_day:
-            same_day.daily_minutes, same_day.workdays = minutes, workdays
+            same_day.kind, same_day.day_minutes, same_day.cycle_start = new.kind, new.day_minutes, new.cycle_start
         else:
-            employee.schedules.append(EmployeeSchedule(valid_from=start, daily_minutes=minutes, workdays=workdays))
+            employee.schedules.append(new)
             employee.schedules.sort(key=lambda s: s.valid_from)
-        old = schedule_label(current.daily_minutes, current.workdays) if current else "—"
         self.audit.record(
             user,
             "jornada.alterada",
             f"Mudou a jornada de {employee.name} a partir de {start:%d/%m/%Y}: "
-            f"{old} → {schedule_label(minutes, workdays)}",
+            f"{current.label if current else '—'} → {new.label}",
             employee_id=employee.id,
             details={
                 "valid_from": start,
-                "old": {"daily_minutes": current.daily_minutes, "workdays": current.workdays} if current else None,
-                "new": {"daily_minutes": minutes, "workdays": workdays},
+                "old": _schedule_details(current) if current else None,
+                "new": _schedule_details(new),
             },
         )
 
@@ -231,7 +243,13 @@ class EmployeeService:
                 "observacao_pin": "O PIN não é guardado, só um código derivado dele (hash), que não permite descobri-lo.",
             },
             "jornadas": [
-                {"desde": s.valid_from, "minutos_por_dia": s.daily_minutes, "dias_da_semana": s.workdays}
+                {
+                    "desde": s.valid_from,
+                    "tipo": s.kind,
+                    "minutos": s.minutes,
+                    "inicio_da_escala": s.cycle_start,
+                    "descricao": s.label,
+                }
                 for s in employee.schedules
             ],
             "batidas": [
