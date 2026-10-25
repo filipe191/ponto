@@ -28,6 +28,10 @@ class Company(Base):
     # Link do aviso de privacidade para os funcionários (/privacidade?e=<código>). Aleatório, para o
     # link não permitir descobrir as outras empresas atendidas.
     public_code: Mapped[str] = mapped_column(String, unique=True, default=lambda: secrets.token_urlsafe(9))
+    # Quem recebe o e-mail de aviso das solicitações do app (vários separados por vírgula; vazio = sem aviso)
+    notify_email: Mapped[str] = mapped_column(String, default="", server_default="")
+    # Último aviso enviado, para várias solicitações seguidas não virarem vários e-mails
+    requests_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class CompanyRule(Base):

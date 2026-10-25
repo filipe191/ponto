@@ -20,6 +20,7 @@ from app.core.security import (
 from app.models import AdminAccount, AdminSession, Company
 from app.repositories.admin_repository import AdminRepository
 from app.services.audit import AuditLog
+from app.services.notify import recipients
 from app.services.rules import default_rule
 
 KIOSK_SUBJECT = "relogio"  # sujeito do token do relógio: "relogio:<empresa>"
@@ -37,6 +38,16 @@ PENDING_2FA = "2fa"  # precisa ativar a verificação em duas etapas
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _notify_email(value: str) -> str:
+    """E-mails de aviso da empresa, separados por vírgula (vazio = sem aviso)."""
+    addresses = recipients(value)
+    for address in addresses:
+        local, at, domain = address.partition("@")
+        if not local or not at or "." not in domain or " " in address:
+            raise BadRequest(f"E-mail inválido: {address}")
+    return ", ".join(addresses)
 
 
 class AuthService:
@@ -373,7 +384,9 @@ class AuthService:
     def list_companies(self) -> list[Company]:
         return self.repo.companies()
 
-    def create_company(self, name: str, contact: str, admin_username: str, admin_password: str, user: str) -> Company:
+    def create_company(
+        self, name: str, contact: str, admin_username: str, admin_password: str, user: str, notify_email: str = ""
+    ) -> Company:
         """Cadastra a empresa já com o primeiro admin dela (senha provisória, como os demais)."""
         name = name.strip()
         if not name:
@@ -382,6 +395,7 @@ class AuthService:
             Company(
                 name=name,
                 privacy_contact=contact.strip(),
+                notify_email=_notify_email(notify_email),
                 kiosk_secret=secrets.token_hex(32),
                 timezone=settings.tz,
                 offline_max_hours=settings.offline_max_hours,
@@ -396,7 +410,13 @@ class AuthService:
         return company
 
     def update_company(
-        self, company_id: int, user: str, name: str | None, contact: str | None, active: bool | None
+        self,
+        company_id: int,
+        user: str,
+        name: str | None,
+        contact: str | None,
+        active: bool | None,
+        notify_email: str | None = None,
     ) -> Company:
         company = self._company(company_id)
         changes = []
@@ -406,6 +426,9 @@ class AuthService:
         if contact is not None and contact.strip() != company.privacy_contact:
             changes.append("contato de privacidade alterado")
             company.privacy_contact = contact.strip()
+        if notify_email is not None and _notify_email(notify_email) != company.notify_email:
+            company.notify_email = _notify_email(notify_email)
+            changes.append("e-mail de aviso " + ("alterado" if company.notify_email else "removido"))
         events = []
         if changes:
             events.append(("empresa.alterada", "Alterou a empresa: " + "; ".join(changes)))

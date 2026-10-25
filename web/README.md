@@ -91,6 +91,8 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
 | `API_DOCS`       | `true` liga a documentação da API em `/api/docs` (desligada por padrão) |
 | `EMPRESA_NOME`   | Só para instalações anteriores às várias empresas: nome da empresa nº 1 na migração. Depois, o nome fica no cadastro da empresa |
 | `PRIVACIDADE_CONTATO` | Idem: contato de privacidade da empresa nº 1 na migração |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Servidor de e-mail do aviso de solicitações do app. Sem `SMTP_HOST`, nenhum e-mail é enviado. Porta `465` usa SSL; as outras, STARTTLS (padrão `587`) |
+| `PAINEL_URL`     | Endereço do painel no e-mail de aviso (ex.: `https://192.168.0.34:9443/admin`); vazio, o e-mail vai sem link |
 
 ## Funcionalidades
 
@@ -104,7 +106,7 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
 **App de celular** (pasta `app/` na raiz do repositório)
 - Este backend atende também o app de iPhone, no contrato `/api/pontos/...` (autenticação pelo cabeçalho `X-API-Key`).
 - O admin gera uma **chave de celular** por funcionário (Funcionários → Celular). A chave aparece uma única vez, só o hash fica no banco, e pode ser revogada. Ela vale 1 ano (o painel avisa 30 dias antes) e é revogada sozinha depois de 90 dias sem uso.
-- A batida feita na hora no app entra direto no ponto, marcada `cel` (em vermelho se o relógio do celular estiver adiantado em relação ao servidor). Batida lançada depois, correção e exclusão feitas no app viram **solicitações** que o admin aprova ou recusa na aba Início do painel (a aba mostra quantas estão pendentes).
+- A batida feita na hora no app entra direto no ponto, marcada `cel` (em vermelho se o relógio do celular estiver adiantado em relação ao servidor). Batida lançada depois, correção e exclusão feitas no app viram **solicitações** que o admin aprova ou recusa na aba Início do painel (a aba mostra quantas estão pendentes). Com o SMTP configurado e um e-mail de avisos no cadastro da empresa, chega um e-mail quando há solicitação nova: só com a quantidade pendente (sem nomes nem horários) e no máximo um a cada 30 minutos por empresa.
 
 **Administração**
 - **Funcionários:** nome, PIN, jornada diária e dias de trabalho, admissão e desligamento. Mudar a jornada cria uma nova vigência a partir de uma data, sem alterar o passado. Só cadastros sem nenhum registro podem ser excluídos; os demais são desativados.
@@ -189,6 +191,6 @@ docker rm -f ponto-testes-db && docker network rm ponto-testes
 
 Os testes de integração **apagam e recriam o banco**: só rodam quando `PGDATABASE` contém "test"; sem isso, são pulados. O `scripts/deploy.sh` faz o mesmo com um Postgres descartável, e o GitHub Actions (`.github/workflows/backend.yml`) roda tudo, mais o `pip-audit`, a cada push.
 
-Nova mudança no banco: crie `app/db/migrations/versions/0012_<descricao>.py` com `revision = "0012"` e `down_revision = "0011"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
+Nova mudança no banco: crie `app/db/migrations/versions/0013_<descricao>.py` com `revision = "0013"` e `down_revision = "0012"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
 
 Páginas: o HTML fica em `frontend/public/*.html` e o script de cada uma em `frontend/public/js/`. A CSP só aceita scripts desses arquivos (`script-src 'self'`): não coloque `<script>` com código nem `onclick=` dentro do HTML.

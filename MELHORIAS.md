@@ -14,7 +14,7 @@ Levantamento feito em 24/10/2026, depois da mudança para várias empresas no me
 | 6 | Tabelas que viram cartões no celular | Alta | Pequeno | Frontend | ✅ Concluído |
 | 7 | Link do aviso de privacidade por empresa | Média | Pequeno | Backend + frontend | ✅ Concluído |
 | 8 | Bloqueios de tentativas guardados no banco | Média | Pequeno | Backend | ✅ Concluído |
-| 9 | Aviso de solicitações pendentes | Média | Médio | Backend | Pendente |
+| 9 | Aviso de solicitações pendentes | Média | Médio | Backend | ✅ Concluído |
 | 10 | Confirmações do relógio com o visual do sistema | Média | Pequeno | Relógio | ✅ Concluído |
 | 11 | Confirmação visual depois de salvar | Baixa | Pequeno | Painel | Pendente |
 | 12 | Busca de funcionários | Baixa | Pequeno | Painel | Pendente |
@@ -118,6 +118,8 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 
 **Proposta.** Um e-mail por empresa (endereço no cadastro) quando chega uma solicitação, ou um resumo diário. Exige configurar um servidor de e-mail (SMTP) no `.env`.
 
+**Status: concluído em 25/10/2026.** No cadastro da empresa (Empresas, só o superadmin) há um **e-mail de avisos** (vários separados por vírgula; migração 0012). Quando o app cria uma solicitação (batida esquecida, correção ou exclusão), esse endereço recebe um e-mail com a quantidade pendente e o link do painel (`PAINEL_URL`). Para não lotar a caixa, vai no máximo um aviso por empresa a cada 30 minutos. O e-mail não traz nomes nem horários: os dados dos funcionários ficam só no painel. O envio é em segundo plano, então um servidor de e-mail fora do ar só gera um aviso no log. Sem `SMTP_HOST` no `.env`, nada é enviado. **Para ligar:** preencher `SMTP_*` e `PAINEL_URL` no `.env` e o e-mail de cada empresa no cadastro.
+
 ### 10. Confirmações do relógio com o visual do sistema
 
 **Hoje.** A tela do relógio (`js/index.js`) usa `confirm()` e `alert()` do navegador para ligar e desligar o modo relógio. Elas destoam do resto e ficam ruins no tablet.
@@ -172,7 +174,7 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - [x] 6. Tabelas que viram cartões no celular
 - [x] 7. Link do aviso de privacidade por empresa
 - [x] 8. Bloqueios de tentativas guardados no banco
-- [ ] 9. Aviso de solicitações pendentes
+- [x] 9. Aviso de solicitações pendentes
 - [x] 10. Confirmações do relógio com o visual do sistema
 - [ ] 11. Confirmação visual depois de salvar
 - [ ] 12. Busca de funcionários

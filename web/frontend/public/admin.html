@@ -37,10 +37,11 @@
       <header class="card-head">
         <h2 class="card-title" id="coTitle">Empresas</h2>
       </header>
-      <p class="hint" id="coHint">Cada empresa tem os próprios funcionários, feriados, administradores, relógios e auditoria; uma não enxerga os dados da outra. Para trabalhar numa empresa, abra-a no seletor ao lado de “Ponto”. O contato aparece no aviso de privacidade que os funcionários da empresa leem.</p>
+      <p class="hint" id="coHint">Cada empresa tem os próprios funcionários, feriados, administradores, relógios e auditoria; uma não enxerga os dados da outra. Para trabalhar numa empresa, abra-a no seletor ao lado de “Ponto”. O contato aparece no aviso de privacidade que os funcionários da empresa leem. O e-mail de avisos (vários separados por vírgula) recebe uma mensagem quando chega uma solicitação do app, só com a quantidade pendente; precisa do servidor de e-mail (SMTP) configurado no <code>.env</code>.</p>
       <form class="toolbar" id="coForm">
         <input class="input grow" type="text" id="coName" placeholder="Nome da empresa" required autocomplete="off" aria-label="Nome da empresa">
         <input class="input grow" type="text" id="coContact" placeholder="Contato para privacidade (e-mail ou telefone do RH)" autocomplete="off" aria-label="Contato para privacidade">
+        <input class="input grow" type="text" id="coEmail" placeholder="E-mail para avisos de solicitações (opcional)" autocomplete="off" aria-label="E-mail para avisos das solicitações do app">
         <input class="input" type="text" id="coAdmUser" placeholder="Usuário do 1º admin" required autocomplete="off" aria-label="Usuário do primeiro administrador">
         <input class="input" type="password" id="coAdmPass" placeholder="Senha inicial (mín. 12)" required minlength="12" autocomplete="new-password" aria-label="Senha inicial do primeiro administrador">
         <button class="btn btn-primary" type="submit" id="coSubmit">Cadastrar empresa</button>

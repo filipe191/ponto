@@ -749,7 +749,7 @@ async function loadCompanies(openId) {
     ? companies.map((c) => `
         <tr>
           <td class="who">${esc(c.name)}${c.active ? '' : '<span class="tag inativo">desativada</span>'}${c.id === openId ? ' <span class="muted">(aberta)</span>' : ''}</td>
-          <td>${c.privacy_contact ? esc(c.privacy_contact) : '<span class="muted">—</span>'}</td>
+          <td>${c.privacy_contact ? esc(c.privacy_contact) : '<span class="muted">—</span>'}${c.notify_email ? `<small class="contract">avisos: ${esc(c.notify_email)}</small>` : ''}</td>
           <td class="actions">
             ${c.id === openId ? '' : `<button class="btn btn-sm" data-co="open" data-id="${c.id}">Abrir</button>`}
             <button class="btn btn-sm" data-co="edit" data-id="${c.id}">Editar</button>
@@ -775,6 +775,7 @@ function companyForm(company = null) {
   editingCompany = company;
   $('coName').value = company?.name || '';
   $('coContact').value = company?.privacy_contact || '';
+  $('coEmail').value = company?.notify_email || '';
   // O primeiro admin só é pedido no cadastro; depois, os admins são criados no painel da empresa
   for (const id of ['coAdmUser', 'coAdmPass']) {
     $(id).hidden = !!company;
@@ -792,7 +793,7 @@ $('coCancel').addEventListener('click', () => companyForm());
 $('coForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('coError').textContent = '';
-  const body = { name: $('coName').value, privacy_contact: $('coContact').value };
+  const body = { name: $('coName').value, privacy_contact: $('coContact').value, notify_email: $('coEmail').value };
   try {
     if (editingCompany) {
       await request(`/api/companies/${editingCompany.id}`, { method: 'PATCH', body: JSON.stringify(body) });

@@ -49,6 +49,7 @@ from app.schemas.mobile import (
 from app.schemas.punch import ManualPunchCreate, PunchUpdate
 from app.schemas.report import DayStatus
 from app.services.audit import AuditLog
+from app.services.notify import RequestNotifier
 from app.services.punch_service import MIN_PUNCH_INTERVAL, PunchService
 from app.services.report_service import ReportService, check_month
 from app.services.rules import load_rules
@@ -209,6 +210,7 @@ class MobileService:
     def sync(self, raw: list[dict]) -> LoteResponse:
         """Recebe as batidas pendentes do celular. Reenviar o mesmo lote não duplica nada."""
         result = LoteResponse()
+        self._new_request = False
         for item in raw:
             item_id = str(item.get("id", "")) if isinstance(item, dict) else ""
             try:
@@ -225,6 +227,8 @@ class MobileService:
                 continue
             (result.aceitas if status == "aceita" else result.duplicadas).append(batida.id)
         self.db.commit()
+        if self._new_request:
+            RequestNotifier(self.db).new_request(self.employee.company_id)
         return result
 
     def _receive(self, b: BatidaRequest) -> str:
@@ -246,6 +250,7 @@ class MobileService:
                     note=b.observacao or "Batida esquecida, lançada no app",
                 )
             )
+            self._new_request = True
             return "aceita"
 
         if self.closures.get(self.employee.id, month_of(to_local(ts, self.tz).date())):
@@ -345,6 +350,7 @@ class MobileService:
         request.note = note or REQUEST_NOTE
         request.requested_at = datetime.now(timezone.utc)
         self.db.commit()
+        RequestNotifier(self.db).new_request(self.employee.company_id)
 
     def _punch(self, public_id: str) -> Punch:
         punch = punch_by_public_id(self.db, self.employee.id, public_id)

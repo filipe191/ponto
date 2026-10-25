@@ -120,11 +120,13 @@ class CompanyOut(BaseModel):
     active: bool
     created_at: datetime
     public_code: str  # link do aviso de privacidade: /privacidade?e=<código>
+    notify_email: str  # quem recebe o aviso das solicitações do app
 
 
 class CompanyCreate(BaseModel):
     name: str = ""
     privacy_contact: str = ""
+    notify_email: str = ""
     # Primeiro administrador da empresa (senha provisória: troca no primeiro acesso)
     admin_username: str = ""
     admin_password: str = ""
@@ -133,6 +135,7 @@ class CompanyCreate(BaseModel):
 class CompanyUpdate(BaseModel):
     name: str | None = None
     privacy_contact: str | None = None
+    notify_email: str | None = None
     active: bool | None = None
 
 

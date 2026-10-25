@@ -19,13 +19,15 @@ def list_companies(db: DbSession):
 @router.post("", response_model=CompanyOut, status_code=201)
 def create_company(body: CompanyCreate, db: DbSession, user: SuperAdmin):
     return AuthService(db).create_company(
-        body.name, body.privacy_contact, body.admin_username, body.admin_password, user
+        body.name, body.privacy_contact, body.admin_username, body.admin_password, user, body.notify_email
     )
 
 
 @router.patch("/{company_id}", response_model=CompanyOut)
 def update_company(company_id: int, body: CompanyUpdate, db: DbSession, user: SuperAdmin):
-    return AuthService(db).update_company(company_id, user, body.name, body.privacy_contact, body.active)
+    return AuthService(db).update_company(
+        company_id, user, body.name, body.privacy_contact, body.active, body.notify_email
+    )
 
 
 # ---------- Superadministradores ----------

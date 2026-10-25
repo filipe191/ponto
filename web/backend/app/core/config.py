@@ -73,6 +73,18 @@ class Settings(BaseSettings):
     empresa_nome: str = ""
     privacidade_contato: str = ""
 
+    # E-mail de aviso das solicitações do app (endereço no cadastro de cada empresa). Sem SMTP_HOST,
+    # nenhum e-mail é enviado. Porta 465 usa SSL direto; as outras, STARTTLS.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    # Endereço do painel no e-mail (ex.: https://192.168.0.34:9443/admin); vazio, o e-mail vai sem link
+    painel_url: str = ""
+    # Um aviso por empresa a cada X minutos, no máximo: várias solicitações seguidas viram um e-mail só
+    aviso_intervalo_minutos: int = 30
+
     # Documentação interativa em /api/docs (deixe desligada em produção)
     api_docs: bool = False
 
