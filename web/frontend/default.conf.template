@@ -72,6 +72,19 @@ server {
     location = /js/privacidade.js {
         try_files $uri =404;
     }
+    # Instalação do relógio como app: o navegador busca o manifest e os ícones sem o cookie de login
+    location = /manifest.webmanifest {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "public, max-age=3600";
+        default_type application/manifest+json;
+        types { }
+        try_files $uri =404;
+    }
+    location /icons/ {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "public, max-age=86400";
+        try_files $uri =404;
+    }
     location /fonts/ {
         include /etc/nginx/snippets/security-headers.conf;
         add_header Cache-Control "public, max-age=31536000, immutable";

@@ -72,7 +72,8 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
   1. No aparelho, entre como administrador (o superadmin escolhe antes a empresa no painel).
   2. Na tela do relógio, toque em **Usar como relógio**. O aparelho passa a só bater ponto, e só para os funcionários da empresa (vale 1 ano). O nome da empresa aparece no topo, e o admin é desconectado do aparelho.
   3. Para administrar a partir dele, toque em **Administração** e entre: nesse aparelho o login do admin dura 30 minutos. Use **Sair** ao terminar.
-  4. Perdeu um tablet? Administração → **Desligar todos os relógios** e ative de novo os que continuam em uso. Isso desliga só os relógios da empresa aberta.
+  4. Para abrir como um app, em tela cheia e sem a barra de endereço: no Chrome do tablet, menu → **Instalar app** (ou **Adicionar à tela inicial**; no iPad, Compartilhar → **Adicionar à Tela de Início**). O ícone é o mesmo do app de celular. O aparelho precisa confiar no certificado do ponto (CA instalada, ver HTTPS), senão o navegador não oferece a instalação.
+  5. Perdeu um tablet? Administração → **Desligar todos os relógios** e ative de novo os que continuam em uso. Isso desliga só os relógios da empresa aberta.
 - **PIN:** de 6 a 8 dígitos (botão **Gerar PIN** no cadastro). PINs antigos de 4 ou 5 dígitos ainda valem, mas aparecem como "PIN curto" no painel para serem trocados.
 - Dez PINs errados em 5 minutos pausam o relógio por 5 minutos; cada nova rodada de erros dobra a pausa (até 24 h). Os bloqueios ficam no banco e continuam valendo depois de reiniciar o backend. Cada bloqueio aparece em **Avisos de segurança**, na aba Início do painel.
 

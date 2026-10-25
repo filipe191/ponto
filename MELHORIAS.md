@@ -19,9 +19,9 @@ Levantamento feito em 24/10/2026, depois da mudança para várias empresas no me
 | 11 | Confirmação visual depois de salvar | Baixa | Pequeno | Painel | ✅ Concluído |
 | 12 | Busca de funcionários | Baixa | Pequeno | Painel | ✅ Concluído |
 | 13 | Tema escuro no painel | Baixa | Pequeno | Frontend | ✅ Concluído |
-| 14 | Relógio instalável no tablet | Baixa | Pequeno | Relógio | Pendente |
+| 14 | Relógio instalável no tablet | Baixa | Pequeno | Relógio | ✅ Concluído |
 
-Para começar, a melhor relação entre esforço e resultado está nos itens 1, 2, 4, 5 e 6.
+Todos os 14 itens foram concluídos entre 24 e 25/10/2026.
 
 ---
 
@@ -162,6 +162,8 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 
 **Proposta.** Um `manifest` com ícone e `display: standalone`, para o tablet instalar o relógio como um app e abrir em tela cheia. As batidas sem conexão já ficam guardadas no aparelho, então não é preciso um service worker para isso.
 
+**Status: concluído em 25/10/2026.** `manifest.webmanifest` com o ícone do app de celular (192, 512 e 180 px para o iPad), abrindo em tela cheia (`display_override: fullscreen`, com `standalone` de reserva) e cor da barra igual à do sistema, claro e escuro. O relógio e a tela de login apontam para ele. O nginx entrega o manifest e os ícones sem login, porque o navegador os busca sem o cookie; a tela do relógio continua exigindo login. Conferido no Chromium: o manifest é lido sem erros e a página não tem nenhum impedimento de instalação. Passo a passo no `web/README.md` (Aparelho do relógio). No tablet, a instalação só aparece se o aparelho confiar no certificado do ponto. Sem service worker, como previsto.
+
 ---
 
 ## Já registrados em outros documentos
@@ -185,4 +187,4 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - [x] 11. Confirmação visual depois de salvar
 - [x] 12. Busca de funcionários
 - [x] 13. Tema escuro no painel
-- [ ] 14. Relógio instalável no tablet
+- [x] 14. Relógio instalável no tablet
