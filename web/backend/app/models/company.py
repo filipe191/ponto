@@ -1,3 +1,4 @@
+import secrets
 from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, func, text
@@ -24,6 +25,9 @@ class Company(Base):
     timezone: Mapped[str] = mapped_column(String)
     # Batidas guardadas no relógio sem conexão são aceitas até X horas depois
     offline_max_hours: Mapped[int] = mapped_column(Integer)
+    # Link do aviso de privacidade para os funcionários (/privacidade?e=<código>). Aleatório, para o
+    # link não permitir descobrir as outras empresas atendidas.
+    public_code: Mapped[str] = mapped_column(String, unique=True, default=lambda: secrets.token_urlsafe(9))
 
 
 class CompanyRule(Base):

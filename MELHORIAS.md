@@ -12,7 +12,7 @@ Levantamento feito em 24/10/2026, depois da mudança para várias empresas no me
 | 4 | Testes de ponta a ponta e CI | Alta | Médio | `web/backend/tests/` + GitHub Actions | ✅ Concluído |
 | 5 | Painel em abas | Alta | Médio | Frontend | ✅ Concluído |
 | 6 | Tabelas que viram cartões no celular | Alta | Pequeno | Frontend | ✅ Concluído |
-| 7 | Link do aviso de privacidade por empresa | Média | Pequeno | Backend + frontend | Pendente |
+| 7 | Link do aviso de privacidade por empresa | Média | Pequeno | Backend + frontend | ✅ Concluído |
 | 8 | Bloqueios de tentativas guardados no banco | Média | Pequeno | Backend | Pendente |
 | 9 | Aviso de solicitações pendentes | Média | Médio | Backend | Pendente |
 | 10 | Confirmações do relógio com o visual do sistema | Média | Pequeno | Relógio | Pendente |
@@ -102,6 +102,8 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 
 **Proposta.** Um código público e aleatório por empresa (ex.: `/privacidade?e=k3f9x2`), mostrado no painel para o admin repassar aos funcionários. O código é aleatório para não permitir listar as empresas atendidas.
 
+**Status: concluído em 25/10/2026.** Cada empresa tem um código aleatório (migração 0010, gerado também para as empresas existentes). O link aparece em Configurações → Administradores e relógios → **Aviso de privacidade**, com botão para copiar, e o superadmin também recebe o código na lista de empresas. O código só é entregue a admins: o relógio não o recebe. Código errado ou empresa desativada mostram o texto genérico. Testes de integração em `tests/integration/test_privacidade.py`.
+
 ### 8. Bloqueios de tentativas guardados no banco
 
 **Hoje.** Os limites de PIN errado no relógio, de senha errada no login e de chave errada no app ficam na memória do backend (`core/ratelimit.py`). Reiniciar o backend zera os bloqueios em andamento, inclusive o bloqueio crescente de até 24 h do relógio.
@@ -164,7 +166,7 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - [x] 4. Testes de ponta a ponta no repositório e CI
 - [x] 5. Painel em abas
 - [x] 6. Tabelas que viram cartões no celular
-- [ ] 7. Link do aviso de privacidade por empresa
+- [x] 7. Link do aviso de privacidade por empresa
 - [ ] 8. Bloqueios de tentativas guardados no banco
 - [ ] 9. Aviso de solicitações pendentes
 - [ ] 10. Confirmações do relógio com o visual do sistema

@@ -185,6 +185,11 @@ class AuthService:
     def company(self, company_id: int | None) -> Company | None:
         return self.repo.company(company_id)
 
+    def company_by_code(self, code: str) -> Company | None:
+        """Empresa do link público do aviso de privacidade (só as ativas)."""
+        company = self.repo.company_by_code(code) if code else None
+        return company if company and company.active else None
+
     def end_session(self, token: str | None) -> None:
         session = self.repo.session_by_hash(hash_session_token(token)) if token else None
         if session and not session.revoked_at:

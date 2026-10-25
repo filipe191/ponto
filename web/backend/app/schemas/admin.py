@@ -119,6 +119,7 @@ class CompanyOut(BaseModel):
     privacy_contact: str
     active: bool
     created_at: datetime
+    public_code: str  # link do aviso de privacidade: /privacidade?e=<código>
 
 
 class CompanyCreate(BaseModel):

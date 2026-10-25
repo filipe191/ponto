@@ -96,6 +96,9 @@ class AdminRepository:
     def company(self, company_id: int | None) -> Company | None:
         return self.db.get(Company, company_id) if company_id else None
 
+    def company_by_code(self, code: str) -> Company | None:
+        return self.db.scalar(select(Company).where(Company.public_code == code))
+
     def companies(self) -> list[Company]:
         return list(self.db.scalars(select(Company).order_by(Company.name, Company.id)))
 

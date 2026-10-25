@@ -121,7 +121,7 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
 - **Exportação:** CSV do espelho de um funcionário, CSV com o resumo de todos (para a contabilidade) e página de impressão com o espelho de todos, com linha de assinatura (imprima ou salve como PDF).
 
 **Privacidade (LGPD)**
-- **Aviso de privacidade** em `/privacidade` (link no relógio e no login): o que é guardado, para quê, por quanto tempo e a quem pedir acesso. O nome e o contato vêm do cadastro da empresa do relógio (Administração → Empresas). Num aparelho sem relógio liberado nem admin logado, a página usa um texto genérico.
+- **Aviso de privacidade** em `/privacidade` (link no relógio e no login): o que é guardado, para quê, por quanto tempo e a quem pedir acesso. O nome e o contato vêm do cadastro da empresa do relógio (Administração → Empresas). Para o celular do funcionário, cada empresa tem um link próprio com um código aleatório (`/privacidade?e=<código>`), mostrado em Configurações → Administradores e relógios → **Aviso de privacidade**. Sem link, relógio ou admin logado, a página usa um texto genérico.
 - **Pedido de acesso:** Funcionários → **Dados** baixa em JSON tudo o que o sistema guarda sobre a pessoa.
 - **Retenção:** 5 anos depois do desligamento, o painel avisa e oferece **Anonimizar**. O nome, o PIN e os celulares são apagados; as batidas e as horas continuam, como "Ex-funcionário nº N".
 
@@ -189,6 +189,6 @@ docker rm -f ponto-testes-db && docker network rm ponto-testes
 
 Os testes de integração **apagam e recriam o banco**: só rodam quando `PGDATABASE` contém "test"; sem isso, são pulados. O `scripts/deploy.sh` faz o mesmo com um Postgres descartável, e o GitHub Actions (`.github/workflows/backend.yml`) roda tudo, mais o `pip-audit`, a cada push.
 
-Nova mudança no banco: crie `app/db/migrations/versions/0010_<descricao>.py` com `revision = "0010"` e `down_revision = "0009"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
+Nova mudança no banco: crie `app/db/migrations/versions/0011_<descricao>.py` com `revision = "0011"` e `down_revision = "0010"` (veja as anteriores como modelo). Ela é aplicada na próxima subida.
 
 Páginas: o HTML fica em `frontend/public/*.html` e o script de cada uma em `frontend/public/js/`. A CSP só aceita scripts desses arquivos (`script-src 'self'`): não coloque `<script>` com código nem `onclick=` dentro do HTML.

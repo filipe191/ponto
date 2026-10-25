@@ -17,9 +17,11 @@ class PrivacyInfo(BaseModel):
 
 
 @router.get("/privacidade", response_model=PrivacyInfo)
-def privacy(db: DbSession, access: CurrentAccess):
-    """A empresa vem do relógio ou do admin logado neste aparelho; sem eles, a página usa o texto genérico."""
-    company = AuthService(db).company(access.clock_company_id)
+def privacy(db: DbSession, access: CurrentAccess, e: str = ""):
+    """A empresa vem do link público (`?e=<código>`, para o celular do funcionário), do relógio ou do admin
+    logado neste aparelho; sem nenhum deles, a página usa o texto genérico."""
+    auth = AuthService(db)
+    company = auth.company_by_code(e.strip()[:64]) if e else auth.company(access.clock_company_id)
     return PrivacyInfo(
         empresa=company.name if company else "",
         contato=company.privacy_contact if company else "",

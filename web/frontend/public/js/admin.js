@@ -955,6 +955,16 @@ async function loadSystemAudit(more = false) {
 
 $('sysAudMore').addEventListener('click', () => loadSystemAudit(true));
 
+// ---------- Aviso de privacidade ----------
+
+$('privacyCopy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('privacyLink').textContent);
+    $('privacyCopy').textContent = 'Copiado';
+  } catch { $('privacyCopy').textContent = 'Selecione e copie'; }
+  setTimeout(() => { $('privacyCopy').textContent = 'Copiar link'; }, 2000);
+});
+
 // ---------- Abas ----------
 // Cada cartão pertence a uma aba (data-tab). A aba aberta fica no endereço (/admin#espelho), para o
 // voltar do navegador e os links funcionarem.
@@ -1025,6 +1035,7 @@ fetch('/api/auth/admin').then((r) => (r.ok ? r.json() : null)).then((me) => {
   currentUser = me.user || '';
   openCompanyId = me.company_id;
   $('whoami').textContent = currentUser ? `Você entrou como ${currentUser}` : '';
+  $('privacyLink').textContent = me.privacy_code ? `${location.origin}/privacidade?e=${me.privacy_code}` : '';
   $('companyName').textContent = me.superadmin ? '' : me.company || '';
   $('companyName').hidden = me.superadmin;
   $('coCard').hidden = !me.superadmin;

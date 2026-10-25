@@ -49,6 +49,7 @@ class Me(BaseModel):
     superadmin: bool = False
     company_id: int | None = None  # empresa aberta (no painel, ou a do relógio em /me)
     company: str | None = None  # nome dela
+    privacy_code: str | None = None  # código do link do aviso de privacidade (só para o admin)
 
 
 def _me(db, access, company_id: int | None, pending: str | None = None) -> Me:
@@ -61,6 +62,7 @@ def _me(db, access, company_id: int | None, pending: str | None = None) -> Me:
         superadmin=bool(access.account and access.account.superadmin),
         company_id=company.id if company else None,
         company=company.name if company else None,
+        privacy_code=company.public_code if company and access.account else None,
     )
 
 

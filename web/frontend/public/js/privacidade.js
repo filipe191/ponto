@@ -1,7 +1,9 @@
 const $ = (id) => document.getElementById(id);
 
-// Nome e contato vêm do cadastro da empresa do relógio (ou do admin logado); sem eles, fica o texto genérico
-fetch('/api/privacidade')
+// Nome e contato vêm do cadastro da empresa: pelo link da empresa (?e=<código>, para o celular do
+// funcionário), pelo relógio ou pelo admin logado; sem nenhum deles, fica o texto genérico
+const code = new URLSearchParams(location.search).get('e') || '';
+fetch('/api/privacidade' + (code ? `?e=${encodeURIComponent(code)}` : ''))
   .then((res) => (res.ok ? res.json() : null))
   .then((info) => {
     if (!info) return;
