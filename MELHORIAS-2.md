@@ -9,7 +9,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 1 | Ausências justificadas (atestado, férias, folga) | Alta | Grande | Backend + painel | ✅ Concluído |
 | 2 | Início do controle e saldo inicial do banco de horas | Alta | Pequeno | Backend + painel | ✅ Concluído |
 | 3 | Jornada diferente por dia da semana e escalas | Alta | Grande | Backend + painel | ✅ Concluído |
-| 4 | Horas extras separadas em 50% e 100% | Alta | Médio | Backend + painel | Pendente |
+| 4 | Horas extras separadas em 50% e 100% | Alta | Médio | Backend + painel | ✅ Concluído |
 | 5 | Funcionário vê o resultado das solicitações no app | Média | Médio | Backend + app | Pendente |
 | 6 | Aviso por e-mail quando o backup ou o sistema falha | Média | Pequeno | Scripts + backend | Pendente |
 | 7 | Teste de restauração do backup | Média | Pequeno | `web/scripts/` | Pendente |
@@ -20,7 +20,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 12 | Prorrogação do horário noturno | Baixa | Médio | Backend | Pendente |
 | 13 | Dividir o `admin.js` em módulos | Baixa | Médio | Frontend | Pendente |
 
-Os itens 1 a 4 são os que mais mudam o espelho de uma empresa real: sem eles, atestados, férias, sábados de meio período e funcionários antigos aparecem como faltas ou saldo errado. O item 2 é pequeno e deve vir antes de cadastrar a primeira empresa de verdade.
+Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram concluídos em 25/10/2026.
 
 ---
 
@@ -68,6 +68,8 @@ Os itens 1 a 4 são os que mais mudam o espelho de uma empresa real: sem eles, a
 - No espelho e no resumo do mês: colunas **extras 50%**, **extras 100%**, **noturnas** e **faltas (horas)**, respeitando o banco de horas (o que foi para o banco não vira extra paga).
 - Os percentuais e quais dias contam 100% ficam nas regras de jornada da empresa, com vigência, como as demais regras (convenção coletiva diferente por empresa).
 - O CSV do resumo ganha essas colunas, na ordem que a contabilidade usa.
+
+**Status: concluído em 25/10/2026.** As regras de jornada ganharam, com vigência, o tratamento das horas a mais e a menos: **banco de horas** (padrão, o cálculo de antes) ou **pagas no mês**, com o adicional do dia comum (50% a 200%) e o de domingo e feriado (até 300%). Nos dias com a regra "pagar", o saldo positivo vira extra (100% em feriado e em domingo que não é dia de jornada, para uma escala 12x36 que cai no domingo não pagar em dobro; sábado de folga conta como dia comum) e o negativo, horas a descontar; esses dias não entram no banco. O espelho mostra os três totais e marca cada dia; o espelho em CSV e o resumo ganharam as colunas "Extras (dia comum)", "Extras (domingo/feriado)" e "A descontar", e o CSV diz quais adicionais valeram. As horas noturnas já eram separadas. A migração 0016 deixa as regras existentes no modo banco: nenhum saldo muda. Testes em `tests/test_extras.py` e em `tests/integration/test_regras.py`.
 
 ---
 
@@ -149,7 +151,7 @@ Os itens 1 a 4 são os que mais mudam o espelho de uma empresa real: sem eles, a
 - [x] 1. Ausências justificadas (atestado, férias, folga)
 - [x] 2. Início do controle e saldo inicial do banco de horas
 - [x] 3. Jornada diferente por dia da semana e escalas
-- [ ] 4. Horas extras separadas em 50% e 100%
+- [x] 4. Horas extras separadas em 50% e 100%
 - [ ] 5. Funcionário vê o resultado das solicitações no app
 - [ ] 6. Aviso por e-mail quando o backup ou o sistema falha
 - [ ] 7. Teste de restauração do backup

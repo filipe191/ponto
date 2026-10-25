@@ -163,6 +163,17 @@ def build_days(
             if status == DayStatus.OK and expected and abs(balance) <= rules.on(day).tolerance:
                 balance = ZERO  # tolerância do art. 58 §1º
 
+        # Regra "pagar": o saldo do dia é extra (100% em feriado ou domingo sem jornada) ou horas a descontar
+        paid = closed and not before_control and rules.on(day).pays_overtime
+        extra = extra_rest = deficit = ZERO
+        if paid and balance > ZERO:
+            if day in holidays or (day.weekday() == 6 and not expected):
+                extra_rest = balance
+            else:
+                extra = balance
+        elif paid and balance < ZERO:
+            deficit = -balance
+
         punches = [p for s in day_shifts for p in s.punches] + deleted_by_day.get(day, [])
         days.append(
             DayReport(
@@ -182,6 +193,10 @@ def build_days(
                 ),
                 absence=DayAbsence.model_validate(absence) if absence else None,
                 credited_ms=_ms(credited) if closed else 0,
+                paid=paid,
+                extra_ms=_ms(extra),
+                extra_rest_ms=_ms(extra_rest),
+                deficit_ms=_ms(deficit),
             )
         )
         day += timedelta(days=1)
@@ -249,8 +264,9 @@ class ReportService:
         closed = [d for d in days if d.closed]
         # Saldo trazido do controle anterior: vale a partir do mês em que o controle começa
         initial = employee.initial_balance_minutes * 60000 if last_day >= control_from else 0
-        previous = initial + sum(d.balance_ms for d in before)
-        balance = sum(d.balance_ms for d in closed)
+        # Só os dias no modo "banco" somam no banco de horas; os do modo "pagar" viram extras do mês
+        previous = initial + sum(d.balance_ms for d in before if not d.paid)
+        balance = sum(d.balance_ms for d in closed if not d.paid)
         return MonthReport(
             employee=EmployeeRef.model_validate(employee),
             month=month,
@@ -265,6 +281,10 @@ class ReportService:
             control_from=control_from,
             credited_ms=sum(d.credited_ms for d in closed),
             absence_days=_absence_days(days),
+            extra_ms=sum(d.extra_ms for d in closed),
+            extra_rest_ms=sum(d.extra_rest_ms for d in closed),
+            deficit_ms=sum(d.deficit_ms for d in closed),
+            paid_days=sum(d.paid for d in closed),
             closure=ClosureOut.model_validate(closure) if closure else None,
         )
 
@@ -301,6 +321,9 @@ class ReportService:
                     alerts=sum(len(d.alerts) for d in r.days),
                     credited_ms=r.credited_ms,
                     absence_days=r.absence_days,
+                    extra_ms=r.extra_ms,
+                    extra_rest_ms=r.extra_rest_ms,
+                    deficit_ms=r.deficit_ms,
                     closure=r.closure,
                 )
             )
@@ -326,7 +349,13 @@ class ReportService:
             marks = ("*" if p.manual else "") + (" (offline)" if p.offline else "") + (" (cel)" if p.source == "app" else "")
             return f"{kind} {local:%H:%M}{next_day}{marks}"
 
-        lines = ["Data;Dia;Batidas;Trabalhado;Noturno;Previsto;Abonado;Saldo;Situação;Alertas"]
+        def opt(ms: int) -> str:
+            return hours(ms) if ms else ""
+
+        lines = [
+            "Data;Dia;Batidas;Trabalhado;Noturno;Previsto;Abonado;Saldo;Extras (dia comum);Extras (domingo/feriado);"
+            "A descontar;Situação;Alertas"
+        ]
         for d in report.days:
             batidas = " | ".join(stamp(p, d.date) for p in d.punches if not p.deleted_at)
             weekday = WEEKDAYS[date.fromisoformat(d.date).weekday()]
@@ -338,18 +367,20 @@ class ReportService:
             abonado = hours(d.credited_ms) if d.credited_ms else ""
             lines.append(
                 f"{d.date};{weekday};{batidas};{hours(d.worked_ms)};{hours(d.night_ms)};{hours(d.expected_ms)};"
-                f"{abonado};{saldo};{situacao};{_text(' / '.join(d.alerts))}"
+                f"{abonado};{saldo};{opt(d.extra_ms)};{opt(d.extra_rest_ms)};{opt(d.deficit_ms)};"
+                f"{situacao};{_text(' / '.join(d.alerts))}"
             )
         lines.append(
             f"Total;;;{hours(report.total_ms)};{hours(report.night_ms)};{hours(report.expected_ms)};"
-            f"{hours(report.credited_ms)};{hours(report.balance_ms, True)};;"
+            f"{hours(report.credited_ms)};{hours(report.balance_ms, True)};{hours(report.extra_ms)};"
+            f"{hours(report.extra_rest_ms)};{hours(report.deficit_ms)};;"
         )
-        lines.append(f"Banco de horas anterior;;;;;;;{hours(report.previous_balance_ms, True)};;")
-        lines.append(f"Banco de horas ao fim do mês;;;;;;;{hours(report.bank_ms, True)};;")
+        lines.append(f"Banco de horas anterior;;;;;;;{hours(report.previous_balance_ms, True)};;;;;")
+        lines.append(f"Banco de horas ao fim do mês;;;;;;;{hours(report.bank_ms, True)};;;;;")
         lines.append(
             "* lançamento ou correção manual; (+1) batida no dia seguinte; (cel) feita no app de celular;"
             " horas noturnas com hora reduzida; abonado: ausência justificada que conta como trabalhado;"
-            f" tolerância de {self._tolerance_label(report)} por dia;;;;;;"
+            f" tolerância de {self._tolerance_label(report)} por dia; {self._overtime_label(report)};;;;;;;;;"
         )
         return "﻿" + "\r\n".join(lines)
 
@@ -358,6 +389,19 @@ class ReportService:
         values = sorted({self.rules.on(date.fromisoformat(d.date)).tolerance_minutes for d in report.days})
         values = values or [self.rules.current.tolerance_minutes]
         return " ou ".join(f"{v} min" for v in values)
+
+    def _overtime_label(self, report: MonthReport) -> str:
+        """Como as horas a mais foram tratadas no mês (banco ou pagas, com os adicionais da regra)."""
+        rules = {self.rules.on(date.fromisoformat(d.date)) for d in report.days} or {self.rules.current}
+        labels = sorted(
+            {
+                f"extras pagas: {r.overtime_pct}% no dia comum e {r.rest_overtime_pct}% em domingo e feriado"
+                if r.pays_overtime
+                else "extras no banco de horas"
+                for r in rules
+            }
+        )
+        return " / ".join(labels)
 
     def summary_csv(self, month: str, rows: list[SummaryRow]) -> str:
         hours = self._hours
@@ -368,8 +412,9 @@ class ReportService:
 
         kinds = list(ABSENCE_KINDS)
         lines = [
-            f"Resumo {month}" + ";" * (11 + len(kinds)),
-            "Funcionário;Trabalhado;Noturno;Previsto;Abonado;Saldo do mês;Banco de horas;Faltas;"
+            f"Resumo {month}" + ";" * (14 + len(kinds)),
+            "Funcionário;Trabalhado;Noturno;Previsto;Abonado;Saldo do mês;Banco de horas;"
+            "Extras (dia comum);Extras (domingo/feriado);A descontar;Faltas;"
             + "".join(f"{ABSENCE_KINDS[k][0]} (dias);" for k in kinds)
             + "Incompletos;Alertas;Mês fechado;Ciência do funcionário",
         ]
@@ -377,7 +422,8 @@ class ReportService:
             closure = r.closure
             lines.append(
                 f"{_text(r.employee.name)};{hours(r.total_ms)};{hours(r.night_ms)};{hours(r.expected_ms)};"
-                f"{hours(r.credited_ms)};{hours(r.balance_ms, True)};{hours(r.bank_ms, True)};{r.absences};"
+                f"{hours(r.credited_ms)};{hours(r.balance_ms, True)};{hours(r.bank_ms, True)};"
+                f"{hours(r.extra_ms)};{hours(r.extra_rest_ms)};{hours(r.deficit_ms)};{r.absences};"
                 + "".join(f"{r.absence_days.get(k, 0)};" for k in kinds)
                 + f"{r.incomplete};{r.alerts};"
                 f"{when(closure.closed_at) if closure else ''};{when(closure.acknowledged_at) if closure else ''}"

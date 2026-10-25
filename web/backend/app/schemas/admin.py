@@ -150,6 +150,9 @@ class RulePeriodIn(BaseModel):
     night_end_hour: int
     night_hour_minutes: float
     max_shift_hours: int
+    overtime_mode: str = "banco"  # "banco" ou "pagar"
+    overtime_pct: int = 50
+    rest_overtime_pct: int = 100
 
 
 class RulePeriodOut(RulePeriodIn):

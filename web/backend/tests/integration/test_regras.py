@@ -97,3 +97,22 @@ def test_fuso_da_empresa_define_o_dia(superadmin):
     assert response.status_code == 400
     bad_tz = superadmin.patch("/api/admin/rules/settings", json={"timezone": "Lua/Base"}, headers=ORIGIN)
     assert bad_tz.status_code == 400
+
+
+def test_extras_pagas_pela_regra(superadmin):
+    company, adm = new_company(superadmin, "Regras Extras")
+    open_company(superadmin, company)
+    emp = add_employee(superadmin, "Nei", "454545")
+    add_punch(superadmin, emp, "2026-03-02T08:00:00-03:00", "entrada")
+    add_punch(superadmin, emp, "2026-03-02T18:00:00-03:00", "saida")  # 10h: 2h a mais
+    pay = rule("2026-03-01", overtime_mode="pagar", overtime_pct=60, rest_overtime_pct=100)
+    assert superadmin.post("/api/admin/rules", json=pay, headers=ORIGIN).status_code == 201
+    r = superadmin.get(f"/api/admin/report?employee={emp}&month=2026-03").json()
+    assert day(r, "2026-03-02")["extraMs"] == 2 * HOUR and r["extraMs"] == 2 * HOUR
+    assert r["balanceMs"] == 0  # nada vai para o banco
+    csv = superadmin.get(f"/api/admin/report?employee={emp}&month=2026-03&format=csv").text
+    assert "extras pagas: 60% no dia comum e 100% em domingo e feriado" in csv
+    bad = rule("2026-04-01", overtime_mode="pagar", overtime_pct=40)
+    assert superadmin.post("/api/admin/rules", json=bad, headers=ORIGIN).status_code == 400
+    periods = login(adm).get("/api/admin/rules").json()["periods"]
+    assert periods[-1]["overtime_mode"] == "pagar" and periods[-1]["overtime_pct"] == 60

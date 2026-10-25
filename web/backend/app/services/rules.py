@@ -48,6 +48,13 @@ class RulePeriod:
     night_end_hour: int
     night_hour_minutes: float
     max_shift_hours: int
+    overtime_mode: str = "banco"  # "banco" (vai para o banco de horas) ou "pagar" (extras pagas no mês)
+    overtime_pct: int = 50
+    rest_overtime_pct: int = 100
+
+    @property
+    def pays_overtime(self) -> bool:
+        return self.overtime_mode == "pagar"
 
     @property
     def tolerance(self) -> timedelta:
@@ -115,6 +122,9 @@ def load_rules(db: Session, company_id: int | None) -> RuleBook:
             night_end_hour=r.night_end_hour,
             night_hour_minutes=r.night_hour_minutes,
             max_shift_hours=r.max_shift_hours,
+            overtime_mode=r.overtime_mode,
+            overtime_pct=r.overtime_pct,
+            rest_overtime_pct=r.rest_overtime_pct,
         )
         for r in rows
     ]
@@ -133,6 +143,9 @@ _RULE_FIELDS = {
     "night_end_hour": "fim do noturno",
     "night_hour_minutes": "hora noturna",
     "max_shift_hours": "jornada máxima",
+    "overtime_mode": "horas extras",
+    "overtime_pct": "adicional do dia comum",
+    "rest_overtime_pct": "adicional de domingo e feriado",
 }
 
 
@@ -145,15 +158,26 @@ def _check_period(p: RulePeriod) -> None:
         raise BadRequest("A hora noturna deve ter entre 30 e 60 minutos (urbano: 52,5; rural: 60)")
     if not 4 <= p.max_shift_hours <= 24:
         raise BadRequest("A jornada máxima deve ficar entre 4 e 24 horas")
+    if p.overtime_mode not in ("banco", "pagar"):
+        raise BadRequest('Horas extras: escolha "banco" ou "pagar"')
+    if not 50 <= p.overtime_pct <= 200:
+        raise BadRequest("O adicional das horas extras deve ficar entre 50% (mínimo da CLT) e 200%")
+    if not p.overtime_pct <= p.rest_overtime_pct <= 300:
+        raise BadRequest("O adicional de domingo e feriado deve ficar entre o do dia comum e 300%")
     if p.valid_from < SINCE_ALWAYS:
         raise BadRequest("Data de vigência inválida")
 
 
 def _label(p: RulePeriod) -> str:
     minutes = f"{p.night_hour_minutes:g}".replace(".", ",")
+    extras = (
+        f"extras pagas ({p.overtime_pct}% / {p.rest_overtime_pct}% em domingo e feriado)"
+        if p.pays_overtime
+        else "extras no banco de horas"
+    )
     return (
         f"tolerância {p.tolerance_minutes} min, noturno {p.night_start_hour}h–{p.night_end_hour}h "
-        f"(hora de {minutes} min), jornada máxima {p.max_shift_hours} h"
+        f"(hora de {minutes} min), jornada máxima {p.max_shift_hours} h, {extras}"
     )
 
 

@@ -34,6 +34,11 @@ class DayReport(BaseModel):
     alerts: list[str] = []
     absence: DayAbsence | None = None  # ausência lançada que vale no dia
     credited_ms: int = Field(default=0, serialization_alias="creditedMs")  # abonado (conta como trabalhado)
+    # Regra "pagar" no dia: o saldo não vai para o banco; o positivo é extra e o negativo, a descontar
+    paid: bool = False
+    extra_ms: int = Field(default=0, serialization_alias="extraMs")  # extra em dia comum
+    extra_rest_ms: int = Field(default=0, serialization_alias="extraRestMs")  # extra em domingo/feriado de folga
+    deficit_ms: int = Field(default=0, serialization_alias="deficitMs")  # horas a descontar
 
 
 class ClosureOut(BaseModel):
@@ -62,7 +67,7 @@ class MonthReport(BaseModel):
     total_ms: int = Field(serialization_alias="totalMs")
     night_ms: int = Field(serialization_alias="nightMs")
     expected_ms: int = Field(serialization_alias="expectedMs")
-    balance_ms: int = Field(serialization_alias="balanceMs")  # saldo do mês (dias fechados)
+    balance_ms: int = Field(serialization_alias="balanceMs")  # saldo do mês que vai para o banco (dias fechados)
     previous_balance_ms: int = Field(serialization_alias="previousBalanceMs")  # banco antes do mês
     bank_ms: int = Field(serialization_alias="bankMs")  # banco de horas ao fim do mês
     # Saldo trazido do controle anterior (já somado ao banco anterior a partir do mês do início)
@@ -70,6 +75,11 @@ class MonthReport(BaseModel):
     credited_ms: int = Field(default=0, serialization_alias="creditedMs")  # abonado no mês (dias fechados)
     # Dias de trabalho com ausência no mês, por tipo (ex.: {"atestado": 2})
     absence_days: dict[str, int] = Field(default_factory=dict, serialization_alias="absenceDays")
+    # Dias com regra "pagar": extras e horas a descontar do mês (não entram no banco)
+    extra_ms: int = Field(default=0, serialization_alias="extraMs")
+    extra_rest_ms: int = Field(default=0, serialization_alias="extraRestMs")
+    deficit_ms: int = Field(default=0, serialization_alias="deficitMs")
+    paid_days: int = Field(default=0, serialization_alias="paidDays")
     control_from: date | None = Field(default=None, serialization_alias="controlFrom")  # primeiro dia que conta
     closure: ClosureOut | None = None
     reopenings: list[ReopeningOut] = []  # só no espelho do painel
@@ -89,4 +99,7 @@ class SummaryRow(BaseModel):
     alerts: int
     credited_ms: int = Field(default=0, serialization_alias="creditedMs")
     absence_days: dict[str, int] = Field(default_factory=dict, serialization_alias="absenceDays")
+    extra_ms: int = Field(default=0, serialization_alias="extraMs")
+    extra_rest_ms: int = Field(default=0, serialization_alias="extraRestMs")
+    deficit_ms: int = Field(default=0, serialization_alias="deficitMs")
     closure: ClosureOut | None = None

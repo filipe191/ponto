@@ -219,7 +219,7 @@
       <p class="hint">Usadas no cálculo das horas, do horário noturno e do saldo. Cada mudança vale a partir de uma data: os dias anteriores, os meses fechados e o banco de horas acumulado continuam como estavam. Só o superadministrador altera as regras.</p>
       <div class="table-wrap">
         <table class="timecard stack">
-          <thead><tr><th>Desde</th><th>Tolerância</th><th>Horário noturno</th><th>Jornada máxima</th><th>Definida por</th></tr></thead>
+          <thead><tr><th>Desde</th><th>Tolerância</th><th>Horário noturno</th><th>Jornada máxima</th><th>Horas extras</th><th>Definida por</th></tr></thead>
           <tbody id="rulePeriods"></tbody>
         </table>
       </div>
@@ -233,6 +233,17 @@
           <label class="field-inline">Hora noturna (min) <input class="input input-num" type="number" id="rNightMin" min="30" max="60" step="0.5" required></label>
           <label class="field-inline">Jornada máxima (h) <input class="input input-num" type="number" id="rMaxShift" min="4" max="24" required></label>
         </div>
+        <div class="toolbar">
+          <label class="field-inline">Horas a mais e a menos
+            <select class="input" id="rMode">
+              <option value="banco">vão para o banco de horas</option>
+              <option value="pagar">são pagas e descontadas no mês</option>
+            </select>
+          </label>
+          <label class="field-inline">Adicional no dia comum (%) <input class="input input-num" type="number" id="rPct" min="50" max="200" required></label>
+          <label class="field-inline">em domingo e feriado (%) <input class="input input-num" type="number" id="rRestPct" min="50" max="300" required></label>
+        </div>
+        <p class="hint">Pagas: o saldo positivo do dia vira hora extra (o adicional de domingo vale quando o domingo não é dia de jornada, e em todo feriado) e o negativo, horas a descontar; nada vai para o banco. A convenção coletiva da empresa pode exigir adicionais maiores que os da CLT (50% e 100%).</p>
         <div class="toolbar">
           <button class="btn" type="button" data-preset="urbano">Urbano (22h–5h, 52,5 min)</button>
           <button class="btn" type="button" data-preset="lavoura">Rural – lavoura (21h–5h, 60 min)</button>

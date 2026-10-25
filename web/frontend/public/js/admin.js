@@ -455,6 +455,9 @@ async function loadReport() {
     <div><span>Noturno</span><strong>${fmtH(r.nightMs)}</strong><small>base do adicional</small></div>
     <div><span>Previsto</span><strong>${fmtH(r.expectedMs)}</strong>${untilNote}</div>
     <div><span>Saldo do mês</span><strong class="${signCls(r.balanceMs)}">${fmtSigned(r.balanceMs)}</strong>${untilNote}</div>
+    ${r.paidDays ? `<div><span>Extras no dia comum</span><strong class="pos">${fmtH(r.extraMs)}</strong><small>a pagar</small></div>
+    <div><span>Extras em domingo e feriado</span><strong class="pos">${fmtH(r.extraRestMs)}</strong><small>a pagar</small></div>
+    <div><span>A descontar</span><strong class="${r.deficitMs ? 'neg' : ''}">${fmtH(r.deficitMs)}</strong><small>faltas e atrasos</small></div>` : ''}
     <div><span>Banco de horas</span><strong class="${signCls(r.bankMs)}">${fmtSigned(r.bankMs)}</strong><small>anterior: ${fmtSigned(r.previousBalanceMs)}${r.initialBalanceMs ? ` · inclui saldo inicial ${fmtSigned(r.initialBalanceMs)}` : ''}</small></div>
     <div><span>Faltas</span><strong>${count('falta')}</strong></div>
     <div><span>Abonado</span><strong>${fmtH(r.creditedMs)}</strong><small>${absenceSummary(r.absenceDays) || 'sem ausências'}</small></div>
@@ -502,7 +505,7 @@ async function loadReport() {
           <td class="num">${hasHours ? fmtH(d.workedMs) : ''}</td>
           <td class="num muted col-night">${d.nightMs ? fmtH(d.nightMs) : ''}</td>
           <td class="num muted col-expected">${d.expectedMs ? fmtH(d.expectedMs) : ''}</td>
-          <td class="num ${signCls(d.balanceMs)}">${showBalance ? fmtSigned(d.balanceMs) : ''}</td>
+          <td class="num ${signCls(d.balanceMs)}">${showBalance ? fmtSigned(d.balanceMs) : ''}${d.extraRestMs ? '<small class="contract">extra dom./fer.</small>' : d.extraMs ? '<small class="contract">extra</small>' : d.deficitMs ? '<small class="contract">a descontar</small>' : ''}</td>
         </tr>`;
       }).join('')
     : '<tr><td colspan="6" class="empty">Este mês ainda não começou.</td></tr>';
@@ -1039,9 +1042,10 @@ const RULE_PRESETS = {
   lavoura: { night_start_hour: 21, night_end_hour: 5, night_hour_minutes: 60 },
   pecuaria: { night_start_hour: 20, night_end_hour: 4, night_hour_minutes: 60 },
 };
-const RULE_INPUTS = { tolerance_minutes: 'rTol', night_start_hour: 'rNightStart', night_end_hour: 'rNightEnd', night_hour_minutes: 'rNightMin', max_shift_hours: 'rMaxShift' };
+const RULE_INPUTS = { tolerance_minutes: 'rTol', night_start_hour: 'rNightStart', night_end_hour: 'rNightEnd', night_hour_minutes: 'rNightMin', max_shift_hours: 'rMaxShift', overtime_pct: 'rPct', rest_overtime_pct: 'rRestPct' };
+const overtimeText = (r) => (r.overtime_mode === 'pagar' ? `extras pagas (${r.overtime_pct}% · ${r.rest_overtime_pct}% em domingo e feriado)` : 'extras no banco de horas');
 const nightMin = (m) => String(m).replace('.', ',');
-const ruleText = (r) => `tolerância de ${r.tolerance_minutes} min · noturno das ${r.night_start_hour}h às ${r.night_end_hour}h (hora de ${nightMin(r.night_hour_minutes)} min) · jornada máxima de ${r.max_shift_hours} h`;
+const ruleText = (r) => `tolerância de ${r.tolerance_minutes} min · noturno das ${r.night_start_hour}h às ${r.night_end_hour}h (hora de ${nightMin(r.night_hour_minutes)} min) · jornada máxima de ${r.max_shift_hours} h · ${overtimeText(r)}`;
 
 async function loadRules() {
   let r;
@@ -1055,11 +1059,13 @@ async function loadRules() {
       <td>${p.tolerance_minutes} min</td>
       <td>${p.night_start_hour}h às ${p.night_end_hour}h · hora de ${nightMin(p.night_hour_minutes)} min</td>
       <td>${p.max_shift_hours} h</td>
+      <td>${p.overtime_mode === 'pagar' ? `pagas · ${p.overtime_pct}% / ${p.rest_overtime_pct}%` : 'banco de horas'}</td>
       <td>${esc(p.created_by)}<small class="contract">${fmtDT(p.created_at)}</small></td>
     </tr>`).join('');
   // O formulário começa com as regras de hoje, para mudar só o que for preciso
   $('ruleForm').hidden = !r.can_edit;
   if (current) for (const [field, id] of Object.entries(RULE_INPUTS)) $(id).value = current[field];
+  if (current) $('rMode').value = current.overtime_mode;
   if (!$('rFrom').value) $('rFrom').value = today;
   $('sTz').value = r.timezone;
   $('sOffline').value = r.offline_max_hours;
@@ -1076,6 +1082,7 @@ $('ruleForm').addEventListener('submit', async (e) => {
   $('ruleError').textContent = '';
   const body = { valid_from: $('rFrom').value };
   for (const [field, id] of Object.entries(RULE_INPUTS)) body[field] = Number($(id).value);
+  body.overtime_mode = $('rMode').value;
   const ok = await ask({
     title: `Novas regras a partir de ${fmtD(body.valid_from)}?`,
     message: `${ruleText(body)}. Os dias anteriores e o banco de horas acumulado até lá não mudam. Não é possível começar num mês já fechado.`,
