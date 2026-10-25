@@ -13,7 +13,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 5 | Funcionário vê o resultado das solicitações no app | Média | Médio | Backend + app | ✅ Concluído |
 | 6 | Aviso por e-mail quando o backup ou o sistema falha | Média | Pequeno | Scripts + backend | Pendente |
 | 7 | Teste de restauração do backup | Média | Pequeno | `web/scripts/` | Pendente |
-| 8 | Limite de tamanho dos logs do Docker | Média | Pequeno | `docker-compose.yml` | Pendente |
+| 8 | Limite de tamanho dos logs do Docker | Média | Pequeno | `docker-compose.yml` | ✅ Concluído |
 | 9 | Teste das páginas no navegador, no deploy e no CI | Média | Médio | `web/frontend/` + GitHub Actions | Pendente |
 | 10 | Administrador só de consulta (contabilidade) | Média | Médio | Backend + painel | Pendente |
 | 11 | Feriados que se repetem todo ano | Baixa | Pequeno | Backend + painel | Pendente |
@@ -101,6 +101,8 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 
 **Proposta.** No `docker-compose.yml`, `logging: { driver: json-file, options: { max-size: "10m", max-file: "5" } }` nos dois serviços. Uma linha cada, sem mudança de comportamento.
 
+**Status: concluído em 25/10/2026.** Bloco `x-logging` no `docker-compose.yml`, usado pelo backend e pelo nginx: até 5 arquivos de 10 MB por serviço (50 MB no máximo cada). Vale a partir da próxima subida dos containers (o `deploy.sh` recria os dois).
+
 ### 9. Teste das páginas no navegador, no deploy e no CI
 
 **Hoje.** Os 82 testes cobrem só o backend. As páginas (painel, relógio, login) não têm teste: um erro de JavaScript só aparece quando alguém abre a tela. Na rodada anterior, o problema dos botões saindo do cartão no celular só foi visto com capturas feitas à mão.
@@ -157,7 +159,7 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 - [x] 5. Funcionário vê o resultado das solicitações no app
 - [ ] 6. Aviso por e-mail quando o backup ou o sistema falha
 - [ ] 7. Teste de restauração do backup
-- [ ] 8. Limite de tamanho dos logs do Docker
+- [x] 8. Limite de tamanho dos logs do Docker
 - [ ] 9. Teste das páginas no navegador, no deploy e no CI
 - [ ] 10. Administrador só de consulta (contabilidade)
 - [ ] 11. Feriados que se repetem todo ano

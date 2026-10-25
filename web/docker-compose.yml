@@ -1,9 +1,17 @@
 name: ponto
 
+# Logs dos containers com limite: até 5 arquivos de 10 MB por serviço (sem isso crescem até encher o disco)
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   backend:
     build: ./backend
     container_name: ponto-backend
+    logging: *logging
     restart: unless-stopped
     environment:
       TZ: America/Sao_Paulo
@@ -37,6 +45,7 @@ services:
   frontend:
     build: ./frontend
     container_name: ponto-frontend
+    logging: *logging
     restart: unless-stopped
     environment:
       HTTPS_PORT: ${HTTPS_PORT:-9443}
