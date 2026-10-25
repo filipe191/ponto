@@ -116,3 +116,8 @@ def test_extras_pagas_pela_regra(superadmin):
     assert superadmin.post("/api/admin/rules", json=bad, headers=ORIGIN).status_code == 400
     periods = login(adm).get("/api/admin/rules").json()["periods"]
     assert periods[-1]["overtime_mode"] == "pagar" and periods[-1]["overtime_pct"] == 60
+
+
+def test_empresa_nova_vem_com_prorrogacao_noturna(superadmin):
+    _, adm = new_company(superadmin, "Regras Prorrogacao")
+    assert login(adm).get("/api/admin/rules").json()["periods"][0]["night_extension"] is True

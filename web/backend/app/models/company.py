@@ -60,5 +60,8 @@ class CompanyRule(Base):
     # Adicional das extras pagas: dia comum (CLT art. 59, mínimo 50%) e domingo/feriado não compensado (100%)
     overtime_pct: Mapped[int] = mapped_column(Integer, default=50, server_default="50")
     rest_overtime_pct: Mapped[int] = mapped_column(Integer, default=100, server_default="100")
+    # Súmula 60 do TST: jornada que cumpre todo o horário noturno e continua depois dele tem as horas
+    # seguintes também como noturnas (com hora reduzida)
+    night_extension: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("TRUE"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     created_by: Mapped[str] = mapped_column(String)

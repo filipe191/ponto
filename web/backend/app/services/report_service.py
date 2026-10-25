@@ -16,7 +16,7 @@ from app.schemas.report import ClosureOut, DayReport, DayStatus, MonthReport, Re
 from app.services.audit import AuditLog
 from app.services.rules import RuleBook, load_rules
 from app.services.shifts import Shift, pair_shifts
-from app.utils.dates import month_bounds, night_time, parse_month, to_local
+from app.utils.dates import local_at, month_bounds, night_time, parse_month, to_local
 
 STATUS_LABEL = {
     DayStatus.OK: "OK",
@@ -43,18 +43,64 @@ def check_month(month: str) -> str:
     return month
 
 
-def counted_time(shift: Shift, rules: RuleBook | None = None) -> tuple[timedelta, timedelta]:
+# Intervalo máximo dentro de uma jornada (CLT art. 71): pares separados por até isso são a mesma jornada
+MAX_BREAK = timedelta(hours=2)
+
+
+def counted_time(
+    shift: Shift, rules: RuleBook | None = None, extended: timedelta = ZERO
+) -> tuple[timedelta, timedelta]:
     """(horas trabalhadas, horas noturnas), as duas com a hora noturna reduzida (CLT art. 73 §1º).
 
-    Vale o horário noturno da regra em vigor no dia da jornada.
+    Vale o horário noturno da regra em vigor no dia da jornada. `extended`: tempo real depois do fim do
+    horário noturno que também conta como noturno (prorrogação, ver night_extensions).
     """
     if not shift.complete:
         return ZERO, ZERO
     rules = rules or RuleBook()
     rule = rules.on(shift.day)
     night_real = night_time(shift.start, shift.punches[1].ts, rule.night_start_hour, rule.night_end_hour, rules.tz)
+    night_real += extended
     night = night_real * (60 / rule.night_hour_minutes)
     return shift.worked - night_real + night, night
+
+
+def night_extensions(shifts: list[Shift], rules: RuleBook | None = None) -> dict[int, timedelta]:
+    """Prorrogação do horário noturno (Súmula 60, II, do TST): tempo real que conta como noturno além do horário.
+
+    Uma jornada (pares seguidos com intervalo de até 2h, art. 71) que cobre todo o horário noturno e
+    continua depois do fim dele tem o que vem depois também como noturno. Devolve {id(par): tempo}.
+    Só com a regra ligada no dia em que a jornada começa.
+    """
+    rules = rules or RuleBook()
+    result: dict[int, timedelta] = {}
+    chains: list[list[Shift]] = []
+    for s in (s for s in shifts if s.complete):
+        if chains and s.start - chains[-1][-1].punches[1].ts <= MAX_BREAK:
+            chains[-1].append(s)
+        else:
+            chains.append([s])
+    for chain in chains:
+        rule = rules.on(chain[0].day)
+        if not rule.night_extension:
+            continue
+        begin, end = chain[0].start, chain[-1].punches[1].ts
+        night_end = None
+        day = to_local(begin, rules.tz).date() - timedelta(days=1)
+        while local_at(day, rule.night_start_hour, rules.tz) < end:
+            window_start = local_at(day, rule.night_start_hour, rules.tz)
+            next_day = 1 if rule.night_end_hour <= rule.night_start_hour else 0
+            window_end = local_at(day + timedelta(days=next_day), rule.night_end_hour, rules.tz)
+            if begin <= window_start and window_end < end:
+                night_end = window_end  # cumpriu o horário noturno inteiro e continuou depois
+            day += timedelta(days=1)
+        if not night_end:
+            continue
+        for s in chain:
+            after = s.punches[1].ts - max(s.start, night_end)
+            if after > ZERO:
+                result[id(s)] = after
+    return result
 
 
 def expected_for(
@@ -107,6 +153,7 @@ def build_days(
     abonadas) conta como trabalhada; a folga do banco tira a jornada do banco de horas.
     """
     absences = absences or {}
+    extended = night_extensions(shifts, rules)
     rules = rules or RuleBook()
     today = to_local(now, rules.tz).date()
 
@@ -127,7 +174,7 @@ def build_days(
         day_shifts = by_day.get(day, [])
         counted = night = ZERO
         for s in day_shifts:
-            c, n = counted_time(s, rules)
+            c, n = counted_time(s, rules, extended.get(id(s), ZERO))
             counted, night = counted + c, night + n
         expected = expected_for(employee, day, holidays, control_from)
         before_control = bool(control_from and day < control_from and employee.employed_on(day))

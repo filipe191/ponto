@@ -17,7 +17,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 | 9 | Teste das páginas no navegador, no deploy e no CI | Média | Médio | `web/frontend/` + GitHub Actions | Pendente |
 | 10 | Administrador só de consulta (contabilidade) | Média | Médio | Backend + painel | ✅ Concluído |
 | 11 | Feriados que se repetem todo ano | Baixa | Pequeno | Backend + painel | ✅ Concluído |
-| 12 | Prorrogação do horário noturno | Baixa | Médio | Backend | Pendente |
+| 12 | Prorrogação do horário noturno | Baixa | Médio | Backend | ✅ Concluído |
 | 13 | Dividir o `admin.js` em módulos | Baixa | Médio | Frontend | Pendente |
 
 Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram concluídos em 25/10/2026.
@@ -139,6 +139,8 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 
 **Proposta.** Uma opção nas regras de jornada da empresa (ligada por padrão para o urbano): quando a jornada cumpre todo o horário noturno, as horas seguintes também contam como noturnas, com hora reduzida. Vale por vigência e não recalcula meses fechados.
 
+**Status: concluído em 25/10/2026.** Opção **Prorrogar o noturno depois do fim** nas regras de jornada, com vigência (migração 0019). A jornada é contada inteira: pares de batidas separados por até 2h (o intervalo máximo do art. 71) são a mesma jornada, mesmo que a segunda parte comece depois da meia-noite. Se ela começa antes do início do horário noturno e termina depois do fim, o que passa do fim conta como noturno, com hora reduzida, no dia de cada parte. As regras existentes ficaram **desligadas**, para nenhum espelho mudar; empresas novas e regras novas vêm com a opção ligada (desmarcável, ex.: rural). Saiu dos limites conhecidos do README. Testes em `tests/test_prorrogacao.py` e nas integrações de regras e migração.
+
 ### 13. Dividir o `admin.js` em módulos
 
 **Hoje.** O `admin.js` tem mais de 1100 linhas com todas as abas do painel num arquivo só. Cada mudança mexe no mesmo arquivo, e é fácil uma parte quebrar outra.
@@ -171,5 +173,5 @@ Os itens 1 a 4, os que mais mudavam o espelho de uma empresa real, foram conclu�
 - [ ] 9. Teste das páginas no navegador, no deploy e no CI
 - [x] 10. Administrador só de consulta (contabilidade)
 - [x] 11. Feriados que se repetem todo ano
-- [ ] 12. Prorrogação do horário noturno
+- [x] 12. Prorrogação do horário noturno
 - [ ] 13. Dividir o `admin.js` em módulos

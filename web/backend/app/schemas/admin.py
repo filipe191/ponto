@@ -165,6 +165,7 @@ class RulePeriodIn(BaseModel):
     overtime_mode: str = "banco"  # "banco" ou "pagar"
     overtime_pct: int = 50
     rest_overtime_pct: int = 100
+    night_extension: bool = True  # prorrogação do horário noturno (Súmula 60 do TST)
 
 
 class RulePeriodOut(RulePeriodIn):

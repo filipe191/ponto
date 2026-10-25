@@ -60,3 +60,8 @@ def test_jornada_antiga_vira_minutos_por_dia(legacy):
     assert rows("SELECT kind, day_minutes, cycle_start FROM employee_schedules WHERE employee_id = 1") == [
         ("semana", "480,480,480,480,480,0,0", None)
     ]
+
+
+def test_regra_antiga_fica_sem_prorrogacao_noturna(legacy):
+    # A migração 0019 não muda o cálculo de quem já existia
+    assert rows("SELECT night_extension FROM company_rules WHERE company_id = 1") == [(False,)]

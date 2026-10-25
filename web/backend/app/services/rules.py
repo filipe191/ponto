@@ -51,6 +51,7 @@ class RulePeriod:
     overtime_mode: str = "banco"  # "banco" (vai para o banco de horas) ou "pagar" (extras pagas no mês)
     overtime_pct: int = 50
     rest_overtime_pct: int = 100
+    night_extension: bool = True  # prorrogação do horário noturno (Súmula 60 do TST)
 
     @property
     def pays_overtime(self) -> bool:
@@ -125,6 +126,7 @@ def load_rules(db: Session, company_id: int | None) -> RuleBook:
             overtime_mode=r.overtime_mode,
             overtime_pct=r.overtime_pct,
             rest_overtime_pct=r.rest_overtime_pct,
+            night_extension=r.night_extension,
         )
         for r in rows
     ]
@@ -146,6 +148,7 @@ _RULE_FIELDS = {
     "overtime_mode": "horas extras",
     "overtime_pct": "adicional do dia comum",
     "rest_overtime_pct": "adicional de domingo e feriado",
+    "night_extension": "prorrogação do noturno",
 }
 
 
@@ -175,9 +178,10 @@ def _label(p: RulePeriod) -> str:
         if p.pays_overtime
         else "extras no banco de horas"
     )
+    extension = ", prorrogado depois do fim" if p.night_extension else ""
     return (
         f"tolerância {p.tolerance_minutes} min, noturno {p.night_start_hour}h–{p.night_end_hour}h "
-        f"(hora de {minutes} min), jornada máxima {p.max_shift_hours} h, {extras}"
+        f"(hora de {minutes} min{extension}), jornada máxima {p.max_shift_hours} h, {extras}"
     )
 
 
