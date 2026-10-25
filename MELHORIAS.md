@@ -10,7 +10,7 @@ Levantamento feito em 24/10/2026, depois da mudança para várias empresas no me
 | 2 | Auditoria própria do superadmin | Alta | Pequeno | Backend + painel | ✅ Concluído |
 | 3 | Segundo superadmin | Alta | Pequeno | Backend + painel | ✅ Concluído |
 | 4 | Testes de ponta a ponta e CI | Alta | Médio | `web/backend/tests/` + GitHub Actions | ✅ Concluído |
-| 5 | Painel em abas | Alta | Médio | Frontend | Pendente |
+| 5 | Painel em abas | Alta | Médio | Frontend | ✅ Concluído |
 | 6 | Tabelas que viram cartões no celular | Alta | Pequeno | Frontend | Pendente |
 | 7 | Link do aviso de privacidade por empresa | Média | Pequeno | Backend + frontend | Pendente |
 | 8 | Bloqueios de tentativas guardados no banco | Média | Pequeno | Backend | Pendente |
@@ -81,6 +81,8 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - Abas (ou menu lateral no computador): **Início** (avisos e solicitações), **Funcionários**, **Espelho**, **Configurações** (feriados, admins, relógios), **Auditoria** e, para o superadmin, **Empresas**.
 - Guardar a aba aberta no endereço (`/admin#espelho`), para o voltar do navegador e os links funcionarem.
 - Mostrar na aba Início a contagem de solicitações pendentes.
+
+**Status: concluído em 25/10/2026.** Abas **Início** (avisos de segurança e solicitações, com a contagem das pendentes no título da aba), **Funcionários**, **Espelho**, **Configurações** (feriados, regras de jornada, administradores e relógios), **Auditoria** e, só para o superadmin, **Empresas**. A aba fica no endereço (`/admin#espelho`): o voltar do navegador e os links funcionam, e trocar de empresa mantém a aba. As setas do teclado passam de uma aba para a outra. Sem empresa aberta, o superadmin vê só a aba Empresas.
 
 ### 6. Tabelas que viram cartões no celular
 
@@ -158,7 +160,7 @@ Para começar, a melhor relação entre esforço e resultado está nos itens 1, 
 - [x] 2. Auditoria própria do superadmin
 - [x] 3. Segundo superadmin
 - [x] 4. Testes de ponta a ponta no repositório e CI
-- [ ] 5. Painel em abas
+- [x] 5. Painel em abas
 - [ ] 6. Tabelas que viram cartões no celular
 - [ ] 7. Link do aviso de privacidade por empresa
 - [ ] 8. Bloqueios de tentativas guardados no banco

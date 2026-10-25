@@ -74,7 +74,7 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
   3. Para administrar a partir dele, toque em **Administração** e entre: nesse aparelho o login do admin dura 30 minutos. Use **Sair** ao terminar.
   4. Perdeu um tablet? Administração → **Desligar todos os relógios** e ative de novo os que continuam em uso. Isso desliga só os relógios da empresa aberta.
 - **PIN:** de 6 a 8 dígitos (botão **Gerar PIN** no cadastro). PINs antigos de 4 ou 5 dígitos ainda valem, mas aparecem como "PIN curto" no painel para serem trocados.
-- Dez PINs errados em 5 minutos pausam o relógio por 5 minutos; cada nova rodada de erros dobra a pausa (até 24 h). Cada bloqueio aparece em **Avisos de segurança** no topo do painel.
+- Dez PINs errados em 5 minutos pausam o relógio por 5 minutos; cada nova rodada de erros dobra a pausa (até 24 h). Cada bloqueio aparece em **Avisos de segurança**, na aba Início do painel.
 
 ### Variáveis do `.env`
 
@@ -104,7 +104,7 @@ Um mesmo servidor atende várias empresas. Cada uma tem os próprios funcionári
 **App de celular** (pasta `app/` na raiz do repositório)
 - Este backend atende também o app de iPhone, no contrato `/api/pontos/...` (autenticação pelo cabeçalho `X-API-Key`).
 - O admin gera uma **chave de celular** por funcionário (Funcionários → Celular). A chave aparece uma única vez, só o hash fica no banco, e pode ser revogada. Ela vale 1 ano (o painel avisa 30 dias antes) e é revogada sozinha depois de 90 dias sem uso.
-- A batida feita na hora no app entra direto no ponto, marcada `cel` (em vermelho se o relógio do celular estiver adiantado em relação ao servidor). Batida lançada depois, correção e exclusão feitas no app viram **solicitações** que o admin aprova ou recusa no card do topo do painel.
+- A batida feita na hora no app entra direto no ponto, marcada `cel` (em vermelho se o relógio do celular estiver adiantado em relação ao servidor). Batida lançada depois, correção e exclusão feitas no app viram **solicitações** que o admin aprova ou recusa na aba Início do painel (a aba mostra quantas estão pendentes).
 
 **Administração**
 - **Funcionários:** nome, PIN, jornada diária e dias de trabalho, admissão e desligamento. Mudar a jornada cria uma nova vigência a partir de uma data, sem alterar o passado. Só cadastros sem nenhum registro podem ser excluídos; os demais são desativados.

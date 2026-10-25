@@ -585,6 +585,7 @@ async function loadRequests() {
   try { items = await api(`/requests?status=${all ? '' : 'pendente'}`); } catch (err) { $('reqError').textContent = err.message; }
   const pending = items.filter((r) => r.status === 'pendente').length;
   $('reqCount').textContent = pending ? pending : '';
+  $('tabReqCount').textContent = pending ? pending : '';
   $('reqCard').classList.toggle('has-pending', pending > 0);
   $('requests').innerHTML = items.length
     ? items.map((r) => `
@@ -954,6 +955,40 @@ async function loadSystemAudit(more = false) {
 
 $('sysAudMore').addEventListener('click', () => loadSystemAudit(true));
 
+// ---------- Abas ----------
+// Cada cartão pertence a uma aba (data-tab). A aba aberta fica no endereço (/admin#espelho), para o
+// voltar do navegador e os links funcionarem.
+
+const TABS = [...document.querySelectorAll('[role="tab"]')];
+// Guardada antes da primeira showTab, que ainda não sabe quais abas o usuário vê (Empresas fica escondida)
+const initialTab = location.hash.slice(1);
+
+function showTab(name) {
+  const available = TABS.filter((t) => !t.hidden).map((t) => t.dataset.tab);
+  if (!available.includes(name)) name = available[0];
+  for (const tab of TABS) {
+    const on = tab.dataset.tab === name;
+    tab.setAttribute('aria-selected', on);
+    tab.tabIndex = on ? 0 : -1;
+  }
+  document.querySelectorAll('section[data-tab]').forEach((s) => s.classList.toggle('tab-off', s.dataset.tab !== name));
+  if (location.hash.slice(1) !== name) history.replaceState(null, '', `#${name}`);
+}
+
+TABS.forEach((tab, i) => {
+  tab.addEventListener('click', () => { location.hash = tab.dataset.tab; });
+  // Setas do teclado passam de uma aba para a vizinha (padrão de abas acessíveis)
+  tab.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const visible = TABS.filter((t) => !t.hidden);
+    const next = visible[(visible.indexOf(tab) + (e.key === 'ArrowRight' ? 1 : visible.length - 1)) % visible.length];
+    next.focus();
+    location.hash = next.dataset.tab;
+  });
+});
+window.addEventListener('hashchange', () => showTab(location.hash.slice(1)));
+showTab(location.hash.slice(1));
+
 // ---------- Início ----------
 
 let openCompanyId = null;
@@ -980,6 +1015,9 @@ fetch('/api/auth/admin').then((r) => (r.ok ? r.json() : null)).then((me) => {
   $('companyName').hidden = me.superadmin;
   $('coCard').hidden = !me.superadmin;
   $('companyArea').hidden = !openCompanyId;
+  // Sem empresa aberta, só a aba Empresas (superadmin)
+  TABS.forEach((tab) => { tab.hidden = tab.dataset.tab === 'empresas' ? !me.superadmin : !openCompanyId; });
+  showTab(initialTab || (openCompanyId ? 'inicio' : 'empresas'));
   if (me.superadmin) {
     loadCompanies(openCompanyId);
     loadSuperadmins();

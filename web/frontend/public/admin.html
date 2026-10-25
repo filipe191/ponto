@@ -23,8 +23,17 @@
   </header>
 
   <main class="admin-page">
+    <nav class="tabs" role="tablist" aria-label="Seções do painel">
+      <button type="button" role="tab" data-tab="inicio">Início <span class="count" id="tabReqCount"></span></button>
+      <button type="button" role="tab" data-tab="funcionarios">Funcionários</button>
+      <button type="button" role="tab" data-tab="espelho">Espelho</button>
+      <button type="button" role="tab" data-tab="configuracoes">Configurações</button>
+      <button type="button" role="tab" data-tab="auditoria">Auditoria</button>
+      <button type="button" role="tab" data-tab="empresas" hidden>Empresas</button>
+    </nav>
+
     <!-- Só o superadministrador: cadastro das empresas atendidas pelo sistema -->
-    <section class="card" aria-labelledby="coTitle" id="coCard" hidden>
+    <section class="card" aria-labelledby="coTitle" id="coCard" hidden data-tab="empresas" role="tabpanel">
       <header class="card-head">
         <h2 class="card-title" id="coTitle">Empresas</h2>
       </header>
@@ -74,14 +83,14 @@
 
     <!-- Tudo daqui para baixo é da empresa aberta no painel -->
     <div class="company-area" id="companyArea">
-    <section class="card alerts-card" aria-labelledby="alertsTitle" id="alertsCard" hidden>
+    <section class="card alerts-card" aria-labelledby="alertsTitle" id="alertsCard" hidden data-tab="inicio" role="tabpanel">
       <header class="card-head">
         <h2 class="card-title" id="alertsTitle">Avisos de segurança</h2>
       </header>
       <ul class="history" id="alertsList"></ul>
     </section>
 
-    <section class="card" aria-labelledby="reqTitle" id="reqCard">
+    <section class="card" aria-labelledby="reqTitle" id="reqCard" data-tab="inicio" role="tabpanel">
       <header class="card-head">
         <h2 class="card-title" id="reqTitle">Solicitações do app <span class="count" id="reqCount"></span></h2>
         <label class="check"><input type="checkbox" id="reqShowAll"> Mostrar decididas</label>
@@ -96,7 +105,7 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="empTitleMain">
+    <section class="card" aria-labelledby="empTitleMain" data-tab="funcionarios" role="tabpanel">
       <header class="card-head">
         <h1 class="card-title" id="empTitleMain">Funcionários</h1>
         <button class="btn btn-primary" type="button" id="newEmp">Novo funcionário</button>
@@ -110,7 +119,7 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="repTitle">
+    <section class="card" aria-labelledby="repTitle" data-tab="espelho" role="tabpanel">
       <header class="card-head">
         <h2 class="card-title" id="repTitle">Espelho de ponto</h2>
         <p class="card-sub" id="repSub"></p>
@@ -152,7 +161,7 @@
       <div id="history"></div>
     </section>
 
-    <section class="card" aria-labelledby="holTitle">
+    <section class="card" aria-labelledby="holTitle" data-tab="configuracoes" role="tabpanel">
       <header class="card-head">
         <h2 class="card-title" id="holTitle">Feriados</h2>
         <input class="input" type="number" id="holYear" min="2000" max="2100" aria-label="Ano" style="width:110px">
@@ -172,7 +181,7 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="rulesTitle">
+    <section class="card" aria-labelledby="rulesTitle" data-tab="configuracoes" role="tabpanel">
       <header class="card-head">
         <h2 class="card-title" id="rulesTitle">Regras de jornada</h2>
         <p class="card-sub" id="rulesNow"></p>
@@ -218,7 +227,7 @@
       <p class="form-error" id="settingsError" role="alert"></p>
     </section>
 
-    <section class="card" aria-labelledby="accTitle">
+    <section class="card" aria-labelledby="accTitle" data-tab="configuracoes" role="tabpanel">
       <header class="card-head">
         <h2 class="card-title" id="accTitle">Administradores e relógios</h2>
         <p class="card-sub" id="whoami"></p>
@@ -244,7 +253,7 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="audTitle">
+    <section class="card" aria-labelledby="audTitle" data-tab="auditoria" role="tabpanel">
       <header class="card-head">
         <h2 class="card-title" id="audTitle">Auditoria</h2>
       </header>

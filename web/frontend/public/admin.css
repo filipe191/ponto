@@ -9,6 +9,30 @@
 }
 
 [hidden] { display: none !important; }
+
+/* ---------- Abas ---------- */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  border-bottom: 2px solid var(--rule-soft);
+}
+.tabs [role="tab"] {
+  margin-bottom: -2px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tabs [role="tab"]:hover { color: var(--text); }
+.tabs [role="tab"][aria-selected="true"] { border-bottom-color: var(--rule); color: var(--rule); }
+.tab-off { display: none !important; }
+
 /* Cartões da empresa aberta: o invólucro não interfere na grade da página */
 .company-area { display: contents; }
 .muted { color: var(--muted); }
