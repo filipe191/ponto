@@ -6,7 +6,7 @@ Levantamento feito em 25/10/2026, depois de concluídas as 14 melhorias da prime
 
 | # | Item | Prioridade | Esforço | Onde | Status |
 |---|------|-----------|---------|------|--------|
-| 1 | Ausências justificadas (atestado, férias, folga) | Alta | Grande | Backend + painel | Pendente |
+| 1 | Ausências justificadas (atestado, férias, folga) | Alta | Grande | Backend + painel | ✅ Concluído |
 | 2 | Início do controle e saldo inicial do banco de horas | Alta | Pequeno | Backend + painel | ✅ Concluído |
 | 3 | Jornada diferente por dia da semana e escalas | Alta | Grande | Backend + painel | ✅ Concluído |
 | 4 | Horas extras separadas em 50% e 100% | Alta | Médio | Backend + painel | Pendente |
@@ -35,6 +35,8 @@ Os itens 1 a 4 são os que mais mudam o espelho de uma empresa real: sem eles, a
 - Cada tipo diz se o dia **abona** (conta como jornada cumprida: atestado, férias, licença) ou **desconta do banco** (folga compensada).
 - No espelho, o dia aparece com a marca do tipo e fora da contagem de faltas; no resumo do mês, uma coluna por tipo.
 - Ausência em mês fechado só depois de reabrir, como as batidas. Tudo na auditoria.
+
+**Status: concluído em 25/10/2026.** Tabela `absences` (migração 0015) e a seção **Ausências** na aba Espelho: tipo, período (de/até), horas abonadas por dia (vazio = dia inteiro) e observação, com a lista do funcionário e o botão de remover. Atestado, férias, licença e falta abonada contam a jornada (ou as horas informadas) como cumprida; a folga do banco tira a jornada do banco sem virar falta. Dias sem jornada dentro do período (fim de semana nas férias) só ganham a marca. O espelho mostra o tipo no dia, o resumo traz o total abonado e os dias por tipo, e os dois CSVs ganharam as colunas. Também no espelho impresso e no "Ver meu espelho" do relógio. Recusa sobreposição, período fora do contrato e qualquer mês fechado no período. Diferente do proposto, **não há anexo do atestado**: é dado de saúde (sensível na LGPD), então o sistema guarda só tipo, datas e horas, pede para não escrever o CID e a anonimização apaga as observações. Testes em `tests/test_ausencias.py` e `tests/integration/test_ausencias_api.py`.
 
 ### 2. Início do controle e saldo inicial do banco de horas
 
@@ -144,7 +146,7 @@ Os itens 1 a 4 são os que mais mudam o espelho de uma empresa real: sem eles, a
 
 ## Checklist
 
-- [ ] 1. Ausências justificadas (atestado, férias, folga)
+- [x] 1. Ausências justificadas (atestado, férias, folga)
 - [x] 2. Início do controle e saldo inicial do banco de horas
 - [x] 3. Jornada diferente por dia da semana e escalas
 - [ ] 4. Horas extras separadas em 50% e 100%

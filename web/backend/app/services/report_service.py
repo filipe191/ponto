@@ -1,13 +1,15 @@
 import re
 from datetime import date, datetime, timedelta, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import BadRequest
-from app.models import Company, Employee, MonthClosure, Punch, PunchType
+from app.models import ABSENCE_KINDS, Absence, Company, Employee, MonthClosure, Punch, PunchType
 from app.repositories.calendar_repository import ClosureRepository, HolidayRepository
 from app.repositories.employee_repository import EmployeeRepository
 from app.repositories.punch_repository import PunchRepository
+from app.schemas.absence import DayAbsence
 from app.schemas.employee import EmployeeRef
 from app.schemas.punch import PunchOut
 from app.schemas.report import ClosureOut, DayReport, DayStatus, MonthReport, ReopeningOut, SummaryRow
@@ -24,6 +26,7 @@ STATUS_LABEL = {
     DayStatus.FERIADO: "Feriado",
     DayStatus.FORA: "Fora do contrato",
     DayStatus.ANTES: "Antes do controle",
+    DayStatus.AUSENCIA: "Ausência",
     DayStatus.ANDAMENTO: "Em andamento",
 }
 WEEKDAYS = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
@@ -94,12 +97,16 @@ def build_days(
     holidays: dict[date, str],
     rules: RuleBook | None = None,
     control_from: date | None = None,
+    absences: dict[date, Absence] | None = None,
 ) -> list[DayReport]:
     """Um DayReport por dia de `first` a `last` (inclusive). `shifts` em ordem, de todo o histórico.
 
     Cada dia usa a regra da empresa em vigor nele (`rules`; sem ela, os valores do .env). Antes de
     `control_from` (início do controle no sistema) os dias aparecem, mas não entram no saldo.
+    `absences` (dia → ausência): o dia não é falta; se a ausência abona, a jornada (ou as horas
+    abonadas) conta como trabalhada; a folga do banco tira a jornada do banco de horas.
     """
+    absences = absences or {}
     rules = rules or RuleBook()
     today = to_local(now, rules.tz).date()
 
@@ -124,6 +131,10 @@ def build_days(
             counted, night = counted + c, night + n
         expected = expected_for(employee, day, holidays, control_from)
         before_control = bool(control_from and day < control_from and employee.employed_on(day))
+        absence = None if before_control else absences.get(day)
+        credited = ZERO
+        if absence and absence.credits:
+            credited = min(expected, timedelta(minutes=absence.minutes)) if absence.minutes else expected
         still_open = any(s.is_open(now, rules.max_shift_at(s.start)) for s in day_shifts)
         closed = day < today and not still_open
 
@@ -135,6 +146,8 @@ def build_days(
             status = DayStatus.INCOMPLETO
         elif day_shifts:
             status = DayStatus.OK
+        elif expected and absence:
+            status = DayStatus.AUSENCIA
         elif expected:
             status = DayStatus.FALTA
         elif not employee.employed_on(day):
@@ -146,7 +159,7 @@ def build_days(
 
         balance = ZERO
         if closed and not before_control:
-            balance = counted - expected
+            balance = counted + credited - expected
             if status == DayStatus.OK and expected and abs(balance) <= rules.on(day).tolerance:
                 balance = ZERO  # tolerância do art. 58 §1º
 
@@ -167,6 +180,8 @@ def build_days(
                     if closed and day_shifts and not before_control
                     else []
                 ),
+                absence=DayAbsence.model_validate(absence) if absence else None,
+                credited_ms=_ms(credited) if closed else 0,
             )
         )
         day += timedelta(days=1)
@@ -224,9 +239,11 @@ class ReportService:
         else:
             history_start = min([employee.hired_on] + [s.day for s in shifts[:1]])
         holidays = self.holidays.all_between(min(history_start, first_day), max(last_day, first_day))
-        days = build_days(shifts, deleted, employee, first_day, last_day, now, holidays, rules, control_from)
+        absences = self._absences_by_day(employee.id)
+        days = build_days(shifts, deleted, employee, first_day, last_day, now, holidays, rules, control_from, absences)
         before = build_days(
-            shifts, [], employee, history_start, first_day - timedelta(days=1), now, holidays, rules, control_from
+            shifts, [], employee, history_start, first_day - timedelta(days=1), now, holidays, rules, control_from,
+            absences,
         )
 
         closed = [d for d in days if d.closed]
@@ -246,8 +263,19 @@ class ReportService:
             bank_ms=previous + balance,
             initial_balance_ms=employee.initial_balance_minutes * 60000,
             control_from=control_from,
+            credited_ms=sum(d.credited_ms for d in closed),
+            absence_days=_absence_days(days),
             closure=ClosureOut.model_validate(closure) if closure else None,
         )
+
+    def _absences_by_day(self, employee_id: int) -> dict[date, Absence]:
+        result = {}
+        for a in self.db.scalars(select(Absence).where(Absence.employee_id == employee_id)):
+            day = a.first_day
+            while day <= a.last_day:
+                result[day] = a
+                day += timedelta(days=1)
+        return result
 
     def summary(self, month: str) -> list[SummaryRow]:
         """Resumo do mês de todos os funcionários com contrato em algum dia do mês."""
@@ -271,6 +299,8 @@ class ReportService:
                     absences=sum(d.status == DayStatus.FALTA for d in r.days),
                     incomplete=sum(d.status == DayStatus.INCOMPLETO for d in r.days),
                     alerts=sum(len(d.alerts) for d in r.days),
+                    credited_ms=r.credited_ms,
+                    absence_days=r.absence_days,
                     closure=r.closure,
                 )
             )
@@ -296,26 +326,30 @@ class ReportService:
             marks = ("*" if p.manual else "") + (" (offline)" if p.offline else "") + (" (cel)" if p.source == "app" else "")
             return f"{kind} {local:%H:%M}{next_day}{marks}"
 
-        lines = ["Data;Dia;Batidas;Trabalhado;Noturno;Previsto;Saldo;Situação;Alertas"]
+        lines = ["Data;Dia;Batidas;Trabalhado;Noturno;Previsto;Abonado;Saldo;Situação;Alertas"]
         for d in report.days:
             batidas = " | ".join(stamp(p, d.date) for p in d.punches if not p.deleted_at)
             weekday = WEEKDAYS[date.fromisoformat(d.date).weekday()]
             saldo = hours(d.balance_ms, signed=True) if d.closed and (d.expected_ms or d.worked_ms) else ""
-            situacao = _text(STATUS_LABEL[d.status] + (f" ({d.holiday})" if d.holiday else ""))
+            label = STATUS_LABEL[d.status] if not d.absence or d.status == DayStatus.OK else d.absence.label
+            if d.absence and d.status == DayStatus.OK:
+                label += f" · {d.absence.label}"
+            situacao = _text(label + (f" ({d.holiday})" if d.holiday else ""))
+            abonado = hours(d.credited_ms) if d.credited_ms else ""
             lines.append(
                 f"{d.date};{weekday};{batidas};{hours(d.worked_ms)};{hours(d.night_ms)};{hours(d.expected_ms)};"
-                f"{saldo};{situacao};{_text(' / '.join(d.alerts))}"
+                f"{abonado};{saldo};{situacao};{_text(' / '.join(d.alerts))}"
             )
         lines.append(
             f"Total;;;{hours(report.total_ms)};{hours(report.night_ms)};{hours(report.expected_ms)};"
-            f"{hours(report.balance_ms, True)};;"
+            f"{hours(report.credited_ms)};{hours(report.balance_ms, True)};;"
         )
-        lines.append(f"Banco de horas anterior;;;;;;{hours(report.previous_balance_ms, True)};;")
-        lines.append(f"Banco de horas ao fim do mês;;;;;;{hours(report.bank_ms, True)};;")
+        lines.append(f"Banco de horas anterior;;;;;;;{hours(report.previous_balance_ms, True)};;")
+        lines.append(f"Banco de horas ao fim do mês;;;;;;;{hours(report.bank_ms, True)};;")
         lines.append(
             "* lançamento ou correção manual; (+1) batida no dia seguinte; (cel) feita no app de celular;"
-            " horas noturnas com hora reduzida;"
-            f" tolerância de {self._tolerance_label(report)} por dia;;;;;"
+            " horas noturnas com hora reduzida; abonado: ausência justificada que conta como trabalhado;"
+            f" tolerância de {self._tolerance_label(report)} por dia;;;;;;"
         )
         return "﻿" + "\r\n".join(lines)
 
@@ -332,16 +366,20 @@ class ReportService:
         def when(ts: datetime | None) -> str:
             return f"{to_local(ts, tz):%d/%m/%Y %H:%M}" if ts else ""
 
+        kinds = list(ABSENCE_KINDS)
         lines = [
-            f"Resumo {month};;;;;;;;;;",
-            "Funcionário;Trabalhado;Noturno;Previsto;Saldo do mês;Banco de horas;Faltas;Incompletos;Alertas;"
-            "Mês fechado;Ciência do funcionário",
+            f"Resumo {month}" + ";" * (11 + len(kinds)),
+            "Funcionário;Trabalhado;Noturno;Previsto;Abonado;Saldo do mês;Banco de horas;Faltas;"
+            + "".join(f"{ABSENCE_KINDS[k][0]} (dias);" for k in kinds)
+            + "Incompletos;Alertas;Mês fechado;Ciência do funcionário",
         ]
         for r in rows:
             closure = r.closure
             lines.append(
                 f"{_text(r.employee.name)};{hours(r.total_ms)};{hours(r.night_ms)};{hours(r.expected_ms)};"
-                f"{hours(r.balance_ms, True)};{hours(r.bank_ms, True)};{r.absences};{r.incomplete};{r.alerts};"
+                f"{hours(r.credited_ms)};{hours(r.balance_ms, True)};{hours(r.bank_ms, True)};{r.absences};"
+                + "".join(f"{r.absence_days.get(k, 0)};" for k in kinds)
+                + f"{r.incomplete};{r.alerts};"
                 f"{when(closure.closed_at) if closure else ''};{when(closure.acknowledged_at) if closure else ''}"
             )
         return "﻿" + "\r\n".join(lines)
@@ -349,6 +387,15 @@ class ReportService:
     @staticmethod
     def csv_filename(report: MonthReport) -> str:
         return f"ponto-{re.sub(r'[^A-Za-z0-9_-]+', '_', report.employee.name)}-{report.month}.csv"
+
+
+def _absence_days(days: list[DayReport]) -> dict[str, int]:
+    """Dias de trabalho com ausência, por tipo (os dias sem jornada, como fins de semana nas férias, não contam)."""
+    counts: dict[str, int] = {}
+    for d in days:
+        if d.absence and d.expected_ms:
+            counts[d.absence.kind] = counts.get(d.absence.kind, 0) + 1
+    return counts
 
 
 def _text(value: str) -> str:

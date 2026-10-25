@@ -24,10 +24,12 @@ from app.schemas.admin import (
     RulesOut,
     RulesSettingsIn,
 )
+from app.schemas.absence import AbsenceIn, AbsenceOut
 from app.schemas.common import OkResponse
 from app.schemas.employee import EmployeeCreate, EmployeeCreated, EmployeeOut, EmployeeUpdate
 from app.schemas.punch import ManualPunchCreate, PunchChangeOut, PunchUpdate
 from app.schemas.report import MonthReport, SummaryRow
+from app.services.absence_service import AbsenceService
 from app.services.audit import PIN_BLOCKED, AuditLog
 from app.services.auth_service import AuthService
 from app.services.calendar_service import ClosureService, HolidayService
@@ -87,6 +89,25 @@ def anonymize_employee(employee_id: int, db: DbSession, t: CompanyAdmin):
 @router.delete("/employees/{employee_id}", response_model=OkResponse)
 def delete_employee(employee_id: int, db: DbSession, t: CompanyAdmin):
     EmployeeService(db, t.company_id).delete(employee_id, t.user)
+    return OkResponse()
+
+
+# ---------- Ausências (atestado, férias, licença, folga do banco) ----------
+
+
+@router.get("/employees/{employee_id}/absences", response_model=list[AbsenceOut])
+def list_absences(employee_id: int, db: DbSession, t: CompanyAdmin):
+    return AbsenceService(db, t.company_id).list(employee_id)
+
+
+@router.post("/absences", response_model=AbsenceOut, status_code=201)
+def create_absence(body: AbsenceIn, db: DbSession, t: CompanyAdmin):
+    return AbsenceService(db, t.company_id).create(body, t.user)
+
+
+@router.delete("/absences/{absence_id}", response_model=OkResponse)
+def delete_absence(absence_id: int, db: DbSession, t: CompanyAdmin):
+    AbsenceService(db, t.company_id).delete(absence_id, t.user)
     return OkResponse()
 
 

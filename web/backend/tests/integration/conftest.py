@@ -27,6 +27,11 @@ ORIGIN = {"Origin": "http://testserver"}
 LEGACY_KIOSK_SECRET = "segredo-dos-relogios-antigos"
 
 
+def pytest_collection_modifyitems(items):
+    """test_migracao confere o banco migrado antes de qualquer outro teste cadastrar algo: vai primeiro."""
+    items.sort(key=lambda item: "integration/test_migracao.py" not in item.nodeid)
+
+
 def _migrate_to(revision: str) -> None:
     config = Config()
     config.set_main_option("script_location", str(MIGRATIONS_DIR))

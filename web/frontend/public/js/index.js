@@ -299,7 +299,7 @@ let mirrorTimer;
 const monthKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 const shiftMonth = (key, delta) => { const [y, m] = key.split('-').map(Number); return monthKey(new Date(y, m - 1 + delta, 1)); };
 const monthLabel = (key) => { const [y, m] = key.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); };
-const STATUS = { falta: 'falta', incompleto: 'incompleto', feriado: 'feriado', andamento: 'em andamento' };
+const STATUS = { falta: 'falta', incompleto: 'incompleto', feriado: 'feriado', andamento: 'em andamento', ausencia: 'ausência' };
 
 function touchMirror() {
   clearTimeout(mirrorTimer);
@@ -365,7 +365,8 @@ async function loadMirror() {
   $('mirrorBody').innerHTML = days.length
     ? days.slice().reverse().map((d) => {
         const dia = new Date(d.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-        const tag = STATUS[d.status] ? ` <span class="tag">${STATUS[d.status]}</span>` : '';
+        const label = d.absence ? d.absence.label.toLowerCase() : STATUS[d.status];
+        const tag = label ? ` <span class="tag">${esc(label)}</span>` : '';
         const stamps = d.punches.filter((p) => !p.deleted_at).map((p) =>
           `<span class="receipt-line"><span class="stamp ${p.type === 'entrada' ? 'in' : 'out'}">${hhmm(p.ts)}${p.manual ? '*' : ''}</span> <small>nº ${p.id} · ${esc(p.receipt)}</small></span>`).join('');
         return `<tr><td class="who">${dia}${tag}</td><td class="wrap">${stamps || '—'}</td>

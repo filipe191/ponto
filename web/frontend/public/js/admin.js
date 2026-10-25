@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = (n) => String(n).padStart(2, '0');
 const WEEK = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
-const STATUS = { falta: 'falta', incompleto: 'incompleto', andamento: 'em andamento', feriado: 'feriado', fora: 'fora do contrato', antes: 'antes do controle' };
+const STATUS = { falta: 'falta', incompleto: 'incompleto', andamento: 'em andamento', feriado: 'feriado', fora: 'fora do contrato', antes: 'antes do controle', ausencia: 'ausência' };
 const fmtD = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR');
 const todayISO = () => localDate(new Date().toISOString());
 const ACTION = { criada: 'lançada', alterada: 'corrigida', excluida: 'excluída', restaurada: 'restaurada' };
@@ -225,7 +225,7 @@ function renderReportPicker() {
 $('empSearch').addEventListener('input', renderEmployees);
 $('empStatus').addEventListener('change', renderEmployees);
 $('repSearch').addEventListener('input', () => {
-  if (renderReportPicker()) { cancelEdit(); loadReport(); }
+  if (renderReportPicker()) { cancelEdit(); loadReport(); loadAbsences(); }
 });
 
 function openEmpDialog(emp = null) {
@@ -376,6 +376,58 @@ function chip(p, day) {
   </span>`;
 }
 
+const ABSENCE_LABEL = { atestado: 'atestado', ferias: 'férias', licenca: 'licença', abonada: 'abonada', folga: 'folga do banco' };
+const absenceSummary = (counts) => Object.entries(counts || {}).map(([k, n]) => `${n} ${n > 1 ? 'dias' : 'dia'} de ${ABSENCE_LABEL[k]}`).join(' · ');
+
+async function loadAbsences() {
+  const emp = $('repEmp').value;
+  if (!emp) { $('absList').innerHTML = ''; return; }
+  let items = [];
+  try { items = await api(`/employees/${emp}/absences`); } catch (err) { $('absError').textContent = err.message; return; }
+  $('absList').innerHTML = items.length
+    ? items.map((a) => `<li class="dev-row"><span><b>${esc(a.label)}</b> · ${a.first_day === a.last_day ? fmtD(a.first_day) : `${fmtD(a.first_day)} a ${fmtD(a.last_day)}`}${a.minutes ? ` · ${shortH(a.minutes)} por dia` : ''}${a.note ? ` · ${esc(a.note)}` : ''}
+        <small class="contract">lançada por ${esc(a.created_by)} em ${fmtDT(a.created_at)}</small></span>
+        <button class="btn btn-sm btn-danger" type="button" data-abs="${a.id}">Remover</button></li>`).join('')
+    : '<li class="muted">Nenhuma ausência lançada para este funcionário.</li>';
+}
+
+$('absForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('absError').textContent = '';
+  const minutes = parseHM($('absHours').value);
+  if (Number.isNaN(minutes)) { $('absError').textContent = 'Horas abonadas: use horas:minutos (ex.: 02:00) ou deixe vazio para o dia inteiro.'; return; }
+  const body = {
+    employee_id: Number($('repEmp').value),
+    kind: $('absKind').value,
+    first_day: $('absFrom').value,
+    last_day: $('absTo').value,
+    minutes: minutes || null,
+    note: $('absNote').value,
+  };
+  try {
+    await api('/absences', { method: 'POST', body: JSON.stringify(body) });
+    toast('Ausência lançada');
+    $('absHours').value = '';
+    $('absNote').value = '';
+    loadAbsences();
+    loadReport();
+    loadAudit();
+  } catch (err) { $('absError').textContent = err.message; }
+});
+$('absFrom').addEventListener('change', () => { if (!$('absTo').value || $('absTo').value < $('absFrom').value) $('absTo').value = $('absFrom').value; });
+$('absKind').addEventListener('change', () => { $('absHours').disabled = $('absKind').value === 'folga'; if ($('absHours').disabled) $('absHours').value = ''; });
+$('absList').addEventListener('click', async (e) => {
+  const id = e.target.closest('[data-abs]')?.dataset.abs;
+  if (!id) return;
+  const ok = await ask({ title: 'Remover esta ausência?', message: 'Os dias voltam a contar como antes (faltas, se não houver batidas). Fica registrado na auditoria.', ok: 'Remover', danger: true });
+  if (ok === null) return;
+  $('absError').textContent = '';
+  try { await api(`/absences/${id}`, { method: 'DELETE' }); toast('Ausência removida'); } catch (err) { $('absError').textContent = err.message; }
+  loadAbsences();
+  loadReport();
+  loadAudit();
+});
+
 async function loadReport() {
   const emp = $('repEmp').value;
   const month = $('repMonth').value;
@@ -405,6 +457,7 @@ async function loadReport() {
     <div><span>Saldo do mês</span><strong class="${signCls(r.balanceMs)}">${fmtSigned(r.balanceMs)}</strong>${untilNote}</div>
     <div><span>Banco de horas</span><strong class="${signCls(r.bankMs)}">${fmtSigned(r.bankMs)}</strong><small>anterior: ${fmtSigned(r.previousBalanceMs)}${r.initialBalanceMs ? ` · inclui saldo inicial ${fmtSigned(r.initialBalanceMs)}` : ''}</small></div>
     <div><span>Faltas</span><strong>${count('falta')}</strong></div>
+    <div><span>Abonado</span><strong>${fmtH(r.creditedMs)}</strong><small>${absenceSummary(r.absenceDays) || 'sem ausências'}</small></div>
     <div><span>Incompletos</span><strong>${count('incompleto')}</strong></div>
     <div><span>Avisos da CLT</span><strong class="${alerts ? 'neg' : ''}">${alerts}</strong></div>`;
 
@@ -433,7 +486,10 @@ async function loadReport() {
         const dia = new Date(d.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
         d.punches.forEach((p) => { punches[p.id] = p; });
         const chips = d.punches.filter((p) => showDeleted || !p.deleted_at).map((p) => chip(p, d.date)).join('');
-        const tag = STATUS[d.status] ? `<span class="tag ${d.status}">${STATUS[d.status]}</span>` : '';
+        // Ausência: a marca é o tipo (atestado, férias...), também nos dias sem jornada dentro do período
+        const tag = d.absence
+          ? `<span class="tag ausencia" title="${esc(d.absence.note)}">${esc(d.absence.label)}${d.absence.minutes ? ` · ${shortH(d.absence.minutes)}` : ''}</span>`
+          : STATUS[d.status] ? `<span class="tag ${d.status}">${STATUS[d.status]}</span>` : '';
         const holiday = d.holiday ? `<small class="holiday">${esc(d.holiday)}</small>` : '';
         const warn = d.alerts.length ? `<span class="warn" tabindex="0" title="${esc(d.alerts.join('\n'))}" aria-label="${esc(d.alerts.join('; '))}">⚠</span>` : '';
         const hasHours = d.workedMs || d.punches.some((p) => !p.deleted_at);
@@ -488,7 +544,7 @@ $('closure').addEventListener('click', async (e) => {
 
 $('summaryCsvBtn').addEventListener('click', () => downloadCsv(`/api/admin/summary?month=${$('repMonth').value}&format=csv`));
 
-$('repEmp').addEventListener('change', () => { cancelEdit(); loadReport(); });
+$('repEmp').addEventListener('change', () => { cancelEdit(); loadReport(); loadAbsences(); });
 $('repMonth').addEventListener('change', () => { cancelEdit(); loadReport(); });
 $('showDeleted').addEventListener('change', loadReport);
 
@@ -1168,7 +1224,7 @@ function loadCompanyArea() {
   loadRequests();
   setInterval(loadRequests, 60000);
   loadAdmins();
-  loadEmployees().then(() => { loadReport(); loadAudit(); }).catch((err) => { $('empError').textContent = err.message; });
+  loadEmployees().then(() => { loadReport(); loadAbsences(); loadAudit(); }).catch((err) => { $('empError').textContent = err.message; });
   loadHolidays();
   loadRules();
   loadAlerts();

@@ -97,6 +97,7 @@
 }
 .tag.falta, .tag.incompleto { color: var(--danger); }
 .tag.andamento { color: var(--rule); }
+.tag.ausencia { color: var(--ink-in); }
 .tag.inativo { color: var(--muted); }
 
 /* ---------- Resumo do mês ---------- */

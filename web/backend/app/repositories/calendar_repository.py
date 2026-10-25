@@ -57,8 +57,10 @@ class ClosureRepository:
         )
         return {c.employee_id: c for c in self.db.scalars(query)}
 
-    def latest_from(self, company_id: int, month: str, employee_id: int | None = None) -> str | None:
-        """Último mês fechado a partir de `month` (AAAA-MM), na empresa ou só de um funcionário."""
+    def latest_from(
+        self, company_id: int, month: str, employee_id: int | None = None, until: str | None = None
+    ) -> str | None:
+        """Último mês fechado a partir de `month` (AAAA-MM, até `until`), na empresa ou só de um funcionário."""
         query = (
             select(MonthClosure.month)
             .join(Employee, Employee.id == MonthClosure.employee_id)
@@ -68,6 +70,8 @@ class ClosureRepository:
         )
         if employee_id is not None:
             query = query.where(MonthClosure.employee_id == employee_id)
+        if until is not None:
+            query = query.where(MonthClosure.month <= until)
         return self.db.scalar(query)
 
     def add(self, closure: MonthClosure) -> None:

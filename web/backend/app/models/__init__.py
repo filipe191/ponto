@@ -1,3 +1,4 @@
+from app.models.absence import ABSENCE_KINDS, Absence
 from app.models.admin_account import AdminAccount, AdminRecoveryCode, AdminSession
 from app.models.attempt import AttemptBlock, AttemptFailure
 from app.models.audit import AuditEvent
@@ -16,6 +17,8 @@ from app.models.punch import (
 from app.models.settings import AppSetting, EmployeeDevice, Holiday, MonthClosure
 
 __all__ = [
+    "ABSENCE_KINDS",
+    "Absence",
     "AdminAccount",
     "AdminRecoveryCode",
     "AdminSession",

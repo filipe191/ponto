@@ -18,16 +18,23 @@ from app.utils.dates import month_of
 SINCE_ALWAYS = date(2000, 1, 1)  # vigência da primeira regra de cada empresa
 
 
-def ensure_months_open(db: Session, company_id: int, day: date, what: str, employee_id: int | None = None) -> None:
+def ensure_months_open(
+    db: Session, company_id: int, day: date, what: str, employee_id: int | None = None, until: date | None = None
+) -> None:
     """Recusa uma mudança que alteraria um mês já fechado (o espelho e a ciência do funcionário mudariam).
 
-    `day` é o primeiro dia afetado; vale para a empresa toda ou só para `employee_id`.
+    `day` é o primeiro dia afetado (e `until`, o último, quando a mudança tem fim); vale para a empresa
+    toda ou só para `employee_id`.
     """
     from app.repositories.calendar_repository import ClosureRepository
 
-    closed = ClosureRepository(db).latest_from(company_id, month_of(day), employee_id)
+    closed = ClosureRepository(db).latest_from(
+        company_id, month_of(day), employee_id, month_of(until) if until else None
+    )
     if closed:
         year, month = closed.split("-")
+        if until:
+            raise BadRequest(f"O mês {month}/{year} já foi fechado: reabra o mês para mudar {what}")
         raise BadRequest(f"O mês {month}/{year} já foi fechado: {what} precisa começar depois dele (ou reabra o mês)")
 
 

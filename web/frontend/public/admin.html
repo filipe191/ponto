@@ -170,6 +170,25 @@
       </form>
       <p class="form-error" id="manError" role="alert"></p>
       <div id="history"></div>
+
+      <h3 class="subhead" id="absTitle">Ausências</h3>
+      <p class="hint">Atestado, férias, licença e faltas abonadas (CLT art. 473) contam como jornada cumprida; a folga do banco não é falta, mas a jornada sai do banco de horas. Para abonar só parte do dia (ex.: consulta), informe as horas. Não escreva o diagnóstico (CID): guarde o atestado em papel.</p>
+      <form class="toolbar" id="absForm" aria-labelledby="absTitle">
+        <select class="input" id="absKind" aria-label="Tipo de ausência">
+          <option value="atestado">Atestado médico</option>
+          <option value="ferias">Férias</option>
+          <option value="licenca">Licença</option>
+          <option value="abonada">Falta abonada</option>
+          <option value="folga">Folga do banco de horas</option>
+        </select>
+        <label class="field-inline">de <input class="input" type="date" id="absFrom" required></label>
+        <label class="field-inline">até <input class="input" type="date" id="absTo" required></label>
+        <input class="input input-num" id="absHours" placeholder="dia todo" aria-label="Horas abonadas por dia (vazio = dia inteiro)" title="Horas abonadas por dia, ex.: 02:00 (vazio = dia inteiro)" autocomplete="off">
+        <input class="input grow" type="text" id="absNote" maxlength="300" placeholder="Observação (opcional)" aria-label="Observação">
+        <button class="btn btn-primary" type="submit">Lançar ausência</button>
+      </form>
+      <p class="form-error" id="absError" role="alert"></p>
+      <ul class="history" id="absList"></ul>
     </section>
 
     <section class="card" aria-labelledby="holTitle" data-tab="configuracoes" role="tabpanel">

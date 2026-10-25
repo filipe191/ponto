@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.errors import BadRequest, Conflict, NotFound
 from app.core.security import hash_pin
 from app.models import (
+    Absence,
     AuditEvent,
     Company,
     Employee,
@@ -210,7 +211,8 @@ class EmployeeService:
     def delete(self, employee_id: int, user: str) -> None:
         """Só para cadastros feitos por engano: quem já tem registros de ponto é desativado, não excluído."""
         employee = self._get(employee_id)
-        if self.punches.has_any(employee.id):
+        has_absences = self.db.scalar(select(Absence.id).where(Absence.employee_id == employee.id).limit(1))
+        if self.punches.has_any(employee.id) or has_absences:
             raise Conflict("Este funcionário tem registros de ponto e não pode ser excluído. Desative-o.")
         self.audit.record(
             user, "funcionario.excluido", f"Excluiu o cadastro de {employee.name}", employee_id=employee.id
@@ -268,6 +270,18 @@ class EmployeeService:
                     "comprovante": p.receipt,
                 }
                 for p in punches
+            ],
+            "ausencias": [
+                {
+                    "tipo": a.label,
+                    "de": a.first_day,
+                    "ate": a.last_day,
+                    "minutos_abonados_por_dia": a.minutes,
+                    "observacao": a.note,
+                    "lancada_por": a.created_by,
+                    "lancada_em": a.created_at,
+                }
+                for a in db.scalars(select(Absence).where(Absence.employee_id == employee_id).order_by(Absence.first_day))
             ],
             "correcoes_de_batidas": [
                 {
@@ -348,6 +362,8 @@ class EmployeeService:
         )
         db.execute(update(Punch).where(Punch.employee_id == employee_id).values(device=None))
         db.execute(update(PunchRequest).where(PunchRequest.employee_id == employee_id).values(note=None))
+        # As observações das ausências podem trazer dados de saúde: saem; tipo e datas ficam (contam horas)
+        db.execute(update(Absence).where(Absence.employee_id == employee_id).values(note=""))
         # Os registros de auditoria dessa pessoa trazem o nome: saem também (exceção prevista no banco)
         db.execute(text("SET LOCAL ponto.retencao = 'on'"))
         db.execute(delete(AuditEvent).where(AuditEvent.employee_id == employee_id))
